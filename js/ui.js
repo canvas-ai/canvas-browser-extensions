@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     browser.tabs.query({}).then((tabs) => {
         updateTabList(tabs);
-        updateTabCount(tabs);
+        updateBrowserTabCount(tabs);
     });
 
 });
@@ -115,7 +115,7 @@ function updateContextBreadcrumbs(url) {
     }
 }
 
-function updateTabCount(tabs) {
+function updateBrowserTabCount(tabs) {
     console.log('UI | Updating tab count')
     if (!tabs || tabs.length < 1) return console.log('UI | No tabs provided')
     let count = 0;
@@ -127,11 +127,10 @@ function updateTabCount(tabs) {
     }
 
     console.log(`UI | Number of open tabs (excluding empty/new tabs): ${count}`);
-    document.getElementById('tab-count').textContent = count;
+    document.getElementById('browser-tab-count').textContent = count;
 }
 
 function updateTabList(tabs) {
-
     if (!tabs || tabs.length < 1) return;
 
     const tabListContainer = document.getElementById('tab-list');
@@ -141,25 +140,25 @@ function updateTabList(tabs) {
 
     // Generate the updated tab list
     tabs.forEach((tab) => {
-
         const tabItem = document.createElement("li");
         tabItem.className = "collection-item";
 
         const tabItemTitle = document.createElement("p");
         tabItemTitle.textContent = tab.title;
 
-        const tabItemIconSync = document.createElement("i");
+        const tabItemIconSync = document.createElement("a");
         tabItemIconSync.className = "material-icons secondary-content black-text";
+        tabItemIconSync.href = "#!sync";
         tabItemIconSync.textContent = "sync";
 
-        const tabItemIconLoad = document.createElement("i");
+        const tabItemIconLoad = document.createElement("a");
+        tabItemIconLoad.href = "#!close";
         tabItemIconLoad.className = "material-icons secondary-content";
         tabItemIconLoad.textContent = "close";
 
         tabItem.appendChild(tabItemTitle);
-        tabItem.appendChild(tabItemIconSync);
-        tabItem.appendChild(tabItemIconLoad);
+        tabItemTitle.appendChild(tabItemIconSync);
+        tabItemTitle.appendChild(tabItemIconLoad);
         tabListContainer.appendChild(tabItem);
-
     });
 }
