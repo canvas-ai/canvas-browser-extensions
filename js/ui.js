@@ -80,7 +80,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 let syncTabsToCanvasButton = document.getElementById('sync-all-tabs');
 syncTabsToCanvasButton.addEventListener('click', () => {
     console.log('UI | Syncing all tabs to canvas')
-    browser.runtime.sendMessage({ action: 'insert:tabs' });
+    browser.runtime.sendMessage({ action: 'sync:all-tabs' });
 })
 
 let openTabsFromCanvasButton = document.getElementById('open-all-tabs');

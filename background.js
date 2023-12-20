@@ -1,9 +1,4 @@
 /**
- * Canvas extension configuration
- * TODO: Rework
- */
-
-/**
  * Runtime Variables
  */
 
@@ -26,7 +21,6 @@ let watchTabProperties = {
         "mutedInfo"
     ]
 }
-
 
 /**
  * Socket.io
@@ -72,7 +66,7 @@ socket.on('context:url', (url) => {
  * Message Handlers
  */
 
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     console.log('background.js | Message received: ', message);
 
     switch (message.action) {
@@ -123,10 +117,20 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'get:tabs':
             break;
 
-        case 'insert:tab':
+        case 'sync:tab':
             break;
 
-        case 'insert:tabs':
+        case 'sync:all-tabs':
+            socket.emit('test123', {
+                type: 'data/abstraction/tab',
+                data: {
+                    browser: 'firefox',
+                    url: 'test',
+                    title: 'test test',
+                },
+            }, (res) => {
+                console.log('Tab inserted: ', res);
+            });
             break;
 
         case 'update:tab':
@@ -166,7 +170,7 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
         // Update backend
         console.log(`Tab ID ${tabId} changed, sending update to backend`)
-        insertDocument(doc)
+        saveTabToBackend(doc)
 
         // Update browser
         console.log(`Tab ID ${tabId} changed, sending update to browser extension`)
@@ -187,7 +191,8 @@ browser.tabs.onMoved.addListener((tabId, moveInfo) => {
     console.log(`Tab ID ${tabId} moved from ${moveInfo.fromIndex} to ${moveInfo.toIndex}, sending update to backend`);
     let doc = Tab
     doc.data = stripTabProperties(tab)
-    updateDocument(doc)
+    //updateDocument(doc)
+    saveTabToBackend(doc)
 
 });
 
@@ -203,7 +208,8 @@ browser.browserAction.onClicked.addListener((tab, OnClickData) => {
     let doc = Tab
     doc.data = stripTabProperties(tab)
 
-    updateDocument(doc)
+    //updateDocument(doc)
+    saveTabToBackend(doc)
 
 });
 
@@ -251,12 +257,14 @@ function loadTabFromBackend(tabID, cb) {
     });
 }
 
-function saveTabsToBackend(tabs, cb) {
-    let docs = tabs.map(tab => formatTabProperties(tab));
-    socket.emit('index:insertDocuments', docs, (res) => {
-        console.log('Tabs inserted: ', res);
-        if (cb) cb(res)
-    });
+function saveTabsToBackend(cb) {
+    browser.tabs.query({}).then((tabs) => {
+        let docs = tabs.map(tab => formatTabProperties(tab));
+        socket.emit('index:insertDocumentArray', docs, (res) => {
+            console.log('Tabs inserted: ', res);
+            if (cb) cb(res)
+        });
+    })
 }
 
 function loadTabsFromBackend(cb) {
@@ -377,7 +385,7 @@ function stripTabProperties(tab) {
 
 function formatTabProperties(tab) {
     return {
-        ...Tab,
+        ...tab,
         type: 'data/abstraction/tab',
         data: {
             browser: 'firefox',
