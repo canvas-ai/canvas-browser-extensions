@@ -1,7 +1,3 @@
-/**
- * Runtime Variables
- */
-
 let config = {};
 let context = {};
 let isConnected = false;
@@ -48,6 +44,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         context.url = url
+        updateContextBreadcrumbs(sanitizePath(url))
     });
 
     browser.tabs.query({}).then((tabs) => {
@@ -94,12 +91,22 @@ openTabsFromCanvasButton.addEventListener('click', () => {
  * Functions
  */
 
+function sanitizePath(path) {
+    if (!path || path == '/') return '∞:///'
+    path = path
+        .replace(/\/\//g, '/')
+        .replace(/\:/g, '')
+        .replace(/universe/g,'∞')
+
+    return path
+}
+
 function updateContextBreadcrumbs(url) {
     console.log('UI | Updating breadcrumbs')
     if (!url) return console.log('UI | No URL provided')
     if (typeof url !== 'string') return console.log('UI | URL is not a string')
 
-    url = sanitizePath(url)
+    //url = sanitizePath(url)
     const breadcrumbContainer = document.getElementById("breadcrumb-container");
     if (breadcrumbContainer) {
         breadcrumbContainer.innerHTML = ""; // Clear existing breadcrumbs
@@ -153,7 +160,7 @@ function updateTabList(tabs) {
 
         const tabItemIconLoad = document.createElement("a");
         tabItemIconLoad.href = "#!close";
-        tabItemIconLoad.className = "material-icons secondary-content";
+        tabItemIconLoad.className = "material-icons secondary-content red-text";
         tabItemIconLoad.textContent = "close";
 
         tabItem.appendChild(tabItemTitle);
