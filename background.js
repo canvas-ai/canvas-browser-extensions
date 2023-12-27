@@ -19,6 +19,55 @@
 // Logic to load the config from store.js goes here || fetch from canvas backend
 
 
+
+// Function to compare and populate maps
+function compareAndPopulateMaps() {
+    fetchOpenTabs().then(openTabs => {
+        fetchTabsFromCanvas().then(canvasTabs => {
+            const unsyncedTabsMap = new Map();
+            const unopenedTabsMap = new Map();
+
+            // Check for tabs that are open but not in Canvas
+            openTabs.forEach((tab, url) => {
+                if (!canvasTabs.has(url)) {
+                    unsyncedTabsMap.set(url, tab);
+                }
+            });
+
+            // Check for tabs that are in Canvas but not open
+            canvasTabs.forEach((canvasTab, url) => {
+                if (!openTabs.has(url)) {
+                    unopenedTabsMap.set(url, canvasTab);
+                }
+            });
+
+            // Now unsyncedTabsMap and unopenedTabsMap are populated
+
+
+            // Do something with these maps, like updating UI or syncing tabs
+
+        }).catch(error => console.error("Error fetching tabs from Canvas:", error));
+    }).catch(error => console.error("Error fetching open tabs:", error));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * Runtime variables
  */
@@ -45,6 +94,11 @@ let watchTabProperties = {
 };
 
 TabSchema = {}
+
+
+const openTabsMap = new Map();
+const canvasTabsMap = new Map();
+
 
 /**
  * Socket.io
@@ -294,7 +348,7 @@ function saveTabToBackend(tab, cb) {
 }
 
 function loadTabFromBackend(tabID, cb) {
-    socket.emit('index:getDocuments', tabID, (res) => {
+    socket.emit('index:getDocument', tabID, (res) => {
         console.log(`Tab ${tabID} fetched: `, res);
         if (cb) cb(res)
     });
@@ -311,7 +365,7 @@ function saveTabsToBackend(cb) {
 }
 
 function loadTabsFromBackend(cb) {
-    socket.emit('index:getDocuments', { type: 'data/abstraction/tab', version: '2' }, (res) => {
+    socket.emit('index:getDocumentArray', { type: 'data/abstraction/tab'}, (res) => {
         console.log('Tabs fetched: ', res);
         tabs = res;
         if (cb) cb(res)
@@ -320,9 +374,38 @@ function loadTabsFromBackend(cb) {
 
 
 
+
+
 /**
  * Canvas functions
  */
+
+
+// Function to fetch open tabs
+function fetchOpenTabs() {
+    return new Promise((resolve, reject) => {
+        browser.tabs.query({}).then(tabs => {
+            tabs.forEach(tab => {
+                openTabsMap.set(tab.url, tab); // Assuming tab.url is available
+            });
+            resolve(openTabsMap);
+        }).catch(reject);
+    });
+}
+
+// Function to fetch tabs from Canvas
+function fetchTabsFromCanvas() {
+    return new Promise((resolve, reject) => {
+        socket.emit('index:getDocumentArray', { type: 'data/abstraction/tab'}, (res) => {
+            res.forEach(tabData => {
+                canvasTabsMap.set(tabData.url, tabData); // Assuming tabData.url is the SHA1 checksum of the URL
+            });
+            resolve(canvasTabsMap);
+        });
+        resolve(canvasTabsMap);
+    });
+}
+
 
 async function sendTabToCanvas(tab, tagArray) {
     return new Promise((resolve, reject) => {
@@ -395,6 +478,7 @@ function fetchTabSchema() {
     });
 }
 
+
 function fetchStoredUrls() {
     socket.emit('listDocuments', {
         context: context.url,
@@ -404,6 +488,36 @@ function fetchStoredUrls() {
         console.log('Stored URLs fetched: ', tabUrls);
     });
 }
+
+// Function to compare and populate maps
+function compareAndPopulateMaps() {
+    fetchOpenTabs().then(openTabs => {
+        fetchTabsFromCanvas().then(canvasTabs => {
+            const unsyncedTabsMap = new Map(); // Tabs open in browser but not in Canvas
+            const unopenedTabsMap = new Map(); // Tabs in Canvas but not open in browser
+
+            // Check for tabs that are open but not in Canvas
+            openTabs.forEach((tab, url) => {
+                if (!canvasTabs.has(url)) {
+                    unsyncedTabsMap.set(url, tab);
+                }
+            });
+
+            // Check for tabs that are in Canvas but not open
+            canvasTabs.forEach((canvasTab, url) => {
+                if (!openTabs.has(url)) {
+                    unopenedTabsMap.set(url, canvasTab);
+                }
+            });
+
+            // Now unsyncedTabsMap and unopenedTabsMap are populated
+            // Do something with these maps, like updating UI or syncing tabs
+
+        }).catch(error => console.error("Error fetching tabs from Canvas:", error));
+    }).catch(error => console.error("Error fetching open tabs:", error));
+}
+
+
 
 /**
  * Browser tab functions
