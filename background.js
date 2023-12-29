@@ -1,88 +1,16 @@
-/**
- * Configuration section
- * TODO: To be set in the UI and stored with store.js in local storage
- */
+console.log('background.js | Initializing Canvas Browser Extension background worker');
 
-// Default config
-/*config = {
-    transport: {
-        protocol: 'http',
-        host: 'localhost',
-        port: 3000,
-        token: 'canvas-socketio-token'
-    },
+// Extension config @config.js
+// Extension canvas utils @utils-canvas.js
+// Extension browser utils @utils-browser.js
 
-    // You can add tags to your browser tabs if you want to use multiple browser instances with Canvas
-    browserTags: ['test']
-}*/
-
-// Logic to load the config from store.js goes here || fetch from canvas backend
-
-
-
-// Function to compare and populate maps
-function compareAndPopulateMaps() {
-    fetchOpenTabs().then(openTabs => {
-        fetchTabsFromCanvas().then(canvasTabs => {
-            const unsyncedTabsMap = new Map();
-            const unopenedTabsMap = new Map();
-
-            // Check for tabs that are open but not in Canvas
-            openTabs.forEach((tab, url) => {
-                if (!canvasTabs.has(url)) {
-                    unsyncedTabsMap.set(url, tab);
-                }
-            });
-
-            // Check for tabs that are in Canvas but not open
-            canvasTabs.forEach((canvasTab, url) => {
-                if (!openTabs.has(url)) {
-                    unopenedTabsMap.set(url, canvasTab);
-                }
-            });
-
-            // Now unsyncedTabsMap and unopenedTabsMap are populated
-
-
-            // Do something with these maps, like updating UI or syncing tabs
-
-        }).catch(error => console.error("Error fetching tabs from Canvas:", error));
-    }).catch(error => console.error("Error fetching open tabs:", error));
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/**
- * Runtime variables
- */
-
-// Lets set some defaults
+// Runtime defaults
 let context = {
     url: 'universe:///',
     color: '#fff',
 };
 
-let syncQueue = new Map();
-
-let TabSchema;
-let tabs;
-let tabUrls = {};   // Workaround for the missing tab info on onRemoved() and onMove()
+let TabSchema = {};
 
 let watchTabProperties = {
     properties: [
@@ -93,159 +21,142 @@ let watchTabProperties = {
     ]
 };
 
-TabSchema = {}
 
+/**
+ * Tab Index Class (TODO: Move to utils)
+ */
 
-const openTabsMap = new Map();
-const canvasTabsMap = new Map();
+class Index {
+    constructor() {
+        this.browserTabs = new Map();
+        this.canvasTabs = new Map();
+    }
+
+    insertBrowserTab(tab) {
+        this.browserTabs.set(tab.url, tab);
+    }
+
+    removeBrowserTab(url) {
+        this.browserTabs.delete(url);
+    }
+
+    insertBrowserTabArray(tabArray) {
+        tabArray.forEach(tab => this.browserTabs.set(tab.url, tab));
+    }
+
+    hasBrowserTab(url) {
+        return this.browserTabs.has(url);
+    }
+
+    insertCanvasTab(tab) {
+        this.canvasTabs.set(tab.url, tab);
+    }
+
+    removeCanvasTab(url) {
+        this.canvasTabs.delete(url);
+    }
+
+    insertCanvasTabArray(tabArray) {
+        tabArray.forEach(tab => this.canvasTabs.set(tab.url, tab));
+    }
+
+    hasCanvasTab(url) {
+        return this.canvasTabs.has(url);
+    }
+
+    deltaBrowserToCanvas() {
+        return [...this.browserTabs.values()].filter(tab => !this.canvasTabs.has(tab.url));
+    }
+
+    deltaCanvasToBrowser() {
+        return [...this.canvasTabs.values()].filter(tab => !this.browserTabs.has(tab.url));
+    }
+}
+
+const index = new Index();
 
 
 /**
- * Socket.io
+ * Initialize Socket.io
  */
 
-// TODO: Configure based on config.json || store.js
 const socket = io.connect(`${config.transport.protocol}://${config.transport.host}:${config.transport.port}`);
-
 socket.on('connect', () => {
-    console.log('[socket.io] Client connected to server');
-    fetchContextUrl();
-    fetchTabSchema();
-    fetchStoredUrls();
+    console.log('background.js | [socket.io] Browser Client connected to Canvas');
+
+    canvasFetchContextUrl((res) => {
+        if (!res || res.status !== 'success') return console.error('background.js | Error fetching context url from Canvas')
+        console.log('background.js | [socket.io] Received context url: ', res.data)
+        context.url = res.data;
+    });
+
+    canvasFetchTabSchema((res) => {
+        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tab schema from Canvas')
+        console.log('background.js | [socket.io] Received tab schema: ', res.data)
+        TabSchema = res.data;
+    });
+
+    canvasFetchContextTabs((res) => {
+        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
+        index.insertCanvasTabArray(res.data);
+    });
+
+    browser.tabs.query({}).then((tabs) => {
+        index.insertBrowserTabArray(tabs);
+    });
+
 });
 
 socket.on('connect_error', function (error) {
-    console.log(`[socket.io] Connection to "${config.transport.protocol}://${config.transport.host}:${config.transport.port}" failed`);
+    console.log(`background.js | [socket.io] Browser Connection to "${config.transport.protocol}://${config.transport.host}:${config.transport.port}" failed`);
     console.error(error.message);
 });
 
 socket.on('connect_timeout', function () {
-    console.log('[socket.io] Connection Timeout');
+    console.log('background.js | [socket.io] Canvas Connection Timeout');
 });
 
 socket.on('disconnect', () => {
-    console.log('[socket.io] Client disconnected from server');
+    console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
 });
-
-socket.on('context:url', (url) => {
-    console.log('[socket.io] Received context URL: ', url);
-    context.url = url;
-    // Try to update the UI (might not be loaded yet)
-    browser.runtime.sendMessage({ type: 'context:url', data: url }, function(response) {
-        if (browser.runtime.lastError) {
-            console.log(`Error: ${browser.runtime.lastError}`);
-        } else {
-            console.log('Message sent successfully');
-        }
-    });
-});
-
-
-// Get tabs for the current context from Canvas
-// Get current tabs from browser
-// Compare and sync
-
-
 
 
 /**
- * Message Handlers
+ * Socket.io event listeners
  */
 
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('background.js | Message received: ', message);
+socket.on('context:url', async (url) => {
+    console.log('background.js | [socket.io] Received context URL update: ', url);
+    context.url = url;
 
-    switch (message.action) {
+    canvasFetchContextTabs((res) => {
+        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
+        index.insertCanvasTabArray(res.data);
+    });
 
-        // socket.io
-        case 'get:socket:status':
-            console.log('Got get socket status')
-            sendResponse(socket.connected);
-            break;
+    browser.tabs.query({}).then((tabs) => {
+        index.insertBrowserTabArray(tabs);
+    });
 
-        // Canvas Config
-        case 'get:config':
-            sendResponse(config);
-            break;
+    // Automatically close existing tabs if enabled
+    //if (config.sync.autoCloseTabs) { browserCloseCurrentTabs(); }
 
-        case 'get:config:item':
-            if (!message.key) return console.error('No config key specified');
-            sendResponse(config[message.key]);
-            break;
+    // Automatically open new canvas tabs
+    //if (config.sync.autoOpenTabs) { browserOpenTabs(canvasTabs); }
 
-        case 'set:config:item':
-            if (!message.key || !message.value) return console.error('No config key or value specified');
-            config[message.key] = message.value;
-            sendResponse(config[message.key]);
-            break;
+    // Try to update the UI (might not be loaded)
+    browser.runtime.sendMessage({ type: 'context:url', data: url }, function(response) {
+        if (browser.runtime.lastError) {
+            console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
+        } else {
+            console.log('background.js | Message to UI sent successfully');
+        }
+    });
 
-        // Context
-        case 'get:context':
-            sendResponse(context);
-            break;
+});
 
-        case 'get:context:url':
-            sendResponse(context.url);
-            break;
-
-        case 'get:context:path':
-            sendResponse(context.path);
-            break;
-
-        case 'get:context:color':
-            sendResponse(context.color);
-            break;
-
-        // Tabs
-        case 'get:tab:schema':
-            sendResponse(TabSchema);
-            break;
-
-        case 'get:tabs':
-            try {
-                const response = sendTabToCanvas();
-                console.log(response);
-            } catch (error) {
-                console.error(error);
-            }
-            break;
-
-        case 'sync:tab':
-            syncTabToBackend(message.tabID, (res) => {
-                if (res.status === "success") {
-                    console.log(`Tab ${message.tabID} synced: `, res);
-                } else {
-                    console.error(`Sync failed for tab ${message.tabID}:`)
-                    console.error(res);
-                }
-            })
-            break;
-
-        case 'sync:all-tabs':
-            saveTabsToBackend((res) => {
-                if (res.status === "success") {
-                    console.log('All tabs synced: ', res);
-                } else {
-                    console.error('Sync failed:')
-                    console.error(res);
-                }
-
-
-            })
-            break;
-
-        case 'update:tab':
-            break;
-
-        case 'remove:tab':
-            break;
-
-        default:
-            console.error(`Unknown message action: ${message.action}`);
-            break;
-
-    }
-
+socket.on('context:documentInserted', (res) => {
+    console.log('background.js | [socket.io] Received documentInserted event: ', res);
 });
 
 
@@ -255,65 +166,87 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 browser.tabs.onCreated.addListener((tab) => {
     // noop, we need to wait for the onUpdated event to get the url
-    console.log(`Tab created: ${tab.id}`);
+    console.log(`background.js | Tab created: ${tab.id}`);
 })
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Only trigger if url is set and is different from what we already have cached
     // Assuming we already have the current session stored
-    if (changeInfo.url && tabUrls[tabId] !== tab.url) {
+    if (changeInfo.url && !index.hasBrowserTab(tab.url)) { //browserTabs[tabId] !== tab.url) {
 
         // Ignore empty tabs
         if (tab.url == "about:newtab" || tab.url == "about:blank") return
-        tabUrls[tabId] = tab.url;
+        index.insertBrowserTab(tab) //browserTabs[tabId] = tab.url;
 
-        let doc = formatTabProperties(tab);
+        let tabDocument = formatTabProperties(tab);
 
         // Update backend
-        console.log(`Tab ID ${tabId} changed, sending update to backend`)
-        saveTabToBackend(doc)
+        console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
+        canvasInsertTab(tabDocument, (res) => {
+            if (res.status === "success") {
+                console.log(`background.js | Tab ${tabId} inserted: `, res);
+            } else {
+                console.error(`background.js | Insert failed for tab ${tabId}:`)
+                console.error(res);
+            }
+        })
 
-        // Update browser
-        console.log(`Tab ID ${tabId} changed, sending update to browser extension`)
     }
 }, watchTabProperties)
 
 browser.tabs.onMoved.addListener((tabId, moveInfo) => {
-    let url = tabUrls[tabId];
+    let url = browserTabs[tabId];
+
+    // We need to rebuild the object because moveInfo doesn't contain the url
     let tab = {
         id: tabId,
         url: url,
         index: moveInfo.toIndex
     };
 
-    // Update backend
-    console.log(`Tab ID ${tabId} moved from ${moveInfo.fromIndex} to ${moveInfo.toIndex}, sending update to backend`);
-    let doc = TabSchema
-    doc.data = stripTabProperties(tab)
-    //updateDocument(doc)
-    saveTabToBackend(doc)
+
+    console.log(`background.js | Tab ID ${tabId} moved from ${moveInfo.fromIndex} to ${moveInfo.toIndex}, sending update to backend`);
+
+    let tabDocument = TabSchema
+    tabDocument.data = stripTabProperties(tab)
+
+    // Send update to backend
+    canvasUpdateTab(tabDocument, (res) => {
+        if (res.status === "success") {
+            console.log(`background.js | Tab ${tabId} updated: `, res);
+        } else {
+            console.error(`background.js | Update failed for tab ${tabId}:`)
+            console.error(res);
+        }
+    });
 
 });
 
 browser.browserAction.onClicked.addListener((tab, OnClickData) => {
-
     // Ignore empty tabs
     if (!tab.url || tab.url == "about:newtab" || tab.url == "about:blank") return
 
     // Update backend
     console.log(`Sending update to backend for tab ${tab.id}`);
-    tabUrls[tab.id] = tab.url;
+    browserTabs[tab.id] = tab.url;
 
-    let doc = TabSchema
-    doc.data = stripTabProperties(tab)
+    let tabDocument = TabSchema
+    tabDocument.data = stripTabProperties(tab)
 
-    //updateDocument(doc)
-    saveTabToBackend(doc)
+    // Send update to backend
+    canvasUpdateTab(tabDocument, (res) => {
+        if (res.status === "success") {
+            console.log(`background.js | Tab ${tabId} updated: `, res);
+        } else {
+            console.error(`background.js | Update failed for tab ${tabId}:`)
+            console.error(res);
+        }
+    });
 
 });
 
 browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
-    let url = tabUrls[tabId];
+    let url = browserTabs[tabId];
     let tab = {
         id: tabId,
         url: url
@@ -322,300 +255,118 @@ browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // Ignore empty tabs
     if (!tab.url || tab.url == "about:newtab" || tab.url == "about:blank") return
 
-    let doc = TabSchema
-    doc.data = stripTabProperties(tab)
+    let tabDocument = TabSchema
+    tabDocument.data = stripTabProperties(tab)
 
     // Update backend
-    console.log(`Tab ID ${tabId} removed, updating backend`);
-    removeDocument(doc)
+    console.log(`background.js | Tab ID ${tabId} removed, updating backend`);
+    canvasRemoveTab(tabDocument, (res) => {
+        if (res.status === "success") {
+            console.log(`background.js | Tab ${tabId} removed from Canvas: `, res);
+        } else {
+            console.error(`background.js | Remove failed for tab ${tabId}:`)
+            console.error(res);
+        }
+    })
 
     // Update browser
-    console.log(`Tab ID ${tabId} removed, sending update to browser extension`)
-    delete tabUrls[tabId]
+    delete browserTabs[tabId]
+
 });
 
 
 /**
- * Canvas backend functions
+ * UI Message Handlers
  */
 
-function saveTabToBackend(tab, cb) {
-    let doc = formatTabProperties(tab);
-    socket.emit('index:insertDocument', doc, (res) => {
-        console.log('Tab inserted: ', res);
-        if (cb) cb(res)
-    });
-}
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('background.js | UI Message received: ', message);
 
-function loadTabFromBackend(tabID, cb) {
-    socket.emit('index:getDocument', tabID, (res) => {
-        console.log(`Tab ${tabID} fetched: `, res);
-        if (cb) cb(res)
-    });
-}
+    switch (message.action) {
 
-function saveTabsToBackend(cb) {
-    browser.tabs.query({}).then((tabs) => {
-        let docs = tabs.map(tab => formatTabProperties(tab));
-        socket.emit('index:insertDocumentArray', docs, (res) => {
-            console.log('Tabs inserted: ', res);
-            if (cb) cb(res)
-        });
-    })
-}
+        // socket.io
+        case 'socket:status':
+            sendResponse(socket.connected);
+            break;
 
-function loadTabsFromBackend(cb) {
-    socket.emit('index:getDocumentArray', { type: 'data/abstraction/tab'}, (res) => {
-        console.log('Tabs fetched: ', res);
-        tabs = res;
-        if (cb) cb(res)
-    });
-}
+        // Canvas Config
+        case 'config:get':
+            sendResponse(config);
+            break;
 
+        case 'config:get:item':
+            if (!message.key) return console.error('background.js | No config key specified');
+            sendResponse(config[message.key]);
+            break;
 
+        case 'config:set:item':
+            if (!message.key || !message.value) return console.error('background.js | No config key or value specified');
+            config[message.key] = message.value;
+            sendResponse(config[message.key]);
+            break;
 
+        // Context
+        case 'context:get': // TODO: Remove
+            console.log('background.js | Sending ', context)
+            sendResponse(context);
+            break;
 
+        case 'context:get:url':
+            sendResponse(context.url);
+            break;
 
-/**
- * Canvas functions
- */
+        case 'context:get:path':
+            sendResponse(context.path);
+            break;
 
+        case 'context:get:pathArray':
+            sendResponse(context.pathArray);
+            break;
 
-// Function to fetch open tabs
-function fetchOpenTabs() {
-    return new Promise((resolve, reject) => {
-        browser.tabs.query({}).then(tabs => {
-            tabs.forEach(tab => {
-                openTabsMap.set(tab.url, tab); // Assuming tab.url is available
+        case 'context:get:color':
+            sendResponse(context.color);
+            break;
+
+        case 'context:get:tree':
+            sendResponse(context.tree);
+            break;
+
+        // Tab
+        case 'tab:insert':
+            break;
+
+        case 'tab:remove':
+            break;
+
+        case 'tab:get:schema':
+            sendResponse(TabSchema);
+            break;
+
+        // Tabs
+        case 'context:syncTabs':
+            canvasSaveOpenTabs((res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error saving tabs to Canvas')
+                console.log('background.js | Tabs saved to Canvas: ', res.data)
+                sendResponse(res);
             });
-            resolve(openTabsMap);
-        }).catch(reject);
-    });
-}
+            break;
 
-// Function to fetch tabs from Canvas
-function fetchTabsFromCanvas() {
-    return new Promise((resolve, reject) => {
-        socket.emit('index:getDocumentArray', { type: 'data/abstraction/tab'}, (res) => {
-            res.forEach(tabData => {
-                canvasTabsMap.set(tabData.url, tabData); // Assuming tabData.url is the SHA1 checksum of the URL
-            });
-            resolve(canvasTabsMap);
-        });
-        resolve(canvasTabsMap);
-    });
-}
+        case 'context:get:tabs':
+            sendResponse(canvasTabs);
+            break;
 
+        case 'tabs:get:browserToCanvasDelta':
+            sendResponse(index.deltaBrowserToCanvas());
+            break;
 
-async function sendTabToCanvas(tab, tagArray) {
-    return new Promise((resolve, reject) => {
-        socket.emit('sendTabToCanvas', { tab, tagArray }, (response) => {
-            if (response.error) {
-                reject(response.error);
-            } else {
-                resolve(response);
-            }
-        });
-    });
-}
+        case 'tabs:get:canvasToBrowserDelta':
+            sendResponse(index.deltaCanvasToBrowser());
+            break;
 
-async function sendTabsToCanvas(tabArray, tagArray) {
-    return new Promise((resolve, reject) => {
-        socket.emit('sendTabToCanvas', { tabArray, tagArray }, (response) => {
-            if (response.error) {
-                reject(response.error);
-            } else {
-                resolve(response);
-            }
-        });
-    });
-}
-
-async function loadTabsFromCanvas(tagArray) {
-    return new Promise((resolve, reject) => {
-        socket.emit('sendTabToCanvas', tagArray, (response) => {
-            if (response.error) {
-                reject(response.error);
-            } else {
-                resolve(response);
-            }
-        });
-    });
-}
-
-
-
-/**
- * Functions
- */
-
-function checkConnection() {
-    let intervalId = setInterval(() => {
-        if (!isConnected) {
-            console.log('UI | Canvas backend not yet connected');
-        } else {
-            clearInterval(intervalId);
-
-        }
-    }, 1000); // Check every second
-}
-
-// Fetch context URL, Tab schema, and stored URLs from the server
-function fetchContextUrl() {
-    socket.emit('context:get:url', {}, function (data) {
-        context.url = data;
-        console.log('Context URL fetched: ', context.url);
-    });
-}
-
-function fetchTabSchema() {
-    socket.emit('db:schema:get', { type: 'data/abstr/tab', version: '2' }, function (res) {
-        if (!res || res.status === 'error') {
-            console.error('Tab schema not found');
-        }
-        Tab = res;
-        console.log('Tab schema fetched: ', Tab);
-    });
-}
-
-
-function fetchStoredUrls() {
-    socket.emit('listDocuments', {
-        context: context.url,
-        type: 'data/abstraction/tab',
-    }, (data) => {
-        tabUrls = data;
-        console.log('Stored URLs fetched: ', tabUrls);
-    });
-}
-
-// Function to compare and populate maps
-function compareAndPopulateMaps() {
-    fetchOpenTabs().then(openTabs => {
-        fetchTabsFromCanvas().then(canvasTabs => {
-            const unsyncedTabsMap = new Map(); // Tabs open in browser but not in Canvas
-            const unopenedTabsMap = new Map(); // Tabs in Canvas but not open in browser
-
-            // Check for tabs that are open but not in Canvas
-            openTabs.forEach((tab, url) => {
-                if (!canvasTabs.has(url)) {
-                    unsyncedTabsMap.set(url, tab);
-                }
-            });
-
-            // Check for tabs that are in Canvas but not open
-            canvasTabs.forEach((canvasTab, url) => {
-                if (!openTabs.has(url)) {
-                    unopenedTabsMap.set(url, canvasTab);
-                }
-            });
-
-            // Now unsyncedTabsMap and unopenedTabsMap are populated
-            // Do something with these maps, like updating UI or syncing tabs
-
-        }).catch(error => console.error("Error fetching tabs from Canvas:", error));
-    }).catch(error => console.error("Error fetching open tabs:", error));
-}
-
-
-
-/**
- * Browser tab functions
- */
-
-function updateBrowserTabs(tabArray, hideInsteadOfRemove = false) {
-    browser.tabs.query({}).then((tabs) => {
-        let tabsToRemove = tabs.filter(tab => !tabArray.find(newTab => newTab.id === tab.id));
-        tabsToRemove.forEach(tab => {
-            console.log(`Removing tab ${tab.id}`);
-            browser.tabs.remove(tab.id)
-        });
-
-        tabArray.forEach(newTab => {
-            if (!tabs.find(tab => tab.id === newTab.id)) {
-                console.log(`Creating tab ${tab.id}`);
-                browser.tabs.create(newTab);
-            }
-        });
-    });
-}
-
-/**
- * Utils
- */
-
-function sanitizeContextPath(path) {
-    if (!path || path == '/') return '∞:///'
-    path = path
-        .replace(/\/\//g, '/')
-        .replace(/\:/g, '')
-        .replace(/universe/g,'∞')
-
-    return path
-}
-
-function stripTabProperties(tab) {
-    return {
-        //id: tab.id,
-        index: tab.index,
-        // Restore may fail if windowId does not exist
-        // TODO: Handle this case with windows.create()
-        // windowId: tab.windowId,
-        highlighted: tab.highlighted,
-        active: tab.active,
-        pinned: tab.pinned,
-        hidden: tab.hidden,
-        // boolean. Whether the tab is created and made visible in the tab bar without any content
-        // loaded into memory, a state known as discarded. The tab's content is loaded when the tab
-        // is activated.
-        // Defaults to true to conserve memory on restore
-        discarded: true, // tab.discarded,
-        incognito: tab.incognito,
-        //width: 1872,
-        //height: 1004,
-        //lastAccessed: 1675111332554,
-        audible: tab.audible,
-        mutedInfo: tab.mutedInfo,
-        isArticle: tab.isArticle,
-        isInReaderMode: tab.isInReaderMode,
-        sharingState: tab.sharingState,
-        url: tab.url,
-        title: tab.title
-    }
-}
-
-function formatTabProperties(tab) {
-    return {
-        ...TabSchema,
-        type: 'data/abstraction/tab',
-        data: {
-            //id: tab.id,
-            index: tab.index,
-            url: tab.url,
-            title: tab.title,
-            // Restore may fail if windowId does not exist
-            // TODO: Handle this case with windows.create()
-            // windowId: tab.windowId,
-            highlighted: tab.highlighted,
-            active: tab.active,
-            pinned: tab.pinned,
-            hidden: tab.hidden,
-            // boolean. Whether the tab is created and made visible in the tab bar without any content
-            // loaded into memory, a state known as discarded. The tab's content is loaded when the tab
-            // is activated.
-            // Defaults to true to conserve memory on restore
-            discarded: true, // tab.discarded,
-            incognito: tab.incognito,
-            //width: 1872,
-            //height: 1004,
-            //lastAccessed: 1675111332554,
-            audible: tab.audible,
-            mutedInfo: tab.mutedInfo,
-            isArticle: tab.isArticle,
-            isInReaderMode: tab.isInReaderMode,
-            sharingState: tab.sharingState,
-        }
+        default:
+            console.error(`background.js | Unknown message action: ${message.action}`);
+            break;
 
     }
 
-}
+});

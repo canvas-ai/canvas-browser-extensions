@@ -1,55 +1,64 @@
+console.log('UI | Initializing Canvas Browser Extension menu');
+
+
+/**
+ * Runtime variables
+ */
+
 let config = {};
 let context = {};
 let isConnected = false;
 
+let canvasToBrowserTabsDelta = {};
+let browserToCanvasTabsDelta = {};
+
 
 /**
- * Initialize UI
+ * Initialize the UI
  */
 
-browser.runtime.sendMessage({ action: 'get:socket:status' }, (status) => {
-    console.log(`UI | Background canvas connection status: "${status}"`)
-    isConnected = status;
-});
-
-browser.runtime.sendMessage({ action: 'get:config' }, (cfg) => {
-    console.log(`UI | Config: "${JSON.stringify(cfg, null, 2)}"`)
-    config = cfg;
-});
-
-browser.runtime.sendMessage({ action: 'get:context' }, (ctx) => {
-    console.log(`UI | Context: "${JSON.stringify(ctx, null, 2)}"`)
-    context = ctx;
-});
-
-
-// Initialize Materialize components
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
     console.log('UI | DOM loaded');
 
-    var mTabElements = document.querySelectorAll(".tabs");
-    var mTabs = M.Tabs.init(mTabElements, {});
+    // TODO: Rework to use a single request to background.js for initial variables
+    Promise.all([
+        fetchVariable({ action: 'socket:status' }),
+        fetchVariable({ action: 'config:get' }),
+        fetchVariable({ action: 'context:get' }),
+        fetchVariable({ action: 'tabs:get:browserToCanvasDelta' }),
+        fetchVariable({ action: 'tabs:get:canvasToBrowserDelta' })
+    ]).then((values) => {
 
-    var mCollapsibleElements = document.querySelectorAll(".collapsible");
-    var mCollapsible = M.Collapsible.init(mCollapsibleElements, {
-        accordion: false,
-    });
+        // TODO: Handle errors
+        isConnected = values[0];
+        config = values[1];
+        context = values[2];
+        browserToCanvasTabsDelta = values[3];
+        canvasToBrowserTabsDelta = values[4];
 
-    // Populate the pop-up with
-    browser.runtime.sendMessage({ action: 'get:context:url' }, (url) => {
-        if (!url) {
+        console.log(browserToCanvasTabsDelta)
+        console.log(canvasToBrowserTabsDelta)
+
+        var mTabElements = document.querySelectorAll(".tabs");
+        var mTabs = M.Tabs.init(mTabElements, {});
+
+        var mCollapsibleElements = document.querySelectorAll(".collapsible");
+        var mCollapsible = M.Collapsible.init(mCollapsibleElements, {
+            accordion: false,
+        });
+
+        if (!context.url) {
             console.log('UI | No context URL received from backend')
             updateContextBreadcrumbs('> Canvas backend not connected')
-            return;
+        } else {
+            updateContextBreadcrumbs(sanitizePath(context.url))
         }
 
-        context.url = url
-        updateContextBreadcrumbs(sanitizePath(url))
-    });
+        updateTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
+        updateTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
 
-    browser.tabs.query({}).then((tabs) => {
-        updateTabList(tabs);
-        updateBrowserTabCount(tabs);
+    }).catch(error => {
+        console.error("Error loading variables:", error);
     });
 
 });
@@ -65,6 +74,17 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const url = message.data;
         console.log(`UI | Got context URL: "${url}"`)
         updateContextBreadcrumbs(sanitizePath(url))
+
+        Promise.all([
+            fetchVariable({ action: 'tabs:get:browserToCanvasDelta' }),
+            fetchVariable({ action: 'tabs:get:canvasToBrowserDelta' })
+        ]).then((values) => {
+            browserToCanvasTabsDelta = values[0];
+            canvasToBrowserTabsDelta = values[1];
+            updateTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
+            updateTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
+        });
+
         context.url = url
     }
 });
@@ -77,7 +97,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 let syncTabsToCanvasButton = document.getElementById('sync-all-tabs');
 syncTabsToCanvasButton.addEventListener('click', () => {
     console.log('UI | Syncing all tabs to canvas')
-    browser.runtime.sendMessage({ action: 'sync:all-tabs' });
+    browser.runtime.sendMessage({ action: 'context:syncTabs' });
 })
 
 let openTabsFromCanvasButton = document.getElementById('open-all-tabs');
@@ -88,8 +108,12 @@ openTabsFromCanvasButton.addEventListener('click', () => {
 
 
 /**
- * Functions
+ * Utils
  */
+
+function fetchVariable(message) {
+    return browser.runtime.sendMessage(message);
+}
 
 function sanitizePath(path) {
     if (!path || path == '/') return '∞:///'
@@ -126,7 +150,6 @@ function updateBrowserTabCount(tabs) {
     console.log('UI | Updating tab count')
     if (!tabs || tabs.length < 1) return console.log('UI | No tabs provided')
     let count = 0;
-
     for (let i = 0; i < tabs.length; i++) {
         if (tabs[i].url !== 'about:blank' && tabs[i].url !== 'about:newtab') {
             count++;
@@ -137,10 +160,10 @@ function updateBrowserTabCount(tabs) {
     document.getElementById('browser-tab-count').textContent = count;
 }
 
-function updateTabList(tabs) {
+function updateTabList(tabs, containerId) {
     if (!tabs || tabs.length < 1) return;
 
-    const tabListContainer = document.getElementById('tab-list');
+    const tabListContainer = document.getElementById(containerId);
 
     // Clear the existing tab list
     tabListContainer.innerHTML = '';

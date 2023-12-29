@@ -22,6 +22,8 @@
       "js/store.modern.min.js",
       "js/socket.io.min.js",
       "config.js",
+      "utils-canvas.js",
+      "utils-browser.js",
       "background.js"
     ],
     "persistent": true

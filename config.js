@@ -1,13 +1,20 @@
-function getNestedProp(obj, path, defaultValue) {
-    const value = path.split('.').reduce((o, k) => (o || {})[k], obj);
-    return value === undefined ? defaultValue : value;
-}
+/**
+ * Main configuration module
+ */
 
 const config = {
     sync: {
-        autoRestoreSession: getNestedProp(store.get('sync'), 'autoRestoreSession', false),
-        autoSaveSession: getNestedProp(store.get('sync'), 'autoSaveSession', false),
-        autoOpenTabs: getNestedProp(store.get('sync'), 'autoOpenTabs', false)
+        autoRestoreSession: getNestedProp(store.get('sync'), 'autoRestoreSession', true),
+        autoSaveSession: getNestedProp(store.get('sync'), 'autoSaveSession', true),
+        autoOpenTabs: getNestedProp(store.get('sync'), 'autoOpenTabs', true),
+        autoCloseTabs: getNestedProp(store.get('sync'), 'autoCloseTabs', true),
+        // autoCloseTabsBehavior:
+        // - saveToCurrentContext
+        // - saveToNewContext
+        // - saveToTrash
+        // - saveToUniverse
+        // - ignore (leave open, do not sync to Canvas)
+        autoCloseTabsBehavior: getNestedProp(store.get('sync'), 'autoCloseTabsBehavior', 'ignore')
     },
 
     session: {},
@@ -28,3 +35,14 @@ const config = {
         return this[key];
     }
 };
+
+
+/**
+ * Functions
+ */
+
+function getNestedProp(obj, path, defaultValue) {
+    const value = path.split('.').reduce((o, k) => (o || {})[k], obj);
+    return value === undefined ? defaultValue : value;
+}
+
