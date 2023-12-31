@@ -1,3 +1,11 @@
+function browserIsValidTabUrl(tabUrl) {
+    
+    // Ignore empty tabs and URLs starting with "about:"
+    if (tabUrl == "" || /^about:/.test(tabUrl)) {
+        return false;
+    }
+    return true;
+}
 
 function browserCloseCurrentTabs() {
     browser.tabs.query({}).then((tabs) => {
@@ -54,7 +62,8 @@ function stripTabProperties(tab) {
         isInReaderMode: tab.isInReaderMode,
         sharingState: tab.sharingState,
         url: tab.url,
-        title: tab.title
+        title: tab.title,
+        favIconUrl: tab.favIconUrl
     }
 }
 
@@ -67,6 +76,7 @@ function formatTabProperties(tab) {
             index: tab.index,
             url: tab.url,
             title: tab.title,
+            favIconUrl: tab.favIconUrl,
             // Restore may fail if windowId does not exist
             // TODO: Handle this case with windows.create()
             // windowId: tab.windowId,

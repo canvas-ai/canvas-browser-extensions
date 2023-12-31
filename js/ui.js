@@ -47,12 +47,14 @@ document.addEventListener("DOMContentLoaded", () => {
             accordion: false,
         });
 
-        if (!context.url) {
+        if (!isConnected) {
             console.log('UI | No context URL received from backend')
             updateContextBreadcrumbs('> Canvas backend not connected')
         } else {
             updateContextBreadcrumbs(sanitizePath(context.url))
         }
+
+        console.log(browserToCanvasTabsDelta)
 
         updateTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
         updateTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
@@ -106,6 +108,11 @@ openTabsFromCanvasButton.addEventListener('click', () => {
 
 })
 
+let closeAllBrowserTabsButton = document.getElementById('close-all-tabs');
+closeAllBrowserTabsButton.addEventListener('click', () => {
+    console.log('UI | Closing all current tabs')
+
+})
 
 /**
  * Utils
@@ -146,24 +153,27 @@ function updateContextBreadcrumbs(url) {
     }
 }
 
-function updateBrowserTabCount(tabs) {
+function updateTabCount(tabs, containerID) {
     console.log('UI | Updating tab count')
     if (!tabs || tabs.length < 1) return console.log('UI | No tabs provided')
     let count = 0;
     for (let i = 0; i < tabs.length; i++) {
-        if (tabs[i].url !== 'about:blank' && tabs[i].url !== 'about:newtab') {
+        if (browserIsValidTabUrl(tabs[i].url)) {
             count++;
         }
     }
 
     console.log(`UI | Number of open tabs (excluding empty/new tabs): ${count}`);
-    document.getElementById('browser-tab-count').textContent = count;
+    document.getElementById(containerID).textContent = count;
 }
 
-function updateTabList(tabs, containerId) {
+function updateTabList(tabs, containerID) {
     if (!tabs || tabs.length < 1) return;
 
-    const tabListContainer = document.getElementById(containerId);
+    console.log(`UI | Updating tab list: ${containerID}`)
+    console.log(tabs)
+    
+    const tabListContainer = document.getElementById(containerID);
 
     // Clear the existing tab list
     tabListContainer.innerHTML = '';
@@ -173,22 +183,26 @@ function updateTabList(tabs, containerId) {
         const tabItem = document.createElement("li");
         tabItem.className = "collection-item";
 
-        const tabItemTitle = document.createElement("p");
-        tabItemTitle.textContent = tab.title;
+        // Create an anchor tag to make the entire item clickable
+        const tabItemLink = document.createElement("a");
+        tabItemLink.href = tab.url; 
+        tabItemLink.className = "tab-title truncate black-text";
+        tabItemLink.style.textDecoration = "none"; // Remove underline from links
 
-        const tabItemIconSync = document.createElement("a");
-        tabItemIconSync.className = "material-icons secondary-content black-text";
-        tabItemIconSync.href = "#!sync";
-        tabItemIconSync.textContent = "sync";
+        // Create an image element for the favicon
+        const favicon = document.createElement("img");
+        favicon.src = tab.favIconUrl;
+        favicon.style.width = '16px';
+        favicon.style.height = '16px';
+        favicon.style.marginRight = '8px';
 
-        const tabItemIconLoad = document.createElement("a");
-        tabItemIconLoad.href = "#!close";
-        tabItemIconLoad.className = "material-icons secondary-content red-text";
-        tabItemIconLoad.textContent = "close";
+        // Append favicon and text to the link
+        tabItemLink.appendChild(favicon);
+        tabItemLink.appendChild(document.createTextNode(tab.title)); // Use createTextNode to avoid HTML injection
 
-        tabItem.appendChild(tabItemTitle);
-        tabItemTitle.appendChild(tabItemIconSync);
-        tabItemTitle.appendChild(tabItemIconLoad);
+        // Append the link to the list item
+        tabItem.appendChild(tabItemLink);
         tabListContainer.appendChild(tabItem);
     });
 }
+
