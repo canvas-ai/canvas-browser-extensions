@@ -1,11 +1,10 @@
-let context = {}
+console.log('content-script.js | Initializing content script');
 
-console.log('content-script.js | Initializing content script')
-console.log(store)
+let context = {
+    color: "#000"
+}
 
-/*
-browser.runtime.sendMessage({ action: 'get:context' }, (ctx) => {
-    console.log(`Content script | Context: "${JSON.stringify(ctx, null, 2)}"`)
-    context = ctx;
+document.addEventListener("DOMContentLoaded", () => {
+    console.log('content-script | DOM loaded');
+    document.body.style.borderRight = "5px solid " + context.color + " !important";    
 });
-*/

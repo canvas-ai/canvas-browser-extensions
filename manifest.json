@@ -19,11 +19,11 @@
 
   "background": {
     "scripts": [
-      "js/store.modern.min.js",
-      "js/socket.io.min.js",
-      "config.js",
-      "utils-canvas.js",
-      "utils-browser.js",
+      "js/lib/store.modern.min.js",
+      "js/lib/socket.io.min.js",
+      "js/config.js",
+      "js/TabIndex.js",
+      "js/utils.js",
       "background.js"
     ],
     "persistent": true
@@ -57,10 +57,6 @@
     "notifications",
     "storage",
     "unlimitedStorage",
-    "webRequest",
-    "webRequestBlocking",
-    "downloads",
-    "identity",
     "http://*/*",
     "https://*/*"
   ]

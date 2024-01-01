@@ -1,8 +1,8 @@
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
-// Extension config @config.js
-// Extension canvas utils @utils-canvas.js
-// Extension browser utils @utils-browser.js
+// Extension config @js/config.js
+// Extension utils @js/utils.js
+// TabIndex @js/TabIndex.js
 
 // Runtime defaults
 let context = {
@@ -21,123 +21,9 @@ let watchTabProperties = {
     ]
 };
 
-
-/**
- * Tab Index Class (TODO: Move to utils)
- */
-
-class Index {
-
-    constructor() {
-        this.browserTabIdToUrl = new Map();
-        this.browserTabs = new Map();
-        this.canvasTabs = new Map();
-    }
-
-    // Common methods
-    counts() {
-        return {            
-            browserTabs: this.browserTabs.size,
-            canvasTabs: this.canvasTabs.size,
-            browserTabIdToUrl: this.browserTabIdToUrl.size
-        }
-    }
-
-    getBrowserTabArray() {
-        return [...this.browserTabs.values()];
-    }
-
-    getBrowserTabByID(id) {
-        let url = this.browserTabIdToUrl.get(id);
-        return this.browserTabs.get(url);
-    }
-
-    insertBrowserTab(tab) {
-        this.browserTabIdToUrl.set(tab.id, tab.url);
-        this.browserTabs.set(tab.url, tab);
-    }
-
-    removeBrowserTab(url) {
-        let tab = this.browserTabs.get(url);
-        this.browserTabIdToUrl.delete(tab.id);
-        this.browserTabs.delete(url);
-    }
-
-    insertBrowserTabArray(tabArray, clear = true) {
-        if (clear) this.browserTabs.clear();
-        tabArray.forEach(tab => this.insertBrowserTab(tab));
-    }
-
-    hasBrowserTab(url) {
-        return this.browserTabs.has(url);
-    }
-
-    clearBrowserTabs() {
-        this.browserTabIdToUrl.clear();
-        this.browserTabs.clear();
-    }
-
-    updateBrowserTabs() {
-        browser.tabs.query({}).then((tabs) => {            
-            const processedTabs = tabs.map(tab => {
-                // Assign a default favicon if favIconUrl is not present
-                if (!tab.favIconUrl) tab.favIconUrl = browser.runtime.getURL('icons/logo_64x64.png');
-                return tab;
-            });
-    
-            this.insertBrowserTabArray(processedTabs);
-        });
-    }
-    
-
-    insertCanvasTab(tab) {
-        this.canvasTabs.set(tab.url, tab);
-    }
-
-    removeCanvasTab(url) {
-        this.canvasTabs.delete(url);
-    }
-
-    insertCanvasTabArray(tabArray, clear = true) {
-        if (clear) this.canvasTabs.clear();
-        tabArray.forEach(tab => this.insertCanvasTab(tab));
-    }
-
-    hasCanvasTab(url) {
-        return this.canvasTabs.has(url);
-    }
-
-    clearCanvasTabs() {
-        this.canvasTabs.clear();
-    }
-
-    deltaBrowserToCanvas() {
-        console.log('background.js | Computing delta browser to canvas')
-        return [...this.browserTabs.values()].filter(tab => !this.canvasTabs.has(tab.url));
-    }
-
-    deltaCanvasToBrowser() {
-        console.log('background.js | Computing delta canvas to browser')
-        return [...this.canvasTabs.values()].filter(tab => !this.browserTabs.has(tab.url));
-    }
-
-    clearIndex() {
-        console.log('background.js | Clearing tab index')
-        this.clearBrowserTabs();
-        this.clearCanvasTabs();
-    }
-
-    #parseTab(tab) {
-        let parsed = tab;
-        return parsed;
-    }
-
-    #stripTabProperties(tab) {}
-
-}
-
 // Custom index module for easier delta comparison
-const index = new Index();
+const index = new TabIndex();
+index.updateBrowserTabs();
 console.log('background.js | Index initialized: ', index.counts());
 
 /**
@@ -228,19 +114,18 @@ browser.tabs.onCreated.addListener((tab) => {
 })
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    // Only trigger if url is set and is different from what we already have cached
-    // Assuming we already have the current session stored
-    if (changeInfo.url && !index.hasBrowserTab(tab.url)) {
+    console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
-        // Ignore non-valid tabs(about:*, empty tabs etc)
-        if (!browserIsValidTabUrl(tab.url)) return
-        
-        // Update the current index
-        index.updateBrowserTabs();
+    // Update the current index
+    index.updateBrowserTabs();    
+
+    // Trigger on url change if the tab url is valid
+    if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
 
         // Update backend
         console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
-        let tabDocument = formatTabProperties(tab);        
+        
+        let tabDocument = formatTabProperties(tab);
         canvasInsertTab(tabDocument, (res) => {
             if (res.status === "success") {
                 console.log(`background.js | Tab ${tabId} inserted: `, res);
@@ -317,6 +202,8 @@ browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // Lets fetch the tab based on ID from our index
     // This is needed as the tab object is not available after removal
     let tab = index.getBrowserTabByID(tabId);
+    console.log([...index.browserTabIdToUrl])
+    if (!tab) return console.error(`background.js | Tab ${tabId} not found in index`);    
     console.log('background.js | Tab object URL from index: ', tab.url);
 
     // Update the current index (remove tab), maybe we should move it in the callback?

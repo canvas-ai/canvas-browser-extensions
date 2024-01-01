@@ -131,29 +131,3 @@ function fetchStoredUrls() {
         console.log('background.js | Stored URLs fetched: ', tabUrls);
     });
 }
-
-// Function to compare and populate maps
-
-
-
-
-/**
- * Browser tab functions
- */
-
-function updateBrowserTabs(tabArray, hideInsteadOfRemove = false) {
-    browser.tabs.query({}).then((tabs) => {
-        let tabsToRemove = tabs.filter(tab => !tabArray.find(newTab => newTab.id === tab.id));
-        tabsToRemove.forEach(tab => {
-            console.log(`background.js | Removing tab ${tab.id}`);
-            browser.tabs.remove(tab.id)
-        });
-
-        tabArray.forEach(newTab => {
-            if (!tabs.find(tab => tab.id === newTab.id)) {
-                console.log(`background.js | Creating tab ${tab.id}`);
-                browser.tabs.create(newTab);
-            }
-        });
-    });
-}

@@ -1,43 +1,10 @@
-## App config
-/config/**
-!/config/aliases.json
-!/config/colors.json
-!/config/socket.io-server.json
-!/config/jsonapi-server.json
-!/config/.keep
-
-## Var directories
-/var/**
-!/var/.keep
-#/var/log/**
-#/var/run/**
-#/var/tmp/**
-
-## Portable runtimes
-/runtime/**
-!/runtime/.keep
-
-## User directories
-/user/**
-!user/.keep
-!user/.ignore
-/data/**
-!data/.keep
-/home/**
-!home/.keep
-
 ## Dev
 /.vscode
 /.fossil-settings
 /_SCRATCH_
-/_TODO_
-/_OLD_
 
 ## Documentation
 /docs/**
-!/docs/.keep
-!/docs/ui
-!/docs/ui/*
 
 ## Logs
 *.log
