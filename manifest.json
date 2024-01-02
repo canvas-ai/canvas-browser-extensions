@@ -20,11 +20,11 @@
   "background": {
     "scripts": [
       "js/lib/store.modern.min.js",
-      "js/lib/socket.io.min.js",      
+      "js/lib/socket.io.min.js",
       "js/utils/config.js",
       "js/utils/TabIndex.js",
       "js/utils/canvas.js",
-      "js/utils/browser.js",      
+      "js/utils/browser.js",
       "background.js"
     ],
     "persistent": true
@@ -58,9 +58,7 @@
     "storage",
     "unlimitedStorage",
     "http://*/*",
-    "https://*/*",
-    "canvas://*/*",
-    "context://*/*"
+    "https://*/*"
   ]
 
 }

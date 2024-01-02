@@ -7,7 +7,7 @@ const config = {
         autoRestoreSession: getNestedProp(store.get('sync'), 'autoRestoreSession', true),
         autoSaveSession: getNestedProp(store.get('sync'), 'autoSaveSession', true),
         autoOpenTabs: getNestedProp(store.get('sync'), 'autoOpenTabs', true),
-        autoCloseTabs: getNestedProp(store.get('sync'), 'autoCloseTabs', true),
+        autoCloseTabs: getNestedProp(store.get('sync'), 'autoCloseTabs', false),
         // autoCloseTabsBehavior:
         // - saveToCurrentContext
         // - saveToNewContext

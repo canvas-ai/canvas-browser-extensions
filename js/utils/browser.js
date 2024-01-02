@@ -1,9 +1,5 @@
 function browserIsValidTabUrl(tabUrl) {
-    // Ignore empty tabs and URLs starting with "about:"
-    if (tabUrl == "" || /^about:/.test(tabUrl)) {
-        return false;
-    }
-    return true;
+    return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
 }
 
 function browserCloseTab(id) {

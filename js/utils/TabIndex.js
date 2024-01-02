@@ -8,7 +8,7 @@ class TabIndex {
 
     // Common methods
     counts() {
-        return {            
+        return {
             browserTabs: this.browserTabs.size,
             canvasTabs: this.canvasTabs.size,
             browserTabIdToUrl: this.browserTabIdToUrl.size
@@ -29,7 +29,7 @@ class TabIndex {
         return this.browserTabs.get(url);
     }
 
-    insertBrowserTab(tab) {        
+    insertBrowserTab(tab) {
         if (!tab.id || !tab.url) return console.error('background.js | Invalid tab object: ', tab);
         this.browserTabIdToUrl.set(tab.id, tab.url);
         this.browserTabs.set(tab.url, this.#stripTabProperties(tab));
@@ -60,12 +60,16 @@ class TabIndex {
     }
 
     updateBrowserTabs() {
-        browser.tabs.query({}).then((tabs) => {            
-            const processedTabs = tabs.map(tab => this.#stripTabProperties(tab));
+        browser.tabs.query({}).then((tabs) => {
+            const processedTabs = tabs.map(tab => {
+                if (browserIsValidTabUrl(tab.url)) {
+                    return this.#stripTabProperties(tab);
+                }
+            }).filter(tab => tab != undefined);
             this.insertBrowserTabArray(processedTabs);
         });
     }
-    
+
     insertCanvasTab(tab) {
         this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
     }
@@ -85,7 +89,7 @@ class TabIndex {
 
     getCanvasTabArray() {
         return [...this.canvasTabs.values()];
-    }    
+    }
 
     clearCanvasTabs() {
         this.canvasTabs.clear();
@@ -115,7 +119,7 @@ class TabIndex {
             url: tab.url,
             title: tab.title,
             favIconUrl: tab.favIconUrl ? tab.favIconUrl : browser.runtime.getURL('icons/logo_64x64.png'),
-        
+
             // Restore may fail if windowId does not exist hence omitted
             // TODO: Handle this case with windows.create()
             // windowId: tab.windowId,

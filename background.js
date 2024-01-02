@@ -81,7 +81,7 @@ socket.on('context:url', (url) => {
     canvasFetchTabsForContext((res) => {
         if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
         index.updateBrowserTabs();
-        index.insertCanvasTabArray(res.data, false);        
+        index.insertCanvasTabArray(res.data, false);
     });
 
     // Automatically close existing tabs if enabled
@@ -119,14 +119,14 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
     // Update the current index
-    index.updateBrowserTabs();    
+    index.updateBrowserTabs();
 
     // Trigger on url change if the tab url is valid
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
 
         // Update backend
         console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
-        
+
         let tabDocument = formatTabProperties(tab);
         canvasInsertTab(tabDocument, (res) => {
             if (res.status === "success") {
@@ -150,11 +150,11 @@ browser.tabs.onMoved.addListener((tabId, moveInfo) => {
     // noop
     //console.log('background.js | TODO: Disabled as we currently do not track move changes');
     //return;
-    
-    browser.tabs.get(tabId).then(tab => {        
+
+    browser.tabs.get(tabId).then(tab => {
         let tabDocument = TabDocumentSchema
         tabDocument.data = stripTabProperties(tab)
-    
+
         // Send update to backend
         canvasUpdateTab(tabDocument, (res) => {
             if (res.status === "success") {
@@ -200,12 +200,12 @@ browser.browserAction.onClicked.addListener((tab, OnClickData) => {
 
 browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     console.log('background.js | Tab removed: ', tabId, removeInfo);
-    
+
     // Lets fetch the tab based on ID from our index
     // This is needed as the tab object is not available after removal
     let tab = index.getBrowserTabByID(tabId);
     console.log([...index.browserTabIdToUrl])
-    if (!tab) return console.error(`background.js | Tab ${tabId} not found in index`);    
+    if (!tab) return console.error(`background.js | Tab ${tabId} not found in index`);
     console.log('background.js | Tab object URL from index: ', tab.url);
 
     // Update the current index (remove tab), maybe we should move it in the callback?
@@ -301,6 +301,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 console.log('background.js | Tabs saved to Canvas: ', res.data)
                 sendResponse(res);
             });
+            index.updateBrowserTabs();
             break;
 
         case 'context:get:tabs':

@@ -38,13 +38,14 @@ function canvasFetchTabsForContext(cb) {
         // We are only interested in data: { ... }
         const parsed = res.data.filter(tab => tab !== null).map(tab => tab.data);
         res.data = parsed;
-        
+
         cb(res);
     });
 }
 
 function canvasSaveTabArray(tabArray, cb) {
-    if (!tabArray) return false;
+    if (!tabArray || !tabArray.length) return false;
+    tabArray = tabArray.map(tab => formatTabProperties(tab));
     socket.emit('documents:insertDocumentArray', tabArray, (res) => {
         if (cb) cb(res)
     });
@@ -63,7 +64,7 @@ function checkCanvasConnection() {
 
 function formatTabProperties(tab) {
     return {
-        ...TabSchema,
+        ...TabDocumentSchema,
         type: 'data/abstraction/tab',
         data: tab
     }
