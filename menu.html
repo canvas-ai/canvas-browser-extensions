@@ -44,6 +44,7 @@
         .breadcrumb,
         .breadcrumb::before {
             color: rgba(32, 32, 32, 0.7);
+            font-weight: 600;            
         }
 
         .collection-item > p {
@@ -96,8 +97,14 @@
             will-change: left, right;
         }
 
+        li.tab {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            text-transform: none!important;
+        }
     </style>
-    <title>Canvas UI</title>
+    <title>Canvas UI | Browser Sync</title>
 </head>
 <body>
 
@@ -110,15 +117,16 @@
                 <div id="breadcrumb-container" class="col s12 black-text"></div>
             </div>
             <div class="nav-content">
-                <ul class="tabs black-text">
-                    <li class="tab"><a href="#browser-to-canvas" class="black-text">Browser > Canvas</a></li>
-                    <li class="tab"><a href="#canvas-to-browser" class="black-text">Canvas > Browser</a></li>
-                    <li class="tab"><a href="#settings" class="black-text"><i class="material-icons">settings</i></a></li>
+                <ul class="tabs black-text">                    
+                    <li class="tab"><a href="#browser-to-canvas">Browser to Canvas</a></li>
+                    <li class="tab"><a href="#canvas-to-browser">Canvas to Browser</a></li>
+                    <li class="tab"><a href="#tab-search"><i class="material-icons">search</i></a></li>
+                    <li class="tab"><a href="#settings"><i class="material-icons">settings</i></a></li>
                 </ul>
             </div>
         </nav>
     </header>
-
+    
     <main>
         <div id="browser-to-canvas" class="container">
             <h5>Sync to Canvas
@@ -143,6 +151,9 @@
             </ul>
         </div>
 
+        <div id="tab-search" class="container">
+
+        </div>
         <div id="settings" class="container">
             <h5>Settings</h5>
             <ul class="collapsible">
@@ -190,7 +201,7 @@
     <footer class="page-footer grey darken-3">
         <div class="container white-text">
             <div class="row">
-                <div class="col s6 16 left-align">©2023 Canvas UI</div>
+                <div class="col s6 16 left-align">©2024 Canvas UI</div>
                 <div class="col s6 16 right-align">
                     <a class="white-text text-lighten-4" href="https://github.com/idncsk/canvas/issues/new" target="_blank">Submit an issue</a>
                 </div>

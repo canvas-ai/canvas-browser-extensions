@@ -12,7 +12,7 @@
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "canvas-firefox@getcanvas.org",
+      "id": "canvas-ui-firefox@getcanvas.org",
       "strict_min_version": "50.0"
     }
   },
@@ -20,10 +20,11 @@
   "background": {
     "scripts": [
       "js/lib/store.modern.min.js",
-      "js/lib/socket.io.min.js",
-      "js/config.js",
-      "js/TabIndex.js",
-      "js/utils.js",
+      "js/lib/socket.io.min.js",      
+      "js/utils/config.js",
+      "js/utils/TabIndex.js",
+      "js/utils/canvas.js",
+      "js/utils/browser.js",      
       "background.js"
     ],
     "persistent": true
@@ -39,8 +40,7 @@
       ],
       "css": [
         "css/content.css"
-      ],
-      "run_at": "document_start"
+      ]
     }
   ],
 
@@ -58,7 +58,9 @@
     "storage",
     "unlimitedStorage",
     "http://*/*",
-    "https://*/*"
+    "https://*/*",
+    "canvas://*/*",
+    "context://*/*"
   ]
 
 }

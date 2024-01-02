@@ -17,6 +17,8 @@ class TabIndex {
 
     get browserTabCount() { return this.browserTabs.size; }
     get canvasTabCount() { return this.canvasTabs.size; }
+    get browserToCanvasDeltaCount() { return this.deltaBrowserToCanvas().length; }
+    get canvasToBrowserDeltaCount() { return this.deltaCanvasToBrowser().length; }
 
     getBrowserTabArray() {
         return [...this.browserTabs.values()];
@@ -64,7 +66,6 @@ class TabIndex {
         });
     }
     
-
     insertCanvasTab(tab) {
         this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
     }
@@ -81,6 +82,10 @@ class TabIndex {
     hasCanvasTab(url) {
         return this.canvasTabs.has(url);
     }
+
+    getCanvasTabArray() {
+        return [...this.canvasTabs.values()];
+    }    
 
     clearCanvasTabs() {
         this.canvasTabs.clear();
@@ -111,7 +116,7 @@ class TabIndex {
             title: tab.title,
             favIconUrl: tab.favIconUrl ? tab.favIconUrl : browser.runtime.getURL('icons/logo_64x64.png'),
         
-            // Restore may fail if windowId does not exist
+            // Restore may fail if windowId does not exist hence omitted
             // TODO: Handle this case with windows.create()
             // windowId: tab.windowId,
             highlighted: tab.highlighted,

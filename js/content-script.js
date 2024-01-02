@@ -1,10 +1,14 @@
-console.log('content-script.js | Initializing content script');
+console.log('content-script.js | Initializing CanvasUI content script');
 
-let context = {
+const context = {
     color: "#000"
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log('content-script | DOM loaded');
-    document.body.style.borderRight = "5px solid " + context.color + " !important";    
+    browser.runtime.sendMessage({ action: 'context:get' })
+    .then(response => {        
+        console.log('--------------------')
+        console.log(response);
+    });
 });

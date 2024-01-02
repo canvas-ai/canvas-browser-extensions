@@ -36,9 +36,6 @@ document.addEventListener("DOMContentLoaded", () => {
         browserToCanvasTabsDelta = values[3];
         canvasToBrowserTabsDelta = values[4];
 
-        console.log(browserToCanvasTabsDelta)
-        console.log(canvasToBrowserTabsDelta)
-
         var mTabElements = document.querySelectorAll(".tabs");
         var mTabs = M.Tabs.init(mTabElements, {});
 
@@ -49,15 +46,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!isConnected) {
             console.log('UI | No context URL received from backend')
-            updateContextBreadcrumbs('> Canvas backend not connected')
+            updateContextBreadcrumbs('! Canvas backend not connected')
         } else {
-            updateContextBreadcrumbs(sanitizePath(context.url))
+            updateContextBreadcrumbs(context.url)
         }
 
-        console.log(browserToCanvasTabsDelta)
-
-        updateTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
-        updateTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
+        updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
+        updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
 
     }).catch(error => {
         console.error("Error loading variables:", error);
@@ -75,7 +70,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'context:url') {
         const url = message.data;
         console.log(`UI | Got context URL: "${url}"`)
-        updateContextBreadcrumbs(sanitizePath(url))
+        updateContextBreadcrumbs(url)
 
         Promise.all([
             fetchVariable({ action: 'tabs:get:browserToCanvasDelta' }),
@@ -83,8 +78,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ]).then((values) => {
             browserToCanvasTabsDelta = values[0];
             canvasToBrowserTabsDelta = values[1];
-            updateTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
-            updateTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
+            updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
+            updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);    
         });
 
         context.url = url
@@ -114,6 +109,7 @@ closeAllBrowserTabsButton.addEventListener('click', () => {
 
 })
 
+
 /**
  * Utils
  */
@@ -122,22 +118,24 @@ function fetchVariable(message) {
     return browser.runtime.sendMessage(message);
 }
 
-function sanitizePath(path) {
-    if (!path || path == '/') return '∞:///'
-    path = path
+function sanitizeContextUrl(url) {
+    console.log('UI | Sanitizing context URL')
+    console.log(url)
+    if (!url || url == '/' || url == 'universe:///') return 'Universe'
+    url = url
+        .replace(/^universe/, 'Universe')
         .replace(/\/\//g, '/')
         .replace(/\:/g, '')
-        .replace(/universe/g,'∞')
-
-    return path
+        //.replace(/universe/g,'∞')
+    return url
 }
 
 function updateContextBreadcrumbs(url) {
     console.log('UI | Updating breadcrumbs')
-    if (!url) return console.log('UI | No URL provided')
-    if (typeof url !== 'string') return console.log('UI | URL is not a string')
+    if (!url) return console.error('UI | No URL provided')
+    if (typeof url !== 'string') return console.error('UI | URL is not a string')
 
-    //url = sanitizePath(url)
+    url = sanitizeContextUrl(url)
     const breadcrumbContainer = document.getElementById("breadcrumb-container");
     if (breadcrumbContainer) {
         breadcrumbContainer.innerHTML = ""; // Clear existing breadcrumbs
@@ -153,7 +151,7 @@ function updateContextBreadcrumbs(url) {
     }
 }
 
-function updateTabCount(tabs, containerID) {
+function updateTabCounter(tabs, containerID) {
     console.log('UI | Updating tab count')
     if (!tabs || tabs.length < 1) return console.log('UI | No tabs provided')
     let count = 0;
@@ -167,7 +165,7 @@ function updateTabCount(tabs, containerID) {
     document.getElementById(containerID).textContent = count;
 }
 
-function updateTabList(tabs, containerID) {
+function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab-list') {
     if (!tabs || tabs.length < 1) return;
 
     console.log(`UI | Updating tab list: ${containerID}`)
@@ -182,27 +180,98 @@ function updateTabList(tabs, containerID) {
     tabs.forEach((tab) => {
         const tabItem = document.createElement("li");
         tabItem.className = "collection-item";
+        tabItem.style.display = "flex"; // Set display to flex for alignment
+        tabItem.style.justifyContent = "space-between"; // Space between elements
 
-        // Create an anchor tag to make the entire item clickable
+        // Create an anchor tag for the tab
         const tabItemLink = document.createElement("a");
         tabItemLink.href = tab.url; 
         tabItemLink.className = "tab-title truncate black-text";
         tabItemLink.style.textDecoration = "none"; // Remove underline from links
+        tabItemLink.style.flexGrow = "1"; // Allow the link to grow and fill space
 
         // Create an image element for the favicon
         const favicon = document.createElement("img");
-        favicon.src = tab.favIconUrl;
+        favicon.src = tab.favIconUrl
         favicon.style.width = '16px';
         favicon.style.height = '16px';
         favicon.style.marginRight = '8px';
 
         // Append favicon and text to the link
         tabItemLink.appendChild(favicon);
-        tabItemLink.appendChild(document.createTextNode(tab.title)); // Use createTextNode to avoid HTML injection
+        tabItemLink.appendChild(document.createTextNode(tab.title));
 
-        // Append the link to the list item
+        // Create a delete (trash) icon
+        const trashIcon = document.createElement("i");
+        trashIcon.className = 'material-icons';
+        trashIcon.textContent = 'close'; // The text 'delete' represents the trash icon
+        trashIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
+        trashIcon.title = 'Close tab'; 
+        trashIcon.onclick = function(event) {
+            event.preventDefault(); // Prevent the link from navigating
+            // Handle the trash icon click event
+            // Example: console.log('Trash icon clicked for tab:', tab);
+        };
+
+        // Append the link and trash icon to the list item
         tabItem.appendChild(tabItemLink);
+        tabItem.appendChild(trashIcon);
         tabListContainer.appendChild(tabItem);
     });
 }
 
+
+function updateCanvasToBrowserTabList(tabs, containerID = 'canvas-to-browser-tab-list') {
+    if (!tabs || tabs.length < 1) return;
+
+    console.log(`UI | Updating tab list: ${containerID}`)
+    console.log(tabs)
+    
+    const tabListContainer = document.getElementById(containerID);
+
+    // Clear the existing tab list
+    tabListContainer.innerHTML = '';
+
+    // Generate the updated tab list
+    tabs.forEach((tab) => {
+        const tabItem = document.createElement("li");
+        tabItem.className = "collection-item";
+        tabItem.style.display = "flex"; // Set display to flex for alignment
+        tabItem.style.justifyContent = "space-between"; // Space between elements
+
+        // Create an anchor tag for the tab
+        const tabItemLink = document.createElement("a");
+        tabItemLink.href = tab.url; 
+        tabItemLink.className = "tab-title truncate black-text";
+        tabItemLink.style.textDecoration = "none"; // Remove underline from links
+        tabItemLink.style.flexGrow = "1"; // Allow the link to grow and fill space
+
+        // Create an image element for the favicon
+        const favicon = document.createElement("img");
+        favicon.src = tab.favIconUrl
+        favicon.style.width = '16px';
+        favicon.style.height = '16px';
+        favicon.style.marginRight = '8px';
+
+        // Append favicon and text to the link
+        tabItemLink.appendChild(favicon);
+        tabItemLink.appendChild(document.createTextNode(tab.title));
+
+        // Create a delete (trash) icon
+        const trashIcon = document.createElement("i");
+        trashIcon.className = 'material-icons';
+        trashIcon.textContent = 'delete'; // The text 'delete' represents the trash icon
+        trashIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
+        trashIcon.title = 'Remove tab from Canvas (current context layers only)'; // Tooltip text
+        trashIcon.onclick = function(event) {
+            event.preventDefault(); // Prevent the link from navigating
+            // Handle the trash icon click event
+            // Example: console.log('Trash icon clicked for tab:', tab);
+        };
+
+        // Append the link and trash icon to the list item
+        tabItem.appendChild(tabItemLink);
+        tabItem.appendChild(trashIcon);
+        tabListContainer.appendChild(tabItem);
+    });
+}

@@ -1,8 +1,7 @@
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
-// Extension config @js/config.js
-// Extension utils @js/utils.js
-// TabIndex @js/TabIndex.js
+// Extension config @js/utils/config.js
+// TabIndex @js/utils/TabIndex.js
 
 // Runtime defaults
 let context = {
@@ -10,7 +9,10 @@ let context = {
     color: '#fff',
 };
 
-let TabSchema = {};
+let TabDocumentSchema = {
+    meta: {},
+    data: {}
+};
 
 let watchTabProperties = {
     properties: [
@@ -43,10 +45,10 @@ socket.on('connect', () => {
     canvasFetchTabSchema((res) => {
         if (!res || res.status !== 'success') return console.error('background.js | Error fetching tab schema from Canvas')
         console.log('background.js | [socket.io] Received tab schema: ', res.data)
-        TabSchema = res.data;
+        TabDocumentSchema = res.data;
     });
 
-    canvasFetchContextTabs((res) => {
+    canvasFetchTabsForContext((res) => {
         if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
         index.insertCanvasTabArray(res.data, false);
         index.updateBrowserTabs();
@@ -76,17 +78,17 @@ socket.on('context:url', (url) => {
     console.log('background.js | [socket.io] Received context URL update: ', url);
     context.url = url;
 
-    canvasFetchContextTabs((res) => {
+    canvasFetchTabsForContext((res) => {
         if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
         index.updateBrowserTabs();
         index.insertCanvasTabArray(res.data, false);        
     });
 
     // Automatically close existing tabs if enabled
-    //if (config.sync.autoCloseTabs) { browserCloseCurrentTabs(); }
+    if (config.sync.autoCloseTabs) browserCloseCurrentTabs();
 
     // Automatically open new canvas tabs if enabled
-    //if (config.sync.autoOpenTabs) { browserOpenTabs(canvasTabs); }
+    if (config.sync.autoOpenTabs) browserOpenTabs(index.getCanvasTabArray());
 
     // Try to update the UI (might not be loaded(usually the case))
     browser.runtime.sendMessage({ type: 'context:url', data: url }, (response) => {
@@ -150,7 +152,7 @@ browser.tabs.onMoved.addListener((tabId, moveInfo) => {
     //return;
     
     browser.tabs.get(tabId).then(tab => {        
-        let tabDocument = TabSchema
+        let tabDocument = TabDocumentSchema
         tabDocument.data = stripTabProperties(tab)
     
         // Send update to backend
@@ -181,7 +183,7 @@ browser.browserAction.onClicked.addListener((tab, OnClickData) => {
     index.updateBrowserTabs();
 
     // Update our backend
-    let tabDocument = TabSchema
+    let tabDocument = TabDocumentSchema
     tabDocument.data = stripTabProperties(tab)
 
     canvasUpdateTab(tabDocument, (res) => {
@@ -210,7 +212,7 @@ browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     index.updateBrowserTabs()
 
     // TODO: Will be removed, as internal Index will have a stripTabProperties method
-    let tabDocument = TabSchema
+    let tabDocument = TabDocumentSchema
     tabDocument.data = stripTabProperties(tab)
 
     // Send update to backend
@@ -283,7 +285,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(context.tree);
             break;
 
-        // Tab
         case 'tab:insert':
             break;
 
@@ -291,10 +292,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'tab:get:schema':
-            sendResponse(TabSchema);
+            sendResponse(TabDocumentSchema);
             break;
 
-        // Tabs
         case 'context:syncTabs':
             canvasSaveTabArray(index.deltaBrowserToCanvas(), (res) => {
                 if (!res || res.status === 'error') return console.error('background.js | Error saving tabs to Canvas')
