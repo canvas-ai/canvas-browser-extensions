@@ -28,6 +28,7 @@ const index = new TabIndex();
 index.updateBrowserTabs();
 console.log('background.js | Index initialized: ', index.counts());
 
+
 /**
  * Initialize Socket.io
  */
@@ -36,16 +37,10 @@ const socket = io.connect(`${config.transport.protocol}://${config.transport.hos
 socket.on('connect', () => {
     console.log('background.js | [socket.io] Browser Client connected to Canvas');
 
-    canvasFetchContextUrl((res) => {
+    canvasFetchContext((res) => {
         if (!res || res.status !== 'success') return console.error('background.js | Error fetching context url from Canvas')
-        console.log('background.js | [socket.io] Received context url: ', res.data)
-        context.url = res.data;
-    });
-
-    canvasFetchTabSchema((res) => {
-        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tab schema from Canvas')
-        console.log('background.js | [socket.io] Received tab schema: ', res.data)
-        TabDocumentSchema = res.data;
+        console.log('background.js | [socket.io] Received context object: ', res.data)
+        context = res.data;
     });
 
     canvasFetchTabsForContext((res) => {
@@ -243,7 +238,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(socket.connected);
             break;
 
-        // Canvas Config
+        // Config
         case 'config:get':
             sendResponse(config);
             break;
@@ -260,8 +255,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         // Context
-        case 'context:get': // TODO: Remove
-            console.log('background.js | Sending ', context)
+        case 'context:get':
             sendResponse(context);
             break;
 
@@ -285,35 +279,76 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(context.tree);
             break;
 
-        case 'tab:insert':
-            break;
-
-        case 'tab:remove':
-            break;
-
-        case 'tab:get:schema':
-            sendResponse(TabDocumentSchema);
-            break;
-
-        case 'context:syncTabs':
-            canvasSaveTabArray(index.deltaBrowserToCanvas(), (res) => {
-                if (!res || res.status === 'error') return console.error('background.js | Error saving tabs to Canvas')
-                console.log('background.js | Tabs saved to Canvas: ', res.data)
+        case 'context:set:url':
+            if (!message.url) return console.error('background.js | No context url specified');
+            canvasInsertData('context:set:url', message.url, (res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error setting context url')
+                console.log('background.js | Context url set: ', res.data)
                 sendResponse(res);
             });
+            break;
+
+        // Browser
+        case 'browser:tabs:update':
             index.updateBrowserTabs();
             break;
 
-        case 'context:get:tabs':
-            sendResponse(canvasTabs);
+        case 'browser:tabs:open':
+            if (!message.tabs) return console.error('background.js | No tabs specified');
+            browserOpenTabArray(message.tabs);
             break;
 
-        case 'tabs:get:browserToCanvasDelta':
+        case 'browser:tabs:close':
+            if (!message.tabs) return console.error('background.js | No tabs specified');
+            browserCloseTabArrayz(message.tabs);
+            break;
+
+        // Canvas
+        case 'canvas:tabs:insert':
+            if (!message.tabs) return console.error('background.js | No tabs specified');
+            canvasInsertTabArray(message.tabs, (res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+                console.log('background.js | Tabs inserted to Canvas: ', res.data)
+                sendResponse(res);
+            });
+            break;
+
+        case 'canvas:tabs:remove':
+            if (!message.tabs) return console.error('background.js | No tabs specified');
+            canvasRemoveTabArray(message.tabs, (res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error removing tabs from Canvas')
+                console.log('background.js | Tabs removed from Canvas: ', res.data)
+                sendResponse(res);
+            });
+            break;
+
+        // Index
+        case 'index:get:counts':
+            sendResponse(index.counts());
+            break;
+
+        case 'index:get:browserTabArray':
+            sendResponse(index.getBrowserTabArray());
+            break;
+
+        case 'index:get:canvasTabArray':
+            sendResponse(index.getCanvasTabArray());
+            break;
+
+        case 'index:get:deltaBrowserToCanvas':
             sendResponse(index.deltaBrowserToCanvas());
             break;
 
-        case 'tabs:get:canvasToBrowserDelta':
+        case 'index:get:deltaCanvasToBrowser':
             sendResponse(index.deltaCanvasToBrowser());
+            break;
+
+        case 'index:updateBrowserTabs':
+            index.updateBrowserTabs();
+            break;
+
+        case 'index:clear':
+            index.clearIndex();
             break;
 
         default:

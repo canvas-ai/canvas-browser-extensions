@@ -2,6 +2,20 @@ function browserIsValidTabUrl(tabUrl) {
     return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
 }
 
+function browserOpenTab(tab) {
+    browser.tabs.create(tab);
+}
+
+function browserOpenTabArray(tabArray) {
+    tabArray.forEach(tab => {
+        if (!index.hasBrowserTab(tab.url)) {
+            console.log(`background.js | Opening tab ${tab.url}`);
+            browser.tabs.create(tab);
+        }
+    });
+
+}
+
 function browserCloseTab(id) {
     browser.tabs.remove(id);
 }
@@ -20,19 +34,7 @@ function browserCleanContextTabs() {
     });
 }
 
-function browserOpenTab(tab) {
-    browser.tabs.create(tab);
-}
 
-function browserOpenTabArray(tabArray) {
-    tabArray.forEach(tab => {
-        if (!index.hasBrowserTab(tab.url)) {
-            console.log(`background.js | Opening tab ${tab.url}`);
-            browser.tabs.create(tab);
-        }
-    });
-
-}
 
 function sanitizeContextPath(path) {
     if (!path || path == '/') return 'universe:///'

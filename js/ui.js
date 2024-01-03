@@ -25,8 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
         fetchVariable({ action: 'socket:status' }),
         fetchVariable({ action: 'config:get' }),
         fetchVariable({ action: 'context:get' }),
-        fetchVariable({ action: 'tabs:get:browserToCanvasDelta' }),
-        fetchVariable({ action: 'tabs:get:canvasToBrowserDelta' })
+        fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
+        fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
     ]).then((values) => {
 
         // TODO: Handle errors
@@ -79,7 +79,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             browserToCanvasTabsDelta = values[0];
             canvasToBrowserTabsDelta = values[1];
             updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
-            updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);    
+            updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
         });
 
         context.url = url
@@ -170,7 +170,7 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
 
     console.log(`UI | Updating tab list: ${containerID}`)
     console.log(tabs)
-    
+
     const tabListContainer = document.getElementById(containerID);
 
     // Clear the existing tab list
@@ -185,10 +185,14 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
 
         // Create an anchor tag for the tab
         const tabItemLink = document.createElement("a");
-        tabItemLink.href = tab.url; 
+        tabItemLink.href = tab.url;
         tabItemLink.className = "tab-title truncate black-text";
         tabItemLink.style.textDecoration = "none"; // Remove underline from links
         tabItemLink.style.flexGrow = "1"; // Allow the link to grow and fill space
+        tabItemLink.onclick = function(event) {
+            event.preventDefault();
+            console.log('UI | Tab clicked: ', tab.url);
+        };
 
         // Create an image element for the favicon
         const favicon = document.createElement("img");
@@ -202,12 +206,12 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
         tabItemLink.appendChild(document.createTextNode(tab.title));
 
         // Create a delete (trash) icon
-        const trashIcon = document.createElement("i");
-        trashIcon.className = 'material-icons';
-        trashIcon.textContent = 'close'; // The text 'delete' represents the trash icon
-        trashIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
-        trashIcon.title = 'Close tab'; 
-        trashIcon.onclick = function(event) {
+        const closeIcon = document.createElement("i");
+        closeIcon.className = 'material-icons';
+        closeIcon.textContent = 'close'; // The text 'delete' represents the trash icon
+        closeIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
+        closeIcon.title = 'Close tab';
+        closeIcon.onclick = function(event) {
             event.preventDefault(); // Prevent the link from navigating
             // Handle the trash icon click event
             // Example: console.log('Trash icon clicked for tab:', tab);
@@ -215,7 +219,7 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
 
         // Append the link and trash icon to the list item
         tabItem.appendChild(tabItemLink);
-        tabItem.appendChild(trashIcon);
+        tabItem.appendChild(closeIcon);
         tabListContainer.appendChild(tabItem);
     });
 }
@@ -226,7 +230,7 @@ function updateCanvasToBrowserTabList(tabs, containerID = 'canvas-to-browser-tab
 
     console.log(`UI | Updating tab list: ${containerID}`)
     console.log(tabs)
-    
+
     const tabListContainer = document.getElementById(containerID);
 
     // Clear the existing tab list
@@ -241,7 +245,7 @@ function updateCanvasToBrowserTabList(tabs, containerID = 'canvas-to-browser-tab
 
         // Create an anchor tag for the tab
         const tabItemLink = document.createElement("a");
-        tabItemLink.href = tab.url; 
+        tabItemLink.href = tab.url;
         tabItemLink.className = "tab-title truncate black-text";
         tabItemLink.style.textDecoration = "none"; // Remove underline from links
         tabItemLink.style.flexGrow = "1"; // Allow the link to grow and fill space

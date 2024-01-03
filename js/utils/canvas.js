@@ -1,3 +1,58 @@
+/**
+ * General functions for interacting with the Canvas backend
+ */
+
+function canvasFetchData(resource, callback) {
+    if (!resource) {
+        console.error('background.js | No resource provided');
+        return false;
+    }
+
+    if (!callback) {
+        console.error('background.js | No callback function provided');
+        return false;
+    }
+
+    socket.emit(resource, (response) => {
+        console.log('background.js | Canvas response:', response);
+        callback(response)
+    });
+}
+
+function canvasInsertData(resource, data, callback) {
+    if (!resource) {
+        console.error('background.js | No resource provided');
+        return false;
+    }
+
+    if (!data) {
+        console.error('background.js | No data provided');
+        return false;
+    }
+
+    if (!callback) {
+        console.error('background.js | No callback function provided');
+        return false;
+    }
+
+    socket.emit(resource, data, (response) => {
+        console.log('background.js | Canvas response:', response);
+        callback(response)
+    });
+
+}
+
+/**
+ * Functions for interacting with the Canvas backend
+ */
+
+function canvasFetchContext(cb) {
+    socket.emit('context:get', (res) => {
+        console.log('background.js | Context fetched: ', res);
+        cb(res)
+    });
+}
+
 function canvasFetchContextUrl(cb) {
     socket.emit('context:get:url', (res) => {
         console.log('background.js | Context url fetched: ', res);
@@ -12,7 +67,12 @@ function canvasFetchTabSchema(cb) {
     });
 }
 
-function canvasFetchTab(id, cb) {}
+function canvasFetchTab(id, cb) {
+    socket.emit('documents:get', { type: 'data/abstraction/tab', id: id }, (res) => {
+        console.log('background.js | Tab fetched: ', res);
+        cb(res)
+    });
+}
 
 function canvasHasTab(id, cb) {}
 
