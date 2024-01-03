@@ -51,7 +51,7 @@ function canvasSaveTabArray(tabArray, cb) {
     });
 }
 
-function checkCanvasConnection() {
+function canvasCheckConnection() {
     let intervalId = setInterval(() => {
         if (!isConnected) {
             console.log('background.js | Canvas backend not yet connected');
@@ -64,7 +64,6 @@ function checkCanvasConnection() {
 
 function formatTabProperties(tab) {
     return {
-        ...TabDocumentSchema,
         type: 'data/abstraction/tab',
         data: tab
     }

@@ -3,25 +3,14 @@ function browserIsValidTabUrl(tabUrl) {
 }
 
 function browserCloseTab(id) {
-
-}
-
-function browserOpenTab(url) {
-
-}
-
-function browserOpenTabArray(tabArray) {
-
+    browser.tabs.remove(id);
 }
 
 function browserCloseTabArray(tabArray) {
-
+    browser.tabs.remove(tabArray);
 }
 
-function browserSendTabToCanvas(tab) {}
-
-
-function browserCloseCurrentTabs() {
+function browserCleanContextTabs() {
     browser.tabs.query({}).then((tabs) => {
         let tabsToRemove = tabs.filter(tab => !index.hasCanvasTab(tab.url));
         tabsToRemove.forEach(tab => {
@@ -31,13 +20,18 @@ function browserCloseCurrentTabs() {
     });
 }
 
-function browserOpenTabs(tabArray) {
-    tabArray.forEach(newTab => {
-        if (!index.hasBrowserTab(newTab.url)) {
-            console.log(`background.js | Opening tab ${newTab.url}`);
-            browser.tabs.create(newTab.url);
+function browserOpenTab(tab) {
+    browser.tabs.create(tab);
+}
+
+function browserOpenTabArray(tabArray) {
+    tabArray.forEach(tab => {
+        if (!index.hasBrowserTab(tab.url)) {
+            console.log(`background.js | Opening tab ${tab.url}`);
+            browser.tabs.create(tab);
         }
     });
+
 }
 
 function sanitizeContextPath(path) {
