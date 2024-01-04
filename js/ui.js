@@ -77,23 +77,32 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log(`UI | Got context URL: "${url}"`)
         updateContextBreadcrumbs(url)
 
-        Promise.all([
-            fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
-            fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
-        ]).then((values) => {
-            browserToCanvasTabsDelta = values[0];
-            canvasToBrowserTabsDelta = values[1];
-            updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
-            updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
-
-            // Update counters
-            document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
-            document.getElementById('canvas-tab-delta-count').textContent = canvasToBrowserTabsDelta.length;
-        });
-
+        // Update context variable
         context.url = url
+
+        // Update UI
+        updateUI();
     }
 });
+
+function updateUI() {
+    console.log('UI | Updating UI')
+    Promise.all([
+        fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
+        fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
+    ]).then((values) => {
+        // Update tab lists
+        browserToCanvasTabsDelta = values[0];
+        canvasToBrowserTabsDelta = values[1];
+        updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
+        updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
+        // Update counters
+        document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
+        document.getElementById('canvas-tab-delta-count').textContent = canvasToBrowserTabsDelta.length;
+    }).catch(error => {
+        console.error('UI | Error updating UI:', error);       
+    });;
+}
 
 
 /**
@@ -102,15 +111,28 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 let syncTabsToCanvasButton = document.getElementById('sync-all-tabs');
 syncTabsToCanvasButton.addEventListener('click', () => {
-    console.log('UI | Syncing all tabs to canvas')
-    browser.runtime.sendMessage({ action: 'canvas:tabs:insert' });
-})
+    console.log('UI | Syncing all tabs to canvas');
+    browser.runtime.sendMessage({ action: 'canvas:tabs:insert' }).then((res) => {
+        console.log('UI | Res: ' + res)
+        updateUI().then(() => {
+            console.log('UI | UI updated')
+        });
+    }).catch((error) => {
+        console.error('UI | Error syncing tabs to canvas:', error);
+    });
+});
 
 let openTabsFromCanvasButton = document.getElementById('open-all-tabs');
 openTabsFromCanvasButton.addEventListener('click', () => {
-    console.log('UI | Opening all tabs from canvas')
-    browser.runtime.sendMessage({ action: 'canvas:tabs:openInBrowser' });
-})
+    console.log('UI | Opening all tabs from canvas');
+    browser.runtime.sendMessage({ action: 'canvas:tabs:openInBrowser' }).then((res) => {
+        console.log(res)
+        browser.runtime.sendMessage({ action: 'index:updateBrowserTabs' });
+        updateUI();
+    }).catch((error) => {
+        console.error('UI | Error opening tabs from canvas:', error);
+    });
+});
 
 
 /**

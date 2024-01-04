@@ -10,6 +10,7 @@ let context = {
 };
 
 let TabDocumentSchema = {
+    type: 'data/abstraction/tab',
     meta: {},
     data: {}
 };
@@ -25,7 +26,6 @@ let watchTabProperties = {
 
 // Custom index module for easier delta comparison
 const index = new TabIndex();
-index.updateBrowserTabs();
 console.log('background.js | Index initialized: ', index.counts());
 
 
@@ -36,20 +36,24 @@ console.log('background.js | Index initialized: ', index.counts());
 const socket = io.connect(`${config.transport.protocol}://${config.transport.host}:${config.transport.port}`);
 socket.on('connect', () => {
     console.log('background.js | [socket.io] Browser Client connected to Canvas');
-
-    canvasFetchContext((res) => {
-        if (!res || res.status !== 'success') return console.error('background.js | Error fetching context url from Canvas')
-        console.log('background.js | [socket.io] Received context object: ', res.data)
-        context = res.data;
+    
+    canvasFetchContext().then((res) => {
+        console.log('background.js | [socket.io] Received context object: ', res.data);
+        context = res.data;    
     });
 
-    canvasFetchTabsForContext((res) => {
-        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
-        index.insertCanvasTabArray(res.data, false);
-        index.updateBrowserTabs();
+    canvasFetchTabsForContext().then((res) => {
+        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas')
+        index.insertCanvasTabArray(res.data);        
+    }).then(() => {
+        index.updateBrowserTabs().then(() => {
+            console.log('background.js | Index updated: ', index.counts());
+        })    
     });
+
 
 });
+
 
 socket.on('connect_error', function (error) {
     console.log(`background.js | [socket.io] Browser Connection to "${config.transport.protocol}://${config.transport.host}:${config.transport.port}" failed`);
@@ -73,11 +77,10 @@ socket.on('context:url', async (url) => {
     console.log('background.js | [socket.io] Received context URL update: ', url);
     context.url = url;
 
-    canvasFetchTabsForContext((res) => {
-        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas');
-        index.updateBrowserTabs();
-        index.insertCanvasTabArray(res.data, false);
-    });
+    let res = await canvasFetchTabsForContext();
+    await index.updateBrowserTabs();
+    
+    index.insertCanvasTabArray(res.data);
 
     // Automatically close existing tabs if enabled
     if (config.sync.autoCloseTabs) await browserCloseNonContextTabs();
@@ -94,10 +97,6 @@ socket.on('context:url', async (url) => {
         }
     });
 
-});
-
-socket.on('context:documentInserted', (res) => {
-    console.log('background.js | [socket.io] Received documentInserted event: ', res);
 });
 
 
@@ -117,7 +116,9 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
 
         // Update the current index
-        index.updateBrowserTabs();
+        index.updateBrowserTabs().then(() => {
+            console.log('background.js | Index updated: ', index.counts());
+        });
 
         // Update backend
         console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
@@ -136,11 +137,13 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
 }, watchTabProperties)
 
-browser.tabs.onMoved.addListener((tabId, moveInfo) => {
+browser.tabs.onMoved.addListener( (tabId, moveInfo) => {
     console.log('background.js | Tab moved: ', tabId, moveInfo);
 
     // Update the current index
-    index.updateBrowserTabs();
+    index.updateBrowserTabs().then(() => {
+        console.log('background.js | Index updated: ', index.counts());
+    });
 
     // noop
     //console.log('background.js | TODO: Disabled as we currently do not track move changes');
@@ -168,14 +171,16 @@ browser.tabs.onMoved.addListener((tabId, moveInfo) => {
 
 // TODO: Eval if we need this event at all, as we already have onUpdated
 // (which may not trigger on url change, but we can check for that)
-browser.browserAction.onClicked.addListener((tab, OnClickData) => {
+browser.browserAction.onClicked.addListener( (tab, OnClickData) => {
     console.log('background.js | Browser action clicked: ', tab, OnClickData);
 
     // Ignore non-valid tabs(about:*, empty tabs etc)
     if (!browserIsValidTabUrl(tab.url)) return
 
     // Update the current index
-    index.updateBrowserTabs();
+    index.updateBrowserTabs().then(() => {
+        console.log('background.js | Index updated: ', index.counts());
+    });
 
     // Update our backend
     let tabDocument = TabDocumentSchema
@@ -193,7 +198,7 @@ browser.browserAction.onClicked.addListener((tab, OnClickData) => {
 
 });
 
-browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
+browser.tabs.onRemoved.addListener( (tabId, removeInfo) => {
     console.log('background.js | Tab removed: ', tabId, removeInfo);
 
     // Lets fetch the tab based on ID from our index
@@ -204,7 +209,9 @@ browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     console.log('background.js | Tab object URL from index: ', tab.url);
 
     // Update the current index (remove tab), maybe we should move it in the callback?
-    index.updateBrowserTabs()
+    index.updateBrowserTabs().then(() => {
+        console.log('background.js | Index updated: ', index.counts());
+    });
 
     // TODO: Will be removed, as internal Index will have a stripTabProperties method
     let tabDocument = TabDocumentSchema
@@ -299,7 +306,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // Browser
         case 'browser:tabs:update':
-            index.updateBrowserTabs();
+            return Promise.resulve(index.updateBrowserTabs());
             break;
 
         case 'browser:tabs:open':
@@ -323,6 +330,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             canvasFetchTabsForContext((res) => {
                 if (!res || res.status === 'error') return console.error('background.js | Error fetching tabs from Canvas')
                 console.log('background.js | Tabs fetched from Canvas: ', res.data)
+                index.insertCanvasTabArray(res.data);
                 sendResponse(res);
             });
             break;
@@ -335,22 +343,35 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 message.tabs = index.getCanvasTabArray();
             }
 
-            browserOpenTabArray(message.tabs);
+            browserOpenTabArray(message.tabs)
+            index.updateBrowserTabs().then(() => {
+                sendResponse(index.counts());
+            }).catch((error) => {
+                console.error('background.js | Error updating browser tabs:', error);
+            });
             break;
 
         case 'canvas:tabs:insert':
+            let tabs;
             if (message.tabs) {
                 console.log('background.js | Tabs to sync: ' + message.tabs.length);
+                tabs = message.tabs;
             } else {
                 console.log('background.js | No tabs specified, using current browser tabs');
-                message.tabs = index.getBrowserTabArray();
+                tabs = index.getBrowserTabArray();
             }
 
-            canvasInsertTabArray(message.tabs, (res) => {
+            
+            canvasInsertTabArray(tabs, (res) => {
                 if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-                console.log('background.js | Tabs inserted to Canvas: ', res)
-                sendResponse(res);
-            });
+                console.log('background.js | Tabs inserted to Canvas: ', res)                
+            }).then(() => {
+                index.insertCanvasTabArray(tabs);
+                console.log('background.js | Index updated: ', index.counts());
+            }).catch((error) => {
+                console.error('background.js | Error updating browser tabs:', error);
+            })
+
             break;
 
         case 'canvas:tab:delete':
@@ -361,8 +382,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse(res);
             });
             break;
-
-        ca
 
         // Index
         case 'index:get:counts':
@@ -378,19 +397,27 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'index:get:deltaBrowserToCanvas':
+            index.updateBrowserTabs().then(() => {
+                console.log('background.js | Index updated: ', index.counts());
+                sendResponse(index.counts());
+            });            
             sendResponse(index.deltaBrowserToCanvas());
             break;
 
         case 'index:get:deltaCanvasToBrowser':
+            index.updateBrowserTabs().then(() => {
+                console.log('background.js | Index updated: ', index.counts());
+                sendResponse(index.counts());
+            });            
             sendResponse(index.deltaCanvasToBrowser());
             break;
 
         case 'index:updateBrowserTabs':
-            index.updateBrowserTabs();
+
             break;
 
         case 'index:clear':
-            index.clearIndex();
+            sendResponse(index.clearIndex());
             break;
 
         default:

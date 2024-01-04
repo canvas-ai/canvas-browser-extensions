@@ -2,135 +2,159 @@
  * General functions for interacting with the Canvas backend
  */
 
-function canvasFetchData(resource, callback) {
-    if (!resource) {
-        console.error('background.js | No resource provided');
-        return false;
-    }
+function canvasFetchData(resource) {
+    return new Promise((resolve, reject) => {
+        if (!resource) {
+            console.error('background.js | No resource provided');
+            reject('No resource provided');
+        }
 
-    if (!callback) {
-        console.error('background.js | No callback function provided');
-        return false;
-    }
-
-    socket.emit(resource, (response) => {
-        console.log('background.js | Canvas response:', response);
-        callback(response)
+        socket.emit(resource, (response) => {
+            console.log('background.js | Canvas fetchData response:', response);
+            resolve(response);
+        });
     });
 }
 
-function canvasInsertData(resource, data, callback) {
-    if (!resource) {
-        console.error('background.js | No resource provided');
-        return false;
-    }
+function canvasInsertData(resource, data) {
+    return new Promise((resolve, reject) => {
+        if (!resource) {
+            console.error('background.js | No resource provided');
+            reject('No resource provided');
+        }
 
-    if (!data) {
-        console.error('background.js | No data provided');
-        return false;
-    }
+        if (!data) {
+            console.error('background.js | No data provided');
+            reject('No data provided');
+        }
 
-    if (!callback) {
-        console.error('background.js | No callback function provided');
-        return false;
-    }
-
-    socket.emit(resource, data, (response) => {
-        console.log('background.js | Canvas response:', response);
-        callback(response)
+        socket.emit(resource, data, (response) => {
+            console.log('background.js | Canvas insertData response:', response);
+            resolve(response);
+        });
     });
-
 }
 
 /**
  * Functions for interacting with the Canvas backend
  */
 
-function canvasFetchContext(cb) {
-    socket.emit('context:get', (res) => {
-        console.log('background.js | Context fetched: ', res);
-        cb(res)
+function canvasFetchContext() {
+    return new Promise((resolve, reject) => {
+        socket.emit('context:get', (res) => {
+            if (!res || res.status !== 'success') {
+                reject('background.js | Error fetching context url from Canvas');
+            } else {
+                console.log('background.js | Context fetched: ', res);
+                resolve(res);
+            }
+        });
     });
 }
 
-function canvasFetchContextUrl(cb) {
-    socket.emit('context:get:url', (res) => {
-        console.log('background.js | Context url fetched: ', res);
-        cb(res)
+function canvasFetchTabsForContext() {
+    return new Promise((resolve, reject) => {
+        socket.emit('context:get:documents', { type: 'data/abstraction/tab' }, (res) => {            
+            if (res.status === 'error') {
+                console.error('background.js | Error fetching tabs from Canvas: ', res);
+                reject('background.js | Error fetching tabs: ' + res.message);
+            } else {
+                const parsed = res.data.filter(tab => tab !== null).map(tab => tab.data);
+                res.data = parsed;
+                console.log('background.js | Tabs fetched from Canvas: ', res.data.length);
+                resolve(res);
+            }
+        });
     });
 }
 
-function canvasFetchTabSchema(cb) {
-    socket.emit('schemas:get', { type: 'data/abstraction/tab'}, (res) => {
-        console.log('background.js | Tab schema fetched: ', res);
-        cb(res)
+function canvasFetchContextUrl() {
+    return new Promise((resolve, reject) => {
+        socket.emit('context:get:url', (res) => {            
+            if (!res || res.status !== 'success') {
+                console.error('background.js | Error fetching context URL', res);
+                reject('Error fetching context url from Canvas');
+            } else {
+                console.log('background.js | Context URL fetched: ', res);
+                resolve(res);
+            }
+        });
     });
 }
 
-function canvasFetchTab(id, cb) {
-    socket.emit('documents:get', { type: 'data/abstraction/tab', id: id }, (res) => {
-        console.log('background.js | Tab fetched: ', res);
-        cb(res)
+function canvasFetchTabSchema() {
+    return new Promise((resolve, reject) => {
+        socket.emit('schemas:get', { type: 'data/abstraction/tab'}, (res) => {
+            console.log('background.js | Tab schema fetched: ', res);
+            resolve(res);
+        });
     });
 }
 
-function canvasHasTab(id, cb) {}
-
-function canvasInsertTab(tab, cb) {
-
-}
-
-function canvasUpdateTab(tab, cb) {}
-
-// TODO: Rework to use ID instead of the whole tab object
-function canvasRemoveTab(tab, cb) {
-    socket.emit('documents:remove', tab, (res) => {
-        console.log('background.js | Tab removed: ', res);
-        cb(res)
+function canvasFetchTab(id) {
+    return new Promise((resolve, reject) => {
+        socket.emit('context:get:document', { type: 'data/abstraction/tab', id: id }, (res) => {
+            console.log('background.js | Tab fetched: ', res);
+            resolve(res);
+        });
     });
 }
 
-function canvasFetchTabsForContext(cb) {
-    // TODO: Rework naming convention, should be context:documents:get
-    socket.emit('documents:get', { type: 'data/abstraction/tab'}, (res) => {
-        console.log('background.js | Tabs fetched: ', res);
-        if (res.status === 'error') {
-            console.error('background.js | Error fetching tabs: ', res);
-            return false;
+function canvasHasTab(id) {
+    return new Promise((resolve, reject) => {
+        // TODO: Implement the logic for checking if the tab exists
+    });
+}
+
+function canvasInsertTab(tab) {
+    return new Promise((resolve, reject) => {
+        // TODO: Implement the logic for inserting a tab
+    });
+}
+
+function canvasUpdateTab(tab) {
+    return new Promise((resolve, reject) => {
+        // TODO: Implement the logic for updating a tab
+    });
+}
+
+function canvasRemoveTab(tab) {
+    return new Promise((resolve, reject) => {
+        socket.emit('context:remove:document', tab, (res) => {
+            console.log('background.js | Tab removed: ', res);
+            resolve(res);
+        });
+    });
+}
+
+function canvasInsertTabArray(tabArray) {
+    return new Promise((resolve, reject) => {
+        if (!tabArray || !tabArray.length) {
+            reject('background.js | Invalid tab array');
         }
-
-        // TODO: Move to a separate function
-        // Format of a CanvasDB object is { id: '...', meta: { ... }, data: { ... } }
-        // We are only interested in data: { ... }
-        const parsed = res.data.filter(tab => tab !== null).map(tab => tab.data);
-        res.data = parsed;
-
-        cb(res);
-    });
-}
-
-function canvasInsertTabArray(tabArray, cb) {
-    if (!tabArray || !tabArray.length) return false;
-    tabArray = tabArray.map(tab => formatTabProperties(tab));
-    socket.emit('documents:insertDocumentArray', tabArray, (res) => {
-        if (cb) cb(res)
+        tabArray = tabArray.map(tab => formatTabProperties(tab));
+        socket.emit('context:insert:documentArray', tabArray, (res) => {
+            resolve(res);
+        });
     });
 }
 
 function canvasCheckConnection() {
-    let intervalId = setInterval(() => {
-        if (!isConnected) {
-            console.log('background.js | Canvas backend not yet connected');
-        } else {
-            clearInterval(intervalId);
-
-        }
-    }, 1000);
+    return new Promise((resolve, reject) => {
+        let intervalId = setInterval(() => {
+            if (!isConnected) {
+                console.log('background.js | Canvas backend not yet connected');
+            } else {
+                clearInterval(intervalId);
+                resolve();
+            }
+        }, 1000);
+    });
 }
 
 function formatTabProperties(tab) {
     return {
         type: 'data/abstraction/tab',
         data: tab
-    }
+    };
 }

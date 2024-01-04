@@ -59,15 +59,24 @@ class TabIndex {
         this.browserTabs.clear();
     }
 
-    updateBrowserTabs() {
-        browser.tabs.query({}).then((tabs) => {
-            const processedTabs = tabs.map(tab => {
+    async updateBrowserTabs() {
+        console.log('background.js | Updating browser tabs in index');
+        try {
+            const tabs = await browser.tabs.query({});
+            console.log(`background.js | Found ${tabs.length} open browser tabs, updating index`);
+
+            const processedTabs = tabs.reduce((acc, tab) => {
                 if (browserIsValidTabUrl(tab.url)) {
-                    return this.#stripTabProperties(tab);
+                    acc.push(this.#stripTabProperties(tab));
                 }
-            }).filter(tab => tab != undefined);
+                return acc;
+            }, []);
+            
             this.insertBrowserTabArray(processedTabs);
-        });
+        } catch (error) {
+            console.error('background.js | Error updating browser tabs:', error);
+            throw error; // Or handle it as you see fit
+        }
     }
 
     insertCanvasTab(tab) {
@@ -80,6 +89,7 @@ class TabIndex {
 
     insertCanvasTabArray(tabArray, clear = true) {
         if (clear) this.canvasTabs.clear();
+        console.log('background.js | Inserting canvas tab array in index: ', tabArray.length)
         tabArray.forEach(tab => this.insertCanvasTab(tab));
     }
 

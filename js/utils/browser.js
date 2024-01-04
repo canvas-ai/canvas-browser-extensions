@@ -2,69 +2,83 @@ function browserIsValidTabUrl(tabUrl) {
     return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
 }
 
-function browserOpenTab(tab) {
+async function browserOpenTab(tab) {
     if (!tab) return false;
-    browser.tabs.create({
-        url: tab.url,
-        title: tab.title,
-        discarded: tab.discarded || true, // Defaults to true to conserve memory on restore
-        cookieStoreId: tab.cookieStoreId
-        //windowId: tab.windowId, // Restore may fail if windowId does not exist, TODO: Handle this case with windows.create()
-        //index: tab.index, 
-        //active: tab.active,
-        //muted: tab.muted,
-        //openInReaderMode: tab.openInReaderMode,
-        //pinned: tab.pinned,
-        //selected: tab.selected
-    });
+    if (!browserIsValidTabUrl(tab.url)) return false;
+    console.log(`background.js | Opening tab: `, tab);
+
+    try {
+        return await browser.tabs.create({
+            url: tab.url,
+            title: tab.title,
+            discarded: typeof tab.discarded !== 'undefined' ? tab.discarded : true,
+            cookieStoreId: tab.cookieStoreId
+            //windowId: tab.windowId, // Restore may fail if windowId does not exist, TODO: Handle this case with windows.create()
+            //index: tab.index, 
+            //active: tab.active,
+            //muted: tab.muted,
+            //openInReaderMode: tab.openInReaderMode,
+            //pinned: tab.pinned,
+            //selected: tab.selected            
+        });
+    } catch (error) {
+        console.error('UI | Error creating tab:', error);
+        return false;
+    }
 }
 
-function browserOpenTabArray(tabArray) {
-    if (!tabArray || !tabArray.length) return false;    
-    console.log(`background.js | Opening tab array: `, tabArray)
 
-    browser.windows.getAll().then((windows) => {
+async function browserOpenTabArray(tabArray) {
+    if (!tabArray || !tabArray.length) return false;
+    console.log(`background.js | Opening tab array: `, tabArray);
+
+    try {
+        let windows = await browser.windows.getAll();
         if (windows.length === 0) {
-            browser.windows.create({ url: "about:newtab" });
+            await browser.windows.create({});
         }
 
-        tabArray.forEach(tab => {
+        for (const tab of tabArray) {
             if (!index.hasBrowserTab(tab.url)) {
                 console.log(`background.js | Opening tab ${tab.url}`);
-                browserOpenTab(tab);    
+                await browserOpenTab(tab);  // assuming browserOpenTab is an async function
             }
-        });
-    }); 
+        }
+    } catch (error) {
+        console.error('background.js | Error opening tab array:', error);
+    }
 }
+
 
 function browserCloseTab(id) {
     if (!id) return false;
-    browser.tabs.remove(id);
+    return browser.tabs.remove(id);
 }
 
 function browserCloseTabArray(tabArray) {
     if (!tabArray || !tabArray.length) return false;
-    browser.tabs.remove(tabArray);
+    return browser.tabs.remove(tabArray);
 }
 
-function browserCloseNonContextTabs() {
-    browser.tabs.query({}).then(async (tabs) => {
+async function browserCloseNonContextTabs() {
+    try {
+        let tabs = await browser.tabs.query({});
         let tabsToRemove = tabs.filter(tab => !index.hasCanvasTab(tab.url));
         if (tabsToRemove.length === 0) return;
 
-        if (tabs.length <= tabsToRemove.length) {
-            // Ensure we always have at least one tab open
+        if (tabs.length === tabsToRemove.length) {
+            // Open a new tab before closing all others to ensure at least one remains
             await browser.tabs.create({});
         }
 
-        await tabsToRemove.forEach(tab => {
+        for (const tab of tabsToRemove) {
             console.log(`background.js | Removing tab ${tab.id}`);
-            browser.tabs.remove(tab.id)
-        });
-    });
-    
+            await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+        }
+    } catch (error) {
+        console.error('Error in closing non-context tabs:', error);
+    }
 }
-
 
 
 function sanitizeContextPath(path) {
