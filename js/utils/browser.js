@@ -3,35 +3,66 @@ function browserIsValidTabUrl(tabUrl) {
 }
 
 function browserOpenTab(tab) {
-    browser.tabs.create(tab);
+    if (!tab) return false;
+    browser.tabs.create({
+        url: tab.url,
+        title: tab.title,
+        discarded: tab.discarded || true, // Defaults to true to conserve memory on restore
+        cookieStoreId: tab.cookieStoreId
+        //windowId: tab.windowId, // Restore may fail if windowId does not exist, TODO: Handle this case with windows.create()
+        //index: tab.index, 
+        //active: tab.active,
+        //muted: tab.muted,
+        //openInReaderMode: tab.openInReaderMode,
+        //pinned: tab.pinned,
+        //selected: tab.selected
+    });
 }
 
 function browserOpenTabArray(tabArray) {
-    tabArray.forEach(tab => {
-        if (!index.hasBrowserTab(tab.url)) {
-            console.log(`background.js | Opening tab ${tab.url}`);
-            browser.tabs.create(tab);
-        }
-    });
+    if (!tabArray || !tabArray.length) return false;    
+    console.log(`background.js | Opening tab array: `, tabArray)
 
+    browser.windows.getAll().then((windows) => {
+        if (windows.length === 0) {
+            browser.windows.create({ url: "about:newtab" });
+        }
+
+        tabArray.forEach(tab => {
+            if (!index.hasBrowserTab(tab.url)) {
+                console.log(`background.js | Opening tab ${tab.url}`);
+                browserOpenTab(tab);    
+            }
+        });
+    }); 
 }
 
 function browserCloseTab(id) {
+    if (!id) return false;
     browser.tabs.remove(id);
 }
 
 function browserCloseTabArray(tabArray) {
+    if (!tabArray || !tabArray.length) return false;
     browser.tabs.remove(tabArray);
 }
 
-function browserCleanContextTabs() {
-    browser.tabs.query({}).then((tabs) => {
+function browserCloseNonContextTabs() {
+    browser.tabs.query({}).then(async (tabs) => {
         let tabsToRemove = tabs.filter(tab => !index.hasCanvasTab(tab.url));
-        tabsToRemove.forEach(tab => {
+        if (tabsToRemove.length === 0) return;
+
+        if (tabs.length <= tabsToRemove.length) {
+            // Ensure we always have at least one tab open
+            await browser.tabs.create({});
+        }
+
+        await tabsToRemove.forEach(tab => {
             console.log(`background.js | Removing tab ${tab.id}`);
             browser.tabs.remove(tab.id)
         });
     });
+    
 }
 
 

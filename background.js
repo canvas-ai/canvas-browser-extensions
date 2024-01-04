@@ -69,7 +69,7 @@ socket.on('disconnect', () => {
  * Socket.io event listeners
  */
 
-socket.on('context:url', (url) => {
+socket.on('context:url', async (url) => {
     console.log('background.js | [socket.io] Received context URL update: ', url);
     context.url = url;
 
@@ -80,10 +80,10 @@ socket.on('context:url', (url) => {
     });
 
     // Automatically close existing tabs if enabled
-    if (config.sync.autoCloseTabs) browserCloseCurrentTabs();
+    if (config.sync.autoCloseTabs) await browserCloseNonContextTabs();
 
     // Automatically open new canvas tabs if enabled
-    if (config.sync.autoOpenTabs) browserOpenTabs(index.getCanvasTabArray());
+    if (config.sync.autoOpenTabs) await browserOpenTabArray(index.getCanvasTabArray());
 
     // Try to update the UI (might not be loaded(usually the case))
     browser.runtime.sendMessage({ type: 'context:url', data: url }, (response) => {
@@ -113,11 +113,11 @@ browser.tabs.onCreated.addListener((tab) => {
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
-    // Update the current index
-    index.updateBrowserTabs();
-
     // Trigger on url change if the tab url is valid
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
+
+        // Update the current index
+        index.updateBrowserTabs();
 
         // Update backend
         console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
@@ -199,8 +199,8 @@ browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // Lets fetch the tab based on ID from our index
     // This is needed as the tab object is not available after removal
     let tab = index.getBrowserTabByID(tabId);
-    console.log([...index.browserTabIdToUrl])
-    if (!tab) return console.error(`background.js | Tab ${tabId} not found in index`);
+    if (!tab) return console.log(`background.js | Tab ${tabId} not found in index`);
+
     console.log('background.js | Tab object URL from index: ', tab.url);
 
     // Update the current index (remove tab), maybe we should move it in the callback?
@@ -288,39 +288,81 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             break;
 
+        case 'context:tab:remove':
+            if (!message.tab) return console.error('background.js | No tab specified');
+            canvasRemoveTab(message.tab, (res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error removing tab from Canvas')
+                console.log('background.js | Tab removed from the current context in Canvas: ', res.data)
+                sendResponse(res);
+            });
+            break;
+
         // Browser
         case 'browser:tabs:update':
             index.updateBrowserTabs();
             break;
 
         case 'browser:tabs:open':
-            if (!message.tabs) return console.error('background.js | No tabs specified');
+            if (message.tabs) {
+                console.log('background.js | Tabs to sync: ' + message.tabs.length);
+            } else {
+                console.log('background.js | No tabs specified, using current browser tabs');
+                message.tabs = index.getBrowserTabArray();
+            }
+            
             browserOpenTabArray(message.tabs);
             break;
 
         case 'browser:tabs:close':
             if (!message.tabs) return console.error('background.js | No tabs specified');
-            browserCloseTabArrayz(message.tabs);
+            browserCloseTabArray(message.tabs);
             break;
 
         // Canvas
-        case 'canvas:tabs:insert':
-            if (!message.tabs) return console.error('background.js | No tabs specified');
-            canvasInsertTabArray(message.tabs, (res) => {
-                if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-                console.log('background.js | Tabs inserted to Canvas: ', res.data)
+        case 'canvas:tabs:fetch':
+            canvasFetchTabsForContext((res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error fetching tabs from Canvas')
+                console.log('background.js | Tabs fetched from Canvas: ', res.data)
                 sendResponse(res);
             });
             break;
 
-        case 'canvas:tabs:remove':
-            if (!message.tabs) return console.error('background.js | No tabs specified');
-            canvasRemoveTabArray(message.tabs, (res) => {
+        case 'canvas:tabs:openInBrowser':
+            if (message.tabs) {
+                console.log('background.js | Tabs to open: ' + message.tabs.length);
+            } else {
+                console.log('background.js | No tabs specified, using indexed canvas tabs');
+                message.tabs = index.getCanvasTabArray();
+            }
+
+            browserOpenTabArray(message.tabs);
+            break;
+
+        case 'canvas:tabs:insert':
+            if (message.tabs) {
+                console.log('background.js | Tabs to sync: ' + message.tabs.length);
+            } else {
+                console.log('background.js | No tabs specified, using current browser tabs');
+                message.tabs = index.getBrowserTabArray();
+            }
+
+            canvasInsertTabArray(message.tabs, (res) => {
+                if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+                console.log('background.js | Tabs inserted to Canvas: ', res)
+                sendResponse(res);
+            });
+            break;
+
+        case 'canvas:tab:delete':
+            if (!message.tab) return console.error('background.js | No tab specified');
+            canvasRemoveTab(message.tabs, (res) => {
                 if (!res || res.status === 'error') return console.error('background.js | Error removing tabs from Canvas')
                 console.log('background.js | Tabs removed from Canvas: ', res.data)
                 sendResponse(res);
             });
             break;
+
+        ca
 
         // Index
         case 'index:get:counts':

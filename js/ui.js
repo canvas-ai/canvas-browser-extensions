@@ -11,6 +11,7 @@ let isConnected = false;
 
 let canvasToBrowserTabsDelta = {};
 let browserToCanvasTabsDelta = {};
+let counts = {};
 
 
 /**
@@ -54,6 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
         updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
         updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
 
+        // Update counters
+        document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
+        document.getElementById('canvas-tab-delta-count').textContent = canvasToBrowserTabsDelta.length;
+
     }).catch(error => {
         console.error("Error loading variables:", error);
     });
@@ -73,13 +78,17 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         updateContextBreadcrumbs(url)
 
         Promise.all([
-            fetchVariable({ action: 'tabs:get:browserToCanvasDelta' }),
-            fetchVariable({ action: 'tabs:get:canvasToBrowserDelta' })
+            fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
+            fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
         ]).then((values) => {
             browserToCanvasTabsDelta = values[0];
             canvasToBrowserTabsDelta = values[1];
             updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
             updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
+
+            // Update counters
+            document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
+            document.getElementById('canvas-tab-delta-count').textContent = canvasToBrowserTabsDelta.length;
         });
 
         context.url = url
@@ -94,19 +103,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 let syncTabsToCanvasButton = document.getElementById('sync-all-tabs');
 syncTabsToCanvasButton.addEventListener('click', () => {
     console.log('UI | Syncing all tabs to canvas')
-    browser.runtime.sendMessage({ action: 'context:syncTabs' });
+    browser.runtime.sendMessage({ action: 'canvas:tabs:insert' });
 })
 
 let openTabsFromCanvasButton = document.getElementById('open-all-tabs');
 openTabsFromCanvasButton.addEventListener('click', () => {
     console.log('UI | Opening all tabs from canvas')
-
-})
-
-let closeAllBrowserTabsButton = document.getElementById('close-all-tabs');
-closeAllBrowserTabsButton.addEventListener('click', () => {
-    console.log('UI | Closing all current tabs')
-
+    browser.runtime.sendMessage({ action: 'canvas:tabs:openInBrowser' });
 })
 
 
@@ -149,20 +152,6 @@ function updateContextBreadcrumbs(url) {
             breadcrumbContainer.appendChild(breadcrumbLink);
         });
     }
-}
-
-function updateTabCounter(tabs, containerID) {
-    console.log('UI | Updating tab count')
-    if (!tabs || tabs.length < 1) return console.log('UI | No tabs provided')
-    let count = 0;
-    for (let i = 0; i < tabs.length; i++) {
-        if (browserIsValidTabUrl(tabs[i].url)) {
-            count++;
-        }
-    }
-
-    console.log(`UI | Number of open tabs (excluding empty/new tabs): ${count}`);
-    document.getElementById(containerID).textContent = count;
 }
 
 function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab-list') {
@@ -212,9 +201,20 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
         closeIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
         closeIcon.title = 'Close tab';
         closeIcon.onclick = function(event) {
-            event.preventDefault(); // Prevent the link from navigating
-            // Handle the trash icon click event
-            // Example: console.log('Trash icon clicked for tab:', tab);
+            event.preventDefault();
+            console.log('UI | Close icon clicked: ', tab.url);
+            browser.tabs.remove(tab.id);
+            
+            // Remove the tab from the list
+            tabItem.remove();
+
+            // If count of tabListContainer is 0, show a message
+            if (tabListContainer.childElementCount === 0) {
+                const emptyMessage = document.createElement("li");
+                emptyMessage.className = "collection-item";
+                emptyMessage.textContent = 'No browser tabs to sync';
+                tabListContainer.appendChild(emptyMessage);
+            }
         };
 
         // Append the link and trash icon to the list item
@@ -261,21 +261,37 @@ function updateCanvasToBrowserTabList(tabs, containerID = 'canvas-to-browser-tab
         tabItemLink.appendChild(favicon);
         tabItemLink.appendChild(document.createTextNode(tab.title));
 
+        // Create a remove from context icon
+        const removeIcon = document.createElement("i");
+        removeIcon.className = 'material-icons';
+        removeIcon.textContent = 'delete';
+        removeIcon.style.cursor = 'pointer';
+        removeIcon.title = 'Remove tab from the current Canvas context';
+        removeIcon.onclick = function(event) {
+            event.preventDefault();
+            console.log('UI | Removing tab from Canvas context: ', tab.url);
+            browser.runtime.sendMessage({ action: 'context:tabs:remove', id: tab.id });
+        };
+
+
         // Create a delete (trash) icon
-        const trashIcon = document.createElement("i");
-        trashIcon.className = 'material-icons';
-        trashIcon.textContent = 'delete'; // The text 'delete' represents the trash icon
-        trashIcon.style.cursor = 'pointer'; // Change cursor to indicate it's clickable
-        trashIcon.title = 'Remove tab from Canvas (current context layers only)'; // Tooltip text
-        trashIcon.onclick = function(event) {
-            event.preventDefault(); // Prevent the link from navigating
-            // Handle the trash icon click event
-            // Example: console.log('Trash icon clicked for tab:', tab);
+        const deleteIcon= document.createElement("i");
+        deleteIcon.className = 'material-icons';
+        deleteIcon.textContent = 'delete_forever';
+        deleteIcon.style.cursor = 'pointer';
+        deleteIcon.style.color = 'red';
+        deleteIcon.title = 'Delete tab from Canvas (removes the document from Canvas DB)';
+        deleteIcon.onclick = function(event) {
+            event.preventDefault();
+            console.log('UI | Deleting tab from Canvas DB: ', tab.url);
+            browser.runtime.sendMessage({ action: 'canvas:tabs:remove', id: tab.id });
         };
 
         // Append the link and trash icon to the list item
         tabItem.appendChild(tabItemLink);
-        tabItem.appendChild(trashIcon);
+        tabItem.appendChild(removeIcon);
+        tabItem.appendChild(deleteIcon);
+
         tabListContainer.appendChild(tabItem);
     });
 }

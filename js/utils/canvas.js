@@ -82,7 +82,13 @@ function canvasInsertTab(tab, cb) {
 
 function canvasUpdateTab(tab, cb) {}
 
-function canvasRemoveTab(id, cb) {}
+// TODO: Rework to use ID instead of the whole tab object
+function canvasRemoveTab(tab, cb) {
+    socket.emit('documents:remove', tab, (res) => {
+        console.log('background.js | Tab removed: ', res);
+        cb(res)
+    });
+}
 
 function canvasFetchTabsForContext(cb) {
     // TODO: Rework naming convention, should be context:documents:get
@@ -103,7 +109,7 @@ function canvasFetchTabsForContext(cb) {
     });
 }
 
-function canvasSaveTabArray(tabArray, cb) {
+function canvasInsertTabArray(tabArray, cb) {
     if (!tabArray || !tabArray.length) return false;
     tabArray = tabArray.map(tab => formatTabProperties(tab));
     socket.emit('documents:insertDocumentArray', tabArray, (res) => {

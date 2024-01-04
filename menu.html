@@ -130,7 +130,7 @@
     <main>
         <div id="browser-to-canvas" class="container">
             <h5>Sync to Canvas
-                (<span class="" id="browser-tab-count"></span>)
+                (<span class="" id="browser-tab-delta-count"></span>)
                 <span>
                     <a id="sync-all-tabs"
                         class="black white-text waves-effect waves-light btn-small right">
@@ -145,9 +145,11 @@
         </div>
 
         <div id="canvas-to-browser" class="container">
-            <h5>Open all tabs<span><a id="open-all-tabs" class="black white-text waves-effect waves-light btn-small right">Open all<i class="material-icons right">sync</i></a></span></h5>
+            <h5>Open all tabs
+                (<span class="" id="canvas-tab-delta-count"></span>)
+                <span><a id="open-all-tabs" class="black white-text waves-effect waves-light btn-small right">Open all<i class="material-icons right">sync</i></a></span></h5>
             <ul id="canvas-to-browser-tab-list" class="collection">
-                <li class="collection-item">No browser tabs to sync</li>
+                <li class="collection-item">No canvas tabs to sync</li>
             </ul>
         </div>
 
