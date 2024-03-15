@@ -19,7 +19,7 @@
 
   "background": {
     "scripts": [
-      "js/lib/pouchdb.min.js",
+      "js/lib/socket.io.min.js",
       "js/lib/store.modern.min.js",
       "js/utils/config.js",
       "js/utils/TabIndex.js",

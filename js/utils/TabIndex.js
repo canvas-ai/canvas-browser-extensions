@@ -145,7 +145,7 @@
 
 		url: tab.url,
 		title: tab.title,
-		favIconUrl: null, //tab.favIconUrl ? tab.favIconUrl : browser.runtime.getURL('icons/logo_64x64.png'),
+		favIconUrl: tab.favIconUrl ? tab.favIconUrl : browser.runtime.getURL('icons/logo_64x64.png'),
 
 		// Restore may fail if windowId does not exist hence omitted
 		// TODO: Handle this case with windows.create()

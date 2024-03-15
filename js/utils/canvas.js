@@ -55,7 +55,7 @@ function canvasFetchContext() {
 function canvasFetchTabsForContext() {
   return new Promise((resolve, reject) => {
     socket.emit(
-      "context:get:documents",
+      "context:document:getArray",
       { type: "data/abstraction/tab" },
       (res) => {
         if (res.status === "error") {
@@ -106,7 +106,7 @@ function canvasFetchTabSchema() {
 function canvasFetchTab(id) {
   return new Promise((resolve, reject) => {
     socket.emit(
-      "context:get:document",
+      "context:document:get",
       { type: "data/abstraction/tab", id: id },
       (res) => {
         console.log("background.js | Tab fetched: ", res);
