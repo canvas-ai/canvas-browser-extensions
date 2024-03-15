@@ -52,8 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
             updateContextBreadcrumbs(context.url)
         }
 
-        updateBrowserToCanvasTabList(browserToCanvasTabsDelta);
-        updateCanvasToBrowserTabList(canvasToBrowserTabsDelta);
+        updateBrowserToCanvasTabList(browserToCanvasTabsDelta, 'browser-to-canvas-tab-list');
+        updateBrowserToCanvasTabList(canvasToBrowserTabsDelta, 'canvas-to-browser-tab-list');
 
         // Update counters
         document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
@@ -100,7 +100,7 @@ function updateUI() {
         document.getElementById('browser-tab-delta-count').textContent = browserToCanvasTabsDelta.length;
         document.getElementById('canvas-tab-delta-count').textContent = canvasToBrowserTabsDelta.length;
     }).catch(error => {
-        console.error('UI | Error updating UI:', error);       
+        console.error('UI | Error updating UI:', error);
     });;
 }
 
@@ -226,7 +226,7 @@ function updateBrowserToCanvasTabList(tabs, containerID = 'browser-to-canvas-tab
             event.preventDefault();
             console.log('UI | Close icon clicked: ', tab.url);
             browser.tabs.remove(tab.id);
-            
+
             // Remove the tab from the list
             tabItem.remove();
 
