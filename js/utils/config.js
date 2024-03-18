@@ -22,7 +22,8 @@ const config = {
     transport: {
         protocol: getNestedProp(store.get('transport'), 'protocol', 'http'),
         host: getNestedProp(store.get('transport'), 'host', '127.0.0.1'),
-        port: getNestedProp(store.get('transport'), 'port', 8001)
+        port: getNestedProp(store.get('transport'), 'port', 8001),
+        token: getNestedProp(store.get('transport'), 'token', '')
     },
 
     set: function (key, value) {

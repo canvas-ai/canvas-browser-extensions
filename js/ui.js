@@ -5,7 +5,6 @@ console.log('UI | Initializing Canvas Browser Extension menu');
  * Runtime variables
  */
 
-let config = {};
 let context = {};
 let isConnected = false;
 
@@ -18,13 +17,49 @@ let counts = {};
  * Initialize the UI
  */
 
+const initializeEvents = () => {
+    $(document).on("click", ".show-connection-setting-popup", function(e) {
+        updateConnectionSettingsFormData();
+        openPopup('#connection-settings-popup-container');
+    });
+
+    $(document).on("click", ".popup-container .popup-overlay", function(e) {
+        closePopup(`#${$(this).parent().attr('id')}`);
+    });
+
+    $(document).on("click", "#retry-connection", function(e) {
+        $(this).prop("disabled", true);
+        $(".connection-error-message-container").css({ display: "none" });
+        $(".retrying-message-container").css({ display: "block" });    
+        browser.runtime.sendMessage({ action: 'socket:retry' });
+    });
+
+    $(document).on("click", "#connection-setting-save-button", function(e) {
+        $(this).prop("disabled", true);
+        $("#retry-connection").prop("disabled", true);
+        $(".connection-error-message-container").css({ display: "none" });
+        $(".retrying-message-container").css({ display: "block" });
+        closePopup(`#${$(this).closest(".popup-container").attr('id')}`);
+        browser.runtime.sendMessage({ action: 'config:set:item', key: "transport", value: {
+            protocol: $('#connection-setting-protocol').val(),
+            host: $('#connection-setting-host').val(),
+            port: $('#connection-setting-port').val(),
+            token: $('#connection-setting-token').val()
+        } }, (response) => {
+            browser.runtime.sendMessage({ action: 'socket:retry' });
+        });
+    });
+    
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     console.log('UI | DOM loaded');
+
+    initializeEvents();
 
     // TODO: Rework to use a single request to background.js for initial variables
     Promise.all([
         fetchVariable({ action: 'socket:status' }),
-        fetchVariable({ action: 'config:get' }),
         fetchVariable({ action: 'context:get' }),
         fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
         fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
@@ -32,10 +67,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // TODO: Handle errors
         isConnected = values[0];
-        config = values[1];
-        context = values[2];
-        browserToCanvasTabsDelta = values[3];
-        canvasToBrowserTabsDelta = values[4];
+        context = values[1];
+        browserToCanvasTabsDelta = values[2];
+        canvasToBrowserTabsDelta = values[3];
 
         var mTabElements = document.querySelectorAll(".tabs");
         var mTabs = M.Tabs.init(mTabElements, {});
@@ -46,9 +80,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (!isConnected) {
-            console.log('UI | No context URL received from backend')
-            updateContextBreadcrumbs('! Canvas backend not connected')
+            canvasDisconnected();
         } else {
+            canvasConnected();
             updateContextBreadcrumbs(context.url)
         }
 
@@ -82,6 +116,27 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // Update UI
         updateUI();
+    }
+
+    if(message.type === 'socket-event') {
+        const sockevent = message.data.event;
+        console.log(`UI | Got a new socket event: "${sockevent}"`);
+        switch(sockevent) {
+            case 'connect':
+                canvasConnected();
+                break;
+            case 'disconnect':
+                canvasDisconnected();
+                break;
+            case 'connect_error':
+                canvasDisconnected(); // could be treated differently
+                break;
+            case 'connect_timeout': 
+                canvasDisconnected(); // could be treated differently
+                break;
+            default: 
+                console.log(`UI | Unknown socket event: "${sockevent}"`);
+        }
     }
 });
 
@@ -315,5 +370,36 @@ function updateCanvasToBrowserTabList(tabs, containerID = 'canvas-to-browser-tab
         tabItem.appendChild(deleteIcon);
 
         tabListContainer.appendChild(tabItem);
+    });
+}
+
+function canvasConnected() {
+    $(document.body).addClass("connection-connected").removeClass("connection-disconnected");
+}
+
+function canvasDisconnected() {
+    fetchVariable({ action: 'config:get' }).then(config => {
+        $("#connection-host").html(`${config.transport.protocol}://${config.transport.host}:${config.transport.port}`);
+    });
+    $("#retry-connection").prop("disabled", false);
+    $("#connection-setting-save-button").prop("disabled", false);
+    $(".connection-error-message-container").css({ display: "block" });
+    $(".retrying-message-container").css({ display: "none" });
+    $(document.body).addClass("connection-disconnected").removeClass("connection-connected");
+}
+
+function openPopup(cls) {
+    $(cls).addClass("popup-opened");
+}
+
+function closePopup(cls) {
+    $(cls).removeClass("popup-opened");
+}
+
+function updateConnectionSettingsFormData() {
+    fetchVariable({ action: 'config:get' }).then(config => {
+        ['protocol', 'host', 'port', 'token'].forEach(prop => {
+            $(`#connection-setting-${prop}`).val(config.transport[prop]);
+        });
     });
 }

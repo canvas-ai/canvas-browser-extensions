@@ -10,100 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <link rel="stylesheet" href="themes/default/style.css">
-    <style>
-        html,
-        body {
-            width: 680px;
-            min-height: 580px;
-            height: auto;
-            font-family: 'Roboto', sans-serif;
-        }
-
-        body {
-            display: flex;
-            min-height: 100vh;
-            flex-direction: column;
-        }
-
-        .navbar-fixed {
-            height: 110px;
-        }
-
-        main {
-            flex: 1 0 auto;
-        }
-
-        .context-url {
-            padding-left: 18px;
-        }
-
-        #breadcrumb-container {
-            margin-left: 12px;
-        }
-
-        .breadcrumb,
-        .breadcrumb::before {
-            color: rgba(32, 32, 32, 0.7);
-            font-weight: 600;
-        }
-
-        .collection-item > p {
-            overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            padding-right: 32px;
-
-        }
-
-        .collection-item:hover {
-            background-color: rgba(122, 122, 122, 0.1);
-        }
-
-        /**
-        * Overrides for tab colors
-        **/
-
-        .tabs.tabs-transparent .tab a,
-        .tabs.tabs-transparent .tab.disabled a,
-        .tabs.tabs-transparent .tab.disabled a:hover {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .tabs .tab a {
-            color: rgba(66, 66, 66, 0.7);
-        }
-
-        .tabs .tab a:focus, .tabs .tab a:focus.active {
-            background-color: rgba(66, 66, 66, 0.1);
-            outline: none;
-          }
-
-        .tabs .tab a:hover, .tabs .tab a.active {
-            background-color: transparent;
-            color: #424242;
-        }
-
-        .tabs .tab.disabled a,
-        .tabs .tab.disabled a:hover {
-            color: rgba(66, 66, 66, 0.4);
-            cursor: default;
-        }
-
-        .tabs .indicator {
-            position: absolute;
-            bottom: 0;
-            height: 2px;
-            background-color: #424242;
-            will-change: left, right;
-        }
-
-        li.tab {
-            display: flex;
-            flex-direction: row;
-            justify-content: space-between;
-            text-transform: none!important;
-        }
-    </style>
+    <link rel="stylesheet" href="css/content.css">
     <title>Canvas UI | Browser Sync</title>
 </head>
 <body>
@@ -128,76 +35,96 @@
     </header>
 
     <main>
-        <div id="browser-to-canvas" class="container">
-            <h5>Sync to Canvas
-                (<span class="" id="browser-tab-delta-count"></span>)
-                <span>
-                    <a id="sync-all-tabs"
-                        class="black white-text waves-effect waves-light btn-small right">
-                        Sync all
-                        <i class="material-icons right">sync</i>
-                    </a>
-                </span>
-            </h5>
-            <ul id="browser-to-canvas-tab-list" class="collection">
-                <li class="collection-item">No browser tabs to sync</li>
-            </ul>
-        </div>
-
-        <div id="canvas-to-browser" class="container">
-            <h5>Open all tabs
-                (<span class="" id="canvas-tab-delta-count"></span>)
-                <span><a id="open-all-tabs" class="black white-text waves-effect waves-light btn-small right">Open all<i class="material-icons right">sync</i></a></span></h5>
-            <ul id="canvas-to-browser-tab-list" class="collection">
-                <li class="collection-item">No canvas tabs to sync</li>
-            </ul>
-        </div>
-
-        <div id="tab-search" class="container">
-
-        </div>
-        <div id="settings" class="container">
-            <h5>Settings</h5>
-            <ul class="collapsible">
-                <li>
-                    <div class="collapsible-header"><i class="material-icons">settings</i>Extension Settings</div>
-                    <div class="collapsible-body">
-                        <div class="row">
-                            <div class="col s10">Auto-sync browser tabs to Canvas</div>
-                            <div class="col s2">
-                                <div class="switch">
-                                    <label>
-                                        <input type="checkbox">
-                                        <span class="lever"></span>
-                                    </label>
+        <section class="no-pad" id="connected-state">
+            <div id="browser-to-canvas" class="container">
+                <h5>Sync to Canvas
+                    (<span class="" id="browser-tab-delta-count"></span>)
+                    <span>
+                        <a id="sync-all-tabs"
+                            class="black white-text waves-effect waves-light btn-small right">
+                            Sync all
+                            <i class="material-icons right">sync</i>
+                        </a>
+                    </span>
+                </h5>
+                <ul id="browser-to-canvas-tab-list" class="collection">
+                    <li class="collection-item">No browser tabs to sync</li>
+                </ul>
+            </div>
+    
+            <div id="canvas-to-browser" class="container">
+                <h5>Open all tabs
+                    (<span class="" id="canvas-tab-delta-count"></span>)
+                    <span><a id="open-all-tabs" class="black white-text waves-effect waves-light btn-small right">Open all<i class="material-icons right">sync</i></a></span></h5>
+                <ul id="canvas-to-browser-tab-list" class="collection">
+                    <li class="collection-item">No canvas tabs to sync</li>
+                </ul>
+            </div>
+    
+            <div id="tab-search" class="container">
+    
+            </div>
+            <div id="settings" class="container">
+                <h5>Settings</h5>
+                <ul class="collapsible">
+                    <li>
+                        <div class="collapsible-header"><i class="material-icons">settings</i>Extension Settings</div>
+                        <div class="collapsible-body">
+                            <div class="row">
+                                <div class="col s10">Auto-sync browser tabs to Canvas</div>
+                                <div class="col s2">
+                                    <div class="switch">
+                                        <label>
+                                            <input type="checkbox">
+                                            <span class="lever"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+    
+                            <div class="row">
+                                <div class="col s10">Automatically switch tab-sets on context change</div>
+                                <div class="col s2">
+                                    <div class="switch">
+                                        <label>
+                                            <input type="checkbox">
+                                            <span class="lever"></span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="row">
-                            <div class="col s10">Automatically switch tab-sets on context change</div>
-                            <div class="col s2">
-                                <div class="switch">
-                                    <label>
-                                        <input type="checkbox">
-                                        <span class="lever"></span>
-                                    </label>
-                                </div>
-                            </div>
+    
+                    </li>
+    
+                    <li class="disabled">
+                        <div class="collapsible-header">
+                            <i class="material-icons">cloud_sync</i>
+                            Canvas Settings
                         </div>
+                        <div class="collapsible-body">
+                            <button class="show-connection-setting-popup btn-flat blue-text text-darken-1">Set canvas connection details</button>
+                        </div>
+                    </li>
+                </ul>
+            </div>    
+        </section>
+        <section class="no-pad" id="disconnected-state">
+            <div class="disconnected-content">
+                <div class="state-description">
+                    <div class="message-container connection-error-message-container">
+                        <strong>Couldn&apos;t connect to the <span id="connection-host"></span> host.</strong>
                     </div>
-
-                </li>
-
-                <li class="disabled">
-                    <div class="collapsible-header">
-                        <i class="material-icons">cloud_sync</i>
-                        Canvas Settings
+                    <div class="message-container retrying-message-container">
+                        <strong>Retrying...</strong>
                     </div>
-                    <div class="collapsible-body"></div>
-                </li>
-            </ul>
-        </div>
+                    <div class="connection-details-button-container">
+                        <button id="retry-connection" class="btn red waves-effect waves-light">Retry Connection</button>
+                        <button class="show-connection-setting-popup btn-flat blue-text text-darken-1">Set connection details</button>
+                    </div>
+                </div>    
+            </div>
+        </section>
     </main>
 
     <footer class="page-footer grey darken-3">
@@ -210,6 +137,43 @@
             </div>
         </div>
     </footer>
+
+    <div class="popup-container" id="connection-settings-popup-container">
+        <div class="popup-overlay"></div>
+        <div class="popup-content connection-settings-popup">
+            <div class="input-field">
+                <div class="form-label" for="connection-setting-protocol">Protocol</div>
+                <div class="form-control">
+                    <input type="input" id="connection-setting-protocol" />
+                </div>
+            </div>
+
+            <div class="input-field">
+                <div class="form-label" for="connection-setting-host">Host</div>
+                <div class="form-control">
+                    <input type="input" id="connection-setting-host" />
+                </div>
+            </div>
+
+            <div class="input-field">
+                <div class="form-label" for="connection-setting-port">Port</div>
+                <div class="form-control">
+                    <input type="input" id="connection-setting-port" />
+                </div>
+            </div>
+
+            <div class="input-field">
+                <div class="form-label" for="connection-setting-token">Auth Token</div>
+                <div class="form-control">
+                    <input type="input" id="connection-setting-token" />
+                </div>
+            </div>
+
+            <div class="popup-button-container">
+                <button class="btn blue waves-effect waves-light" id="connection-setting-save-button">Save and Connect</button>
+            </div>    
+        </div>
+    </div>
 
     <script src="js/lib/jquery-3.6.4.min.js"></script>
     <script src="js/lib/materialize.min.js"></script>

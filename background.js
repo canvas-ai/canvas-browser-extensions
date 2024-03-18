@@ -33,41 +33,62 @@ console.log('background.js | Index initialized: ', index.counts());
  * Initialize Socket.io
  */
 
-const socket = io.connect(`${config.transport.protocol}://${config.transport.host}:${config.transport.port}`);
-socket.on('connect', () => {
-    console.log('background.js | [socket.io] Browser Client connected to Canvas');
+let socket;
 
-    canvasFetchContext().then((res) => {
-        console.log('background.js | [socket.io] Received context object: ', res.data);
-        context = res.data;
+const initializeSocket = () => {
+    if(socket) socket.disconnect();
+    socket = io.connect(`${config.transport.protocol}://${config.transport.host}:${config.transport.port}`);
+
+    socket.on('connect', () => {
+        console.log('background.js | [socket.io] Browser Client connected to Canvas');
+    
+        sendSocketEvent("connect");
+
+        socket.emit("authenticate", { token: config.transport.token }, result => {
+            if(result === 'success') {
+                console.log('background.js | [socket.io] Authenticated successfully!');
+                sendSocketEvent("authenticated");
+
+                canvasFetchContext().then((res) => {
+                    console.log('background.js | [socket.io] Received context object: ', res.data);
+                    context = res.data;
+                });
+            
+                canvasFetchTabsForContext().then((res) => {
+                    if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas')
+                    index.insertCanvasTabArray(res.data);
+                }).then(() => {
+                    index.updateBrowserTabs().then(() => {
+                        console.log('background.js | Index updated: ', index.counts());
+                    })
+                });
+        
+            } else {
+                console.log('background.js | [socket.io] Invalid auth token! disconnecting...');
+                sendSocketEvent("invalid_token");
+                socket.disconnect();
+            }
+        });    
     });
-
-    canvasFetchTabsForContext().then((res) => {
-        if (!res || res.status !== 'success') return console.error('background.js | Error fetching tabs from Canvas')
-        index.insertCanvasTabArray(res.data);
-    }).then(() => {
-        index.updateBrowserTabs().then(() => {
-            console.log('background.js | Index updated: ', index.counts());
-        })
+    
+    socket.on('connect_error', function (error) {
+        sendSocketEvent("connect_error");
+        console.log(`background.js | [socket.io] Browser Connection to "${config.transport.protocol}://${config.transport.host}:${config.transport.port}" failed`);
+        console.error(error.message);
     });
+    
+    socket.on('connect_timeout', function () {
+        sendSocketEvent("connect_timeout");
+        console.log('background.js | [socket.io] Canvas Connection Timeout');
+    });
+    
+    socket.on('disconnect', () => {
+        sendSocketEvent("disconnect");
+        console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
+    });    
+}
 
-
-});
-
-
-socket.on('connect_error', function (error) {
-    console.log(`background.js | [socket.io] Browser Connection to "${config.transport.protocol}://${config.transport.host}:${config.transport.port}" failed`);
-    console.error(error.message);
-});
-
-socket.on('connect_timeout', function () {
-    console.log('background.js | [socket.io] Canvas Connection Timeout');
-});
-
-socket.on('disconnect', () => {
-    console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
-});
-
+initializeSocket();
 
 /**
  * Socket.io event listeners
@@ -242,7 +263,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // socket.io
         case 'socket:status':
-            sendResponse(socket.connected);
+            sendResponse(socket && socket.connected);
             break;
 
         // Config
@@ -257,6 +278,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case 'config:set:item':
             if (!message.key || !message.value) return console.error('background.js | No config key or value specified');
+            config.set(message.key, message.value);
             config[message.key] = message.value;
             sendResponse(config[message.key]);
             break;
@@ -420,6 +442,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(index.clearIndex());
             break;
 
+        case 'socket:retry': 
+            initializeSocket();
+        break;
+
         default:
             console.error(`background.js | Unknown message action: ${message.action}`);
             break;
@@ -427,3 +453,18 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
 });
+
+
+/**
+ * Helper functions
+ */
+
+function sendSocketEvent(e) {
+    browser.runtime.sendMessage({ type: 'socket-event', data: { event: e } }, (response) => {
+        if (browser.runtime.lastError) {
+            console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
+        } else {
+            console.log('background.js | Message to UI sent successfully');
+        }
+    });
+}
