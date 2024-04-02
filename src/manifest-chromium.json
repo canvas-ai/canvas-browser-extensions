@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Canvas Browser Sync",
+  "description": "Tab sync browser extension for Canvas",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "Canvas Browser Sync",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "64": "popup/icons/logo_64x64.png",
+      "128": "popup/icons/logo_128x128.png"
+    }
+  },
+  "icons": {
+    "64": "popup/icons/logo_64x64.png",
+   "128": "popup/icons/logo_128x128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
+}

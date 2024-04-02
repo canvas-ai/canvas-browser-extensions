@@ -97,13 +97,45 @@
     
                     </li>
     
-                    <li class="disabled">
+                    <li class="enabled">
                         <div class="collapsible-header">
                             <i class="material-icons">cloud_sync</i>
                             Canvas Settings
                         </div>
                         <div class="collapsible-body">
-                            <button class="show-connection-setting-popup btn-flat blue-text text-darken-1">Set canvas connection details</button>
+                            <div class="connection-settings-form">
+                                <div class="input-field">
+                                    <div class="form-label" for="connection-setting-protocol">Protocol</div>
+                                    <div class="form-control">
+                                        <input type="input" id="connection-setting-protocol" />
+                                    </div>
+                                </div>
+                    
+                                <div class="input-field">
+                                    <div class="form-label" for="connection-setting-host">Host</div>
+                                    <div class="form-control">
+                                        <input type="input" id="connection-setting-host" />
+                                    </div>
+                                </div>
+                    
+                                <div class="input-field">
+                                    <div class="form-label" for="connection-setting-port">Port</div>
+                                    <div class="form-control">
+                                        <input type="input" id="connection-setting-port" />
+                                    </div>
+                                </div>
+                    
+                                <div class="input-field">
+                                    <div class="form-label" for="connection-setting-token">Auth Token</div>
+                                    <div class="form-control">
+                                        <input type="input" id="connection-setting-token" />
+                                    </div>
+                                </div>
+                    
+                                <div class="popup-button-container">
+                                    <button class="btn blue waves-effect waves-light" id="connection-setting-save-button">Save and Connect</button>
+                                </div>    
+                            </div>
                         </div>
                     </li>
                 </ul>
@@ -141,37 +173,39 @@
     <div class="popup-container" id="connection-settings-popup-container">
         <div class="popup-overlay"></div>
         <div class="popup-content connection-settings-popup">
-            <div class="input-field">
-                <div class="form-label" for="connection-setting-protocol">Protocol</div>
-                <div class="form-control">
-                    <input type="input" id="connection-setting-protocol" />
+            <div class="connection-settings-form">
+                <div class="input-field">
+                    <div class="form-label" for="connection-setting-protocol">Protocol</div>
+                    <div class="form-control">
+                        <input type="input" id="connection-setting-protocol" />
+                    </div>
                 </div>
-            </div>
-
-            <div class="input-field">
-                <div class="form-label" for="connection-setting-host">Host</div>
-                <div class="form-control">
-                    <input type="input" id="connection-setting-host" />
+    
+                <div class="input-field">
+                    <div class="form-label" for="connection-setting-host">Host</div>
+                    <div class="form-control">
+                        <input type="input" id="connection-setting-host" />
+                    </div>
                 </div>
-            </div>
-
-            <div class="input-field">
-                <div class="form-label" for="connection-setting-port">Port</div>
-                <div class="form-control">
-                    <input type="input" id="connection-setting-port" />
+    
+                <div class="input-field">
+                    <div class="form-label" for="connection-setting-port">Port</div>
+                    <div class="form-control">
+                        <input type="input" id="connection-setting-port" />
+                    </div>
                 </div>
-            </div>
-
-            <div class="input-field">
-                <div class="form-label" for="connection-setting-token">Auth Token</div>
-                <div class="form-control">
-                    <input type="input" id="connection-setting-token" />
+    
+                <div class="input-field">
+                    <div class="form-label" for="connection-setting-token">Auth Token</div>
+                    <div class="form-control">
+                        <input type="input" id="connection-setting-token" />
+                    </div>
                 </div>
+    
+                <div class="popup-button-container">
+                    <button class="btn blue waves-effect waves-light" id="connection-setting-save-button">Save and Connect</button>
+                </div>    
             </div>
-
-            <div class="popup-button-container">
-                <button class="btn blue waves-effect waves-light" id="connection-setting-save-button">Save and Connect</button>
-            </div>    
         </div>
     </div>
 
