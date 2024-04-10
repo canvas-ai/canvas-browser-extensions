@@ -36,6 +36,16 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
     });
   }
 
+  const syncTabClicked = (tab: chrome.tabs.Tab) => {
+    console.log('UI | Syncing a tab to canvas');
+    chrome.runtime.sendMessage({ action: 'canvas:tabs:insert', tabs: [tab] }).then((res) => {
+        console.log('UI | Res: ' + res);
+        // updateTabs(dispatch);
+    }).catch((error) => {
+        console.error('UI | Error syncing tab to canvas:', error);
+    });
+  }
+
   return (
     <div className="container">
       <h5>Sync to Canvas
@@ -61,6 +71,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
                 className="tab-title truncate black-text"
                 onClick={(e) => {
                   e.preventDefault();
+                  if(tab.id) syncTabClicked(tab);
                   console.log('UI | Tab clicked: ', tab.url);
                 }}
               >
@@ -70,12 +81,14 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
                 />
                 {tab.title || ""}
               </a>
-              <i 
-                className="material-icons"
-                style={{ cursor: "pointer" }}
-                title="Close tab"
-                onClick={(e) => { e.preventDefault(); removeBrowserToCanvasTabClicked(tab); }}
-              >close</i>
+              <span className="icons">
+                <i 
+                  className="material-icons"
+                  style={{ cursor: "pointer" }}
+                  title="Close tab"
+                  onClick={(e) => { e.preventDefault(); removeBrowserToCanvasTabClicked(tab); }}
+                >close</i>
+              </span>
             </li>
           })
         }

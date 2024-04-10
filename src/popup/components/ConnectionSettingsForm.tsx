@@ -39,8 +39,6 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
           >
             <option value="http">http</option>
             <option value="https">https</option>
-            <option value="ws">ws</option>
-            <option value="wss">wss</option>
           </select>
         </div>
       </div>
@@ -70,8 +68,20 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         </div>
       </div>
 
-      <div className="popup-button-container">
-        <button className="btn blue waves-effect waves-light" disabled={retrying} onClick={(e) => saveConnectionSettings(e, { ...config, transport })}>Save and Connect</button>
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-pinToContext">Pin To Context</label>
+        <div className="form-control">
+          <input type="input" id="connection-setting-pinToContext" value={transport.pinToContext} onChange={(e) => setTransport({...transport, pinToContext: e.target.value })} />
+        </div>
+      </div>
+
+      <div className="input-container popup-button-container" style={{ alignContent: "flex-end" }}>
+        <button 
+          className="btn blue waves-effect waves-light" 
+          style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }} 
+          disabled={retrying} 
+          onClick={(e) => saveConnectionSettings(e, { ...config, transport })}
+        >Save and Connect</button>
       </div>
     </div>
   );

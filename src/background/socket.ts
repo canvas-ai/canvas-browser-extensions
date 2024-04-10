@@ -2,8 +2,8 @@ import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
 import { canvasFetchContext, canvasFetchTabsForContext } from './canvas';
 import index from './TabIndex';
-import { context } from './context';
-import { browserCloseNonContextTabs, browserOpenTabArray } from './utils';
+import { context, updateContext } from './context';
+import { browserCloseNonContextTabs, browserOpenTabArray, sleep } from './utils';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,
@@ -41,31 +41,27 @@ class MySocket {
       console.log('background.js | [socket.io] Browser Client connected to Canvas');
   
       this.sendSocketEvent("connect");
+
+      canvasFetchContext().then((res: any) => {
+        console.log('background.js | [socket.io] Received context object: ', res.data);
+        updateContext(res.data);
+      });
+
+      canvasFetchTabsForContext().then((res: any) => {
+        if (!res || res.status !== 'success') return console.log('ERROR: background.js | Error fetching tabs from Canvas')
+        index.insertCanvasTabArray(res.data);
+      }).then(() => {
+        index.updateBrowserTabs().then(() => {
+          console.log('background.js | Index updated: ', index.counts());
+        })
+      });
   
       this.socket.emit("authenticate", { token: config.transport.token }, result => {
         if (result === 'success') {
           console.log('background.js | [socket.io] Authenticated successfully!');
           this.sendSocketEvent("authenticated");
-  
-          canvasFetchContext().then((res: any) => {
-            console.log('background.js | [socket.io] Received context object: ', res.data);
-            Object.keys(context).forEach(ck => {
-              if(!Object.keys(res.data).some(dk => dk === ck))
-                delete context[ck];
-            });
-            Object.keys(res.data).forEach(k => {
-              context[k] = res.data[k];
-            });
-          });
-  
-          canvasFetchTabsForContext().then((res: any) => {
-            if (!res || res.status !== 'success') return console.log('ERROR: background.js | Error fetching tabs from Canvas')
-            index.insertCanvasTabArray(res.data);
-          }).then(() => {
-            index.updateBrowserTabs().then(() => {
-              console.log('background.js | Index updated: ', index.counts());
-            })
-          });
+
+          // on authenticate...
   
         } else {
           console.log('background.js | [socket.io] Invalid auth token! disconnecting...');
@@ -93,7 +89,7 @@ class MySocket {
 
     this.socket.on('context:url', async (url) => {
       console.log('background.js | [socket.io] Received context URL update: ', url);
-      context.url = url;
+      context.url = url.payload;
     
       let res: any = await canvasFetchTabsForContext();
       await index.updateBrowserTabs();
@@ -107,7 +103,7 @@ class MySocket {
       if (config.sync.autoOpenTabs) await browserOpenTabArray(index.getCanvasTabArray());
     
       // Try to update the UI (might not be loaded(usually the case))
-      chrome.runtime.sendMessage({ type: 'context:url', data: url }, (response) => {
+      chrome.runtime.sendMessage({ type: 'context:url', data: context.url }, (response) => {
         if (chrome.runtime.lastError) {
           console.log(`background.js | Unable to connect to UI, error: ${chrome.runtime.lastError}`);
         } else {

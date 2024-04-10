@@ -4,6 +4,8 @@
 
 import { AxiosResponse } from "axios";
 import { getSocket } from "./socket";
+import index from "./TabIndex";
+import { onContextTabsUpdated } from "./utils";
 
 export function canvasFetchData(resource) {
   return new Promise(async (resolve, reject) => {
@@ -73,7 +75,7 @@ export function canvasFetchTabsForContext() {
           );
           reject("background.js | Error fetching tabs: " + res.message);
         } else {
-          const parsed = res.data
+          const parsed = (res.data || res.payload)
             .filter((tab) => tab !== null)
             .map((tab) => tab.data);
           res.data = parsed;
@@ -148,9 +150,36 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<AxiosResponse>
 export function canvasRemoveTab(tab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:remove:document", tab, (res) => {
+    socket.emit("context:document:remove", tab, (res) => {
       console.log("background.js | Tab removed: ", res);
-      resolve(res);
+      if (res.status === "success") {
+        console.log(`background.js | Tab ${tab.id} removed from Canvas: `, res);
+        index.removeCanvasTab(tab.url);
+        onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
+        resolve(res);
+      } else {
+        console.error(`background.js | Remove failed for tab ${tab.id}:`)
+        console.error(res);
+        resolve(false);
+      }
+    });
+  });
+}
+
+export function canvasDeleteTab(tab) {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit("context:document:delete", tab, (res) => {
+      if (res.status === "success") {
+        console.log("background.js | Tab deleted: ", res);
+        index.removeCanvasTab(tab.url);
+        onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
+        resolve(res);
+      } else {
+        console.error(`background.js | Delete failed for tab ${tab.id}:`)
+        console.error(res);
+        resolve(false);
+      }
     });
   });
 }

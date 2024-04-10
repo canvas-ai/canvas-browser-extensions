@@ -134,3 +134,8 @@ export function stripTabProperties(tab: chrome.tabs.Tab) {
 
 
 export const sleep = (ms: number = 1000) => new Promise(r => setTimeout(r, ms));
+
+
+export const onContextTabsUpdated = (updateInfo: IUpdatedTabsData) => {
+  chrome.runtime.sendMessage({ type: 'tabs:updated', data: updateInfo }).catch(e => console.log(e));
+}

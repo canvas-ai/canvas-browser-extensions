@@ -4,7 +4,7 @@ import styles from "./Header.module.css";
 import { getContextBreadcrumbs } from '../utils';
 
 interface HeaderTypes {
-  url: string;
+  url: string | undefined;
 }
 
 const Header: React.FC<HeaderTypes> = ({ url }) => {
@@ -17,14 +17,8 @@ const Header: React.FC<HeaderTypes> = ({ url }) => {
           </a>
           <div id="breadcrumb-container" className="col s12 black-text">{getContextBreadcrumbs(url).map(bread => (<a {...bread}>{bread.textContent}</a>))}</div>
         </div>
-        <div className="nav-content">
-          {/* <ul className="tabs black-text">
-            <li className="tab"><a href="#browser-to-canvas">Browser to Canvas</a></li>
-            <li className="tab"><a href="#canvas-to-browser">Canvas to Browser</a></li>
-            <li className="tab"><a href="#tab-search"><i className="material-icons">search</i></a></li>
-            <li className="tab"><a href="#settings"><i className="material-icons">settings</i></a></li>
-          </ul> */}
-        </div>
+        {/* <div className="nav-content">
+        </div> */}
       </nav>
     </header>
   );

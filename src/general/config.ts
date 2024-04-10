@@ -23,7 +23,8 @@ export const DEFAULT_CONFIG: {
     protocol: 'http',
     host: '127.0.0.1',
     port: 8001,
-    token: ''
+    token: '',
+    pinToContext: '/'
   }
 };
 

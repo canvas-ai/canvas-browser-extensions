@@ -5,19 +5,22 @@ export const fetchVariable = (message: { action: string }) => {
   return chrome.runtime.sendMessage(message);
 }
 
-export const sanitizeContextUrl = (url: string) => {
+export const sanitizeContextUrl = (url: string | undefined) => {
   console.log('UI | Sanitizing context URL')
   console.log(url)
   if (!url || url == '/' || url == 'universe:///') return 'Universe'
   url = url
-      .replace(/^universe/, 'Universe')
+      // .replace(/^universe/, 'Universe')
       .replace(/\/\//g, '/')
       .replace(/\:/g, '')
+      .split("")
+      .map((ch, i, self) => i && self[i-1] !== '/' ? ch : ch.toUpperCase())
+      .join("");
       //.replace(/universe/g,'∞')
   return url
 }
 
-export const getContextBreadcrumbs = (url: string) => {
+export const getContextBreadcrumbs = (url: string | undefined) => {
   console.log('UI | Updating breadcrumbs')
   if (!url) return []; // console.error('UI | No URL provided')
   if (typeof url !== 'string') return []; // console.error('UI | URL is not a string')
@@ -47,4 +50,16 @@ export const updateTabs = (dispatch: Dispatch<any>) => {
   }).catch(error => {
     console.error('UI | Error updating UI:', error);
   });;
+}
+
+export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, tabs: chrome.tabs.Tab[], setter: (tabs: chrome.tabs.Tab[]) => void) => {
+  if(updateData.insertedTabs && updateData.insertedTabs.length) {
+    dispatch(setter([...tabs, ...updateData.insertedTabs]));
+  }
+  if(updateData.removedTabs && updateData.removedTabs.length) {
+    const updatedTabs = tabs.filter(
+      (t: chrome.tabs.Tab) => !(updateData?.removedTabs || []).some(tab => tab.url === t.url)
+    );
+    dispatch(setter(updatedTabs));
+  }
 }

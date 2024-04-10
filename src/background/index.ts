@@ -1,5 +1,5 @@
-import { canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
-import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, stripTabProperties } from "./utils";
+import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
+import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
@@ -151,14 +151,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
     // Send update to backend
     const res: any = await canvasRemoveTab(tabDocument);
-    if (res.status === "success") {
-      console.log(`background.js | Tab ${tabId} removed from Canvas: `, res);
-      index.removeCanvasTab(tab.url)
-    } else {
-      console.error(`background.js | Remove failed for tab ${tabId}:`)
-      console.error(res);
-    }
-
   });
 
 
@@ -299,7 +291,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           console.log('background.js | Tabs inserted to Canvas: ', res);
 
           index.insertCanvasTabArray(tabs);
-          // chrome.runtime.sendMessage({ type: 'tabs:updated', data: tabs })
+          onContextTabsUpdated({ canvasTabs: { insertedTabs: tabs } });
           sendResponse(res);
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
@@ -311,9 +303,10 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case 'canvas:tab:delete':
         if (!message.tab) return console.error('background.js | No tab specified');
-        canvasRemoveTab(message.tabs).then((res: any) => {
-          if (!res || res.status === 'error') return console.error('background.js | Error removing tabs from Canvas')
-          console.log('background.js | Tabs removed from Canvas: ', res.data)
+        canvasDeleteTab(message.tab).then((res: any) => {
+          if (!res || res.status === 'error') return console.error('background.js | Error deleting tab from Canvas');
+          index.removeCanvasTab(message.tab.url);
+          console.log('background.js | Tab deleted from Canvas: ', res.data)
           sendResponse(res);
         });
         break;

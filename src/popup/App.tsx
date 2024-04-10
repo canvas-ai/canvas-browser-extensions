@@ -5,7 +5,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ConnectedState from './components/ConnectedState';
 import DisconnectedState from './components/DisconnectedState';
-import { fetchVariable, updateTabs } from './utils';
+import { fetchVariable, tabsUpdated, updateTabs } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
 import store from './redux/store';
 import { useSelector } from 'react-redux';
@@ -26,6 +26,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     store.dispatch(loadInitialConfigState());
+  }, []);
+
+  useEffect(() => {
+    console.log("context url is", JSON.stringify(context?.url));
     // TODO: Rework to use a single request to background.js for initial variables
     Promise.all([
       fetchVariable({ action: 'socket:status' }),
@@ -33,12 +37,13 @@ const App: React.FC = () => {
     ]).then((values) => {
       // TODO: Handle errors
       setConnected(values[0]);
-      if(values[0]) updateTabs(dispatch);
       setContext(values[1]);
     }).catch(error => {
       console.error("Error loading variables:", error);
     });
+  }, [context?.url]);
 
+  useEffect(() => {
     const messageListener = (message: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
       console.log('UI | Message received: ', message);
       if (message.type === 'context:url') {
@@ -47,10 +52,13 @@ const App: React.FC = () => {
         setContext((ctx: any) => ({ ...ctx, url }));
       }
 
-      if(message === "tabs:updated") {
-        setTimeout(() => {
-          updateTabs(dispatch);
-        }, 1000);
+      if(message.type === "tabs:updated") {
+        const updateData: IUpdatedTabsData = message.data;
+        if(updateData.canvasTabs) tabsUpdated(dispatch, updateData.canvasTabs, tabs.canvasTabs, setCanvasTabs);
+        if(updateData.browserTabs) tabsUpdated(dispatch, updateData.browserTabs, tabs.browserTabs, setBrowserTabs);
+        // setTimeout(() => {
+        //   updateTabs(dispatch);
+        // }, 1000);
       }
 
       if (message.type === 'socket-event') {
@@ -83,20 +91,12 @@ const App: React.FC = () => {
       }
     }
 
-    // const interval = setInterval(() => {
-    //   fetchVariable({ action: 'socket:status' }).then(sockStatus => {
-    //     console.log(JSON.stringify({ sockStatus }));
-    //     setConnected(sockStatus);  
-    //   });
-    // }, 1000);
-
     chrome.runtime.onMessage.addListener(messageListener);
 
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
-      // clearInterval(interval)
     }
-  }, [context?.url]);
+  }, [tabs]);
 
   const canvasConnected = () => {
     // fetchVariable({ action: 'config:get' }).then((config: IConfig) => {
