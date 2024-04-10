@@ -66,23 +66,17 @@ export function canvasFetchTabsForContext() {
     const socket = await getSocket();
     socket.emit(
       "context:document:getArray",
-      { type: "data/abstraction/tab" },
+      "data/abstraction/tab",
       (res) => {
         if (res.status === "error") {
-          console.error(
-            "background.js | Error fetching tabs from Canvas: ",
-            res
-          );
+          console.error("background.js | Error fetching tabs from Canvas: ", res);
           reject("background.js | Error fetching tabs: " + res.message);
         } else {
-          const parsed = (res.data || res.payload)
+          const parsed = res.payload
             .filter((tab) => tab !== null)
             .map((tab) => tab.data);
           res.data = parsed;
-          console.log(
-            "background.js | Tabs fetched from Canvas: ",
-            res.data.length
-          );
+          console.log("background.js | Tabs fetched from Canvas: ", res.data.length);
           resolve(res);
         }
       }
@@ -99,7 +93,7 @@ export function canvasFetchContextUrl() {
         reject("Error fetching context url from Canvas");
       } else {
         console.log("background.js | Context URL fetched: ", res);
-        resolve(res);
+        resolve(res.payload);
       }
     });
   });
