@@ -2,7 +2,6 @@
  * General functions for interacting with the Canvas backend
  */
 
-import { AxiosResponse } from "axios";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { onContextTabsUpdated } from "./utils";
@@ -135,7 +134,7 @@ export function canvasInsertTab(tab) {
   });
 }
 
-export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<AxiosResponse> {
+export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
   return new Promise((resolve, reject) => {
     // TODO: Implement the logic for updating a tab
   });
