@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import cx from 'classnames';
 import styles from "./CanvasToBrowser.module.scss";
 import { useSelector } from 'react-redux';
-import { setCanvasTabs } from '@/popup/redux/tabs/tabActions';
 import { useDispatch } from 'react-redux';
 import { Dispatch } from 'redux';
 import { updateTabs } from '@/popup/utils';
-import { Icon } from 'react-materialize';
 
 interface CanvasToBrowserTypes {
 }

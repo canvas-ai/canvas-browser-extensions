@@ -291,7 +291,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           console.log('background.js | Tabs inserted to Canvas: ', res);
 
           index.insertCanvasTabArray(tabs);
-          onContextTabsUpdated({ canvasTabs: { insertedTabs: tabs } });
+          onContextTabsUpdated({ browserTabs: { removedTabs: tabs } });
           sendResponse(res);
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {

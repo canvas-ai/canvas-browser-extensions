@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import cx from 'classnames';
 import styles from "./SyncSettingCheckbox.module.scss";
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';

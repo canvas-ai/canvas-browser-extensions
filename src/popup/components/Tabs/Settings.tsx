@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import cx from 'classnames';
 import styles from "./Settings.module.scss";
 import ConnectionSettingsForm from '../ConnectionSettingsForm';
 import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';

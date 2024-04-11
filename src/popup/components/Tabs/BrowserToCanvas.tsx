@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import cx from 'classnames';
 import styles from "./BrowserToCanvas.module.scss";
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setBrowserTabs } from '@/popup/redux/tabs/tabActions';
 import { Dispatch } from 'redux';
-import { updateTabs } from '@/popup/utils';
 
 interface BrowserToCanvasTypes {
 }
@@ -21,9 +19,6 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
     // Remove the tab from the list
     dispatch(setBrowserTabs(browserTabs.filter((t: chrome.tabs.Tab) => t.id !== tab.id)));
-    // setBrowserToCanvasTabsDelta(btctd => {
-    //   return btctd.filter(b => tab.id !== b.id);
-    // });
   };
 
   const syncAllClicked = () => {

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import cx from 'classnames';
 import styles from "./Search.module.scss";
 
 interface SearchTypes {

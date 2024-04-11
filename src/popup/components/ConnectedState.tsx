@@ -1,7 +1,5 @@
 import React from 'react';
-import cx from 'classnames';
 import styles from "./ConnectedState.module.css";
-import ConnectionSettingsForm from './ConnectionSettingsForm';
 import { Tab, Tabs } from 'react-materialize';
 import BrowserToCanvas from './Tabs/BrowserToCanvas';
 import CanvasToBrowser from './Tabs/CanvasToBrowser';

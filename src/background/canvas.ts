@@ -144,7 +144,7 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<AxiosResponse>
 export function canvasRemoveTab(tab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:remove", tab, (res) => {
+    socket.emit("context:document:remove", tab.id, (res) => {
       console.log("background.js | Tab removed: ", res);
       if (res.status === "success") {
         console.log(`background.js | Tab ${tab.id} removed from Canvas: `, res);
@@ -163,7 +163,7 @@ export function canvasRemoveTab(tab) {
 export function canvasDeleteTab(tab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:delete", tab, (res) => {
+    socket.emit("context:document:delete", tab.id, (res) => {
       if (res.status === "success") {
         console.log("background.js | Tab deleted: ", res);
         index.removeCanvasTab(tab.url);

@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import cx from 'classnames';
 import styles from "./ConnectionPopup.module.css";
-import { setConfig } from 'dompurify';
 import ConnectionSettingsForm from './ConnectionSettingsForm';
 
 interface ConnectionPopupTypes {
