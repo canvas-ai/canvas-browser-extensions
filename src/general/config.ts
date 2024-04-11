@@ -6,6 +6,8 @@ export const DEFAULT_CONFIG: {
   transport: IConfig["transport"]
 } = {
   sync: {
+    autoSyncBrowserTabs: "Never",
+    autoOpenCanvasTabs: "Never",
     autoRestoreSession: true,
     autoSaveSession: true,
     autoOpenTabs: true,

@@ -147,6 +147,7 @@ export class TabIndex {
 	#stripTabProperties(tab: chrome.tabs.Tab) {
 		return {
 			id: tab.id,
+			docId: tab.id,
 			index: tab.index,
 
 			url: tab.url,

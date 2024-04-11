@@ -129,8 +129,16 @@ export function canvasHasTab(id) {
 }
 
 export function canvasInsertTab(tab) {
-  return new Promise((resolve, reject) => {
-    // TODO: Implement the logic for inserting a tab
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    if (!tab) {
+      reject("background.js | Invalid tab");
+    }
+    tab = formatTabProperties(tab);
+    socket.emit("context:document:insert", tab, (res) => {
+      console.log("background.js | tab inserted", tab, res);
+      resolve(res);
+    });
   });
 }
 
@@ -143,7 +151,7 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
 export function canvasRemoveTab(tab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:remove", tab.id, (res) => {
+    socket.emit("context:document:remove", tab.docId, (res) => {
       console.log("background.js | Tab removed: ", res);
       if (res.status === "success") {
         console.log(`background.js | Tab ${tab.id} removed from Canvas: `, res);
@@ -162,7 +170,7 @@ export function canvasRemoveTab(tab) {
 export function canvasDeleteTab(tab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:delete", tab.id, (res) => {
+    socket.emit("context:document:delete", tab.docId, (res) => {
       if (res.status === "success") {
         console.log("background.js | Tab deleted: ", res);
         index.removeCanvasTab(tab.url);

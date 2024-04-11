@@ -3,6 +3,10 @@ import styles from "./Settings.module.scss";
 import ConnectionSettingsForm from '../ConnectionSettingsForm';
 import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 import SyncSettingCheckbox from '../SyncSettingCheckbox';
+import { useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
+import { Dispatch } from 'redux';
+import SyncSettingsForm from '../SyncSettingsForm';
 
 interface SettingsTypes {
   retrying: boolean;
@@ -19,15 +23,7 @@ const Settings: React.FC<SettingsTypes> = ({ retrying }) => {
           icon={<Icon>settings</Icon>}
           node="div"
         >
-          
-          <SyncSettingCheckbox 
-            prop={'autoCloseTabs'} 
-            title="Auto-sync browser tabs to Canvas" />
-
-          <SyncSettingCheckbox 
-            prop={'autoRestoreSession'} 
-            title="Automatically switch tab-sets on context change" />
-
+          <SyncSettingsForm />
         </CollapsibleItem>
         <CollapsibleItem
           expanded={true}

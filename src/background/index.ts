@@ -44,7 +44,8 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
     // Check if the changed properties matters
-    if (!Object.keys(changeInfo).some(cik => watchTabProperties.properties.some(wtpk => cik === wtpk))) return;
+    if (!Object.keys(changeInfo).some(cik => watchTabProperties.properties.some(wtpk => cik === wtpk)))
+      return;
 
     // Trigger on url change if the tab url is valid
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
@@ -57,14 +58,20 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       // Update backend
       console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
 
-      let tabDocument = formatTabProperties(tab);
-      const res: any = await canvasInsertTab(tabDocument);
-      if (res.status === "success") {
-        console.log(`background.js | Tab ${tabId} inserted: `, res);
-        index.insertCanvasTab(tab);
-      } else {
-        console.error(`background.js | Insert failed for tab ${tabId}:`)
-        console.error(res);
+      const tabs = index.getCanvasTabArray();
+      if(
+          config.sync.autoSyncBrowserTabs === "Always" ||
+          tabs.some(tab => tab.id === tabId) // update if its already synced
+      ) {
+        let tabDocument = formatTabProperties(tab);
+        const res: any = await canvasInsertTab(tabDocument);
+        if (res.status === "success") {
+          console.log(`background.js | Tab ${tabId} inserted: `, res);
+          index.insertCanvasTab(tab);
+        } else {
+          console.error(`background.js | Insert failed for tab ${tabId}:`)
+          console.error(res);
+        }  
       }
     }
   })
@@ -150,7 +157,8 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     tabDocument.data = stripTabProperties(tab)
 
     // Send update to backend
-    const res: any = await canvasRemoveTab(tabDocument);
+    if(config.sync.autoSyncBrowserTabs === "Always")
+      await canvasDeleteTab(tab);
   });
 
 

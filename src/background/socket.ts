@@ -1,9 +1,8 @@
 import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContext, canvasFetchTabsForContext } from './canvas';
+import { canvasFetchContext, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
 import index from './TabIndex';
-import { context, updateContext } from './context';
-import { browserCloseNonContextTabs, browserOpenTabArray, sleep } from './utils';
+import { setContextUrl, updateContext } from './context';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,
@@ -49,6 +48,7 @@ class MySocket {
 
       canvasFetchTabsForContext().then((res: any) => {
         if (!res || res.status !== 'success') return console.log('ERROR: background.js | Error fetching tabs from Canvas')
+        console.log("recieved canvas tabs array", res.data);
         index.insertCanvasTabArray(res.data);
       }).then(() => {
         index.updateBrowserTabs().then(() => {
@@ -87,31 +87,7 @@ class MySocket {
       console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
     });
 
-    this.socket.on('context:url', async (url) => {
-      console.log('background.js | [socket.io] Received context URL update: ', url);
-      context.url = url.payload;
-    
-      let res: any = await canvasFetchTabsForContext();
-      await index.updateBrowserTabs();
-    
-      index.insertCanvasTabArray(res.data);
-    
-      // Automatically close existing tabs if enabled
-      if (config.sync.autoCloseTabs) await browserCloseNonContextTabs();
-    
-      // Automatically open new canvas tabs if enabled
-      if (config.sync.autoOpenTabs) await browserOpenTabArray(index.getCanvasTabArray());
-    
-      // Try to update the UI (might not be loaded(usually the case))
-      chrome.runtime.sendMessage({ type: 'context:url', data: context.url }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.log(`background.js | Unable to connect to UI, error: ${chrome.runtime.lastError}`);
-        } else {
-          console.log('background.js | Message to UI sent successfully');
-        }
-      });
-    
-    });
+    this.socket.on('context:url', setContextUrl);
   }
 
   sendSocketEvent(e: string) {
