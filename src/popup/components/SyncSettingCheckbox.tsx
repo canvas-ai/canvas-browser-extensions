@@ -4,6 +4,8 @@ import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';
 import { Dispatch } from 'redux';
+import { browser } from '../utils';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface SyncSettingCheckboxTypes {
   title: string;
@@ -11,12 +13,12 @@ interface SyncSettingCheckboxTypes {
 }
 
 const SyncSettingCheckbox: React.FC<SyncSettingCheckboxTypes> = ({ title, prop }) => {
-  const config = useSelector((state: any) => state.config);
+  const config = useSelector((state: { config: IConfigProps }) => state.config);
   const dispatch = useDispatch<Dispatch<any>>();
 
-  const updateSyncSettings = (config: IConfig, changes: { [key: string]: any }) => {
+  const updateSyncSettings = (config: IConfigProps, changes: { [key: string]: any }) => {
     const sync = { ...config.sync, ...changes };
-    chrome.runtime.sendMessage({ action: 'config:set:item', key: "sync", value: sync }, (response) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key: "sync", value: sync }, (response) => {
       dispatch(setConfig({ ...config, sync }));
     });
   }

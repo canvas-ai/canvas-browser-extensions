@@ -1,25 +1,30 @@
 import React, { useState } from 'react';
 import cx from 'classnames';
 import styles from "./DisconnectedState.module.scss";
+import { browser } from '../utils';
+import { setRetrying } from '../redux/variables/varActions';
+import { useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface DisconnectedStateTypes {
   connectionHost: string;
   setConnectionDetailsClicked: React.MouseEventHandler<HTMLButtonElement>;
-  retrying: boolean;
-  setRetrying: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const DisconnectedState: React.FC<DisconnectedStateTypes> = ({ connectionHost, setConnectionDetailsClicked, setRetrying, retrying }) => {
+const DisconnectedState: React.FC<DisconnectedStateTypes> = ({ connectionHost, setConnectionDetailsClicked }) => {
+  const dispatch = useDispatch<any>();
+  const variables = useSelector((state: { variables: IVarState }) => state.variables);
   const retryConnection = () => {
-    setRetrying(true);
-    chrome.runtime.sendMessage({ action: 'socket:retry' });
+    dispatch(setRetrying(true));
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
   }
 
   return (
     <section className={cx('no-pad', styles.disconnectedState)}>
       <div className={styles.disconnectedContent}>
         <div className={styles.stateDescription}>
-          { retrying ? (
+          { variables.retrying ? (
             <div className={styles.messageContainer}>
               <strong>Retrying...</strong>
             </div>
@@ -29,7 +34,7 @@ const DisconnectedState: React.FC<DisconnectedStateTypes> = ({ connectionHost, s
             </div>
           ) }
           <div className={styles.connectionDetailsButtonContainer}>
-            <button onClick={() => retryConnection()} disabled={retrying} className="btn red waves-effect waves-light">Retry Connection</button>
+            <button onClick={() => retryConnection()} disabled={variables.retrying} className="btn red waves-effect waves-light">Retry Connection</button>
             <button onClick={setConnectionDetailsClicked} className="btn-flat blue-text text-darken-1">Set connection details</button>
           </div>
         </div>

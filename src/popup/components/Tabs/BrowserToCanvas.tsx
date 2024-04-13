@@ -4,18 +4,19 @@ import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setBrowserTabs } from '@/popup/redux/tabs/tabActions';
 import { Dispatch } from 'redux';
+import { browser } from '@/popup/utils';
 
 interface BrowserToCanvasTypes {
 }
 
 const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
-  const browserTabs = useSelector((state: any) => state.tabs.browserTabs);
+  const browserTabs = useSelector((state: ITabsInfo) => state.tabs.browserTabs);
   const dispatch = useDispatch<Dispatch<any>>();
 
   const removeBrowserToCanvasTabClicked = (tab: chrome.tabs.Tab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if(!tab.id) return;
-    chrome.tabs.remove(tab.id);
+    browser.tabs.remove(tab.id);
 
     // Remove the tab from the list
     dispatch(setBrowserTabs(browserTabs.filter((t: chrome.tabs.Tab) => t.id !== tab.id)));
@@ -23,7 +24,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
   const syncAllClicked = () => {
     console.log('UI | Syncing all tabs to canvas');
-    chrome.runtime.sendMessage({ action: 'canvas:tabs:insert' }).then((res) => {
+    browser.runtime.sendMessage({ action: 'canvas:tabs:insert' }).then((res) => {
         console.log('UI | Res: ' + res)
         // updateTabs(dispatch);
     }).catch((error) => {
@@ -33,7 +34,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
   const syncTabClicked = (tab: chrome.tabs.Tab) => {
     console.log('UI | Syncing a tab to canvas');
-    chrome.runtime.sendMessage({ action: 'canvas:tabs:insert', tabs: [tab] }).then((res) => {
+    browser.runtime.sendMessage({ action: 'canvas:tabs:insert', tabs: [tab] }).then((res) => {
         console.log('UI | Res: ' + res);
         // updateTabs(dispatch);
     }).catch((error) => {
@@ -44,7 +45,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
   return (
     <div className="container">
       <h5>Sync to Canvas
-        (<span className="">{browserTabs.length}</span>)
+        (<span className="">{browserTabs?.length}</span>)
         <span>
           <a onClick={syncAllClicked}
             className="black white-text waves-effect waves-light btn-small right">
@@ -55,7 +56,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
       </h5>
       <ul className="collection">
         {
-          !browserTabs.length ? 
+          !browserTabs?.length ? 
           (<li className="collection-item">No browser tabs to sync</li>) : 
           browserTabs.map((tab: chrome.tabs.Tab, idx: number) => {
             if(!tab.url) return null;

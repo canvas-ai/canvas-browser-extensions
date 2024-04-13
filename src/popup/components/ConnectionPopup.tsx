@@ -5,15 +5,14 @@ import ConnectionSettingsForm from './ConnectionSettingsForm';
 interface ConnectionPopupTypes {
   open: boolean;
   closePopup: React.MouseEventHandler<HTMLDivElement>;
-  retrying: boolean;
 }
 
-const ConnectionPopup: React.FC<ConnectionPopupTypes> = ({ open, closePopup, retrying }) => {
+const ConnectionPopup: React.FC<ConnectionPopupTypes> = ({ open, closePopup }) => {
   return (
     <div className={["popup-container", ...(open ? ["popup-opened"] : [])].join(" ")}>
         <div className="popup-overlay" onClick={closePopup}></div>
         <div className="popup-content connection-settings-popup">
-          <ConnectionSettingsForm retrying={retrying} closePopup={closePopup} />
+          <ConnectionSettingsForm closePopup={closePopup} />
         </div>
       </div>
   );

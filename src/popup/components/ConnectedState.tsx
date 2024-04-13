@@ -7,10 +7,9 @@ import Search from './Tabs/Search';
 import Settings from './Tabs/Settings';
 
 interface ConnectedStateTypes {
-  retrying: boolean;
 }
 
-const ConnectedState: React.FC<ConnectedStateTypes> = ({ retrying }) => {
+const ConnectedState: React.FC<ConnectedStateTypes> = ({ }) => {
   return (
     <section className="no-pad">
       <Tabs
@@ -60,7 +59,7 @@ const ConnectedState: React.FC<ConnectedStateTypes> = ({ retrying }) => {
           }}
           title="Settings"
         >
-          <Settings retrying={retrying} />
+          <Settings />
         </Tab>
       </Tabs>
     </section>

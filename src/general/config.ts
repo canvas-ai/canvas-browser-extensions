@@ -55,9 +55,9 @@ class Config {
 
   initialize() {
     return new Promise((res) => {
-      store.get(['sync', 'transport', 'session']).then((cfg: any) => {
+      store.get(['sync', 'transport', 'session'], (cfg: any) => {
         Object.keys(cfg).forEach(key => {
-          config[key] = cfg[key] || config[key];
+          this[key] = cfg[key] || this[key];
         });
         res(true);
       });

@@ -5,126 +5,56 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ConnectedState from './components/ConnectedState';
 import DisconnectedState from './components/DisconnectedState';
-import { fetchVariable, tabsUpdated, updateTabs } from './utils';
+import { browser, requestUpdateTabs, requestVariableUpdate } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
 import store from './redux/store';
 import { useSelector } from 'react-redux';
-import { loadInitialConfigState } from './redux/config/configActions';
+import { loadInitialConfigState, setConfig } from './redux/config/configActions';
 import { useDispatch } from 'react-redux';
-import { setBrowserTabs, setCanvasTabs } from './redux/tabs/tabActions';
 import { Dispatch } from 'redux';
+import { RUNTIME_MESSAGES } from '@/general/constants';
+import { messageListener } from './listener';
+import { ToastContainer, toast } from "react-toastify";
+import { Toast } from 'react-materialize';
 
 const App: React.FC = () => {
-  const config = useSelector((state: any) => state.config);
-  const tabs = useSelector((state: any) => state.tabs);
+  const config = useSelector((state: { config: IConfigProps }) => state.config);
+  const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
+  const variables = useSelector((state: { variables: IVarState }) => state.variables);
   const dispatch = useDispatch<Dispatch<any>>();
 
-  const [connected, setConnected] = useState<boolean>(false);
-  const [retrying, setRetrying] = useState(false);
-  const [context, setContext] = useState<any>({});
   const [popupOpen, setPopupOpen] = useState<boolean>(false);
 
   useEffect(() => {
     store.dispatch(loadInitialConfigState());
+    requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
   }, []);
 
   useEffect(() => {
-    console.log("context url is", JSON.stringify(context?.url));
-    // TODO: Rework to use a single request to background.js for initial variables
-    Promise.all([
-      fetchVariable({ action: 'socket:status' }),
-      fetchVariable({ action: 'context:get' })
-    ]).then((values) => {
-      // TODO: Handle errors
-      setConnected(values[0]);
-      setContext(values[1]);
-    }).catch(error => {
-      console.error("Error loading variables:", error);
-    });
-  }, [context?.url]);
+    console.log("context url is", JSON.stringify(variables.context?.url));
+    requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
+    requestVariableUpdate({ action: RUNTIME_MESSAGES.context_get });
 
-  useEffect(() => {
-    const messageListener = (message: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
-      console.log('UI | Message received: ', message);
-      if (message.type === 'context:url') {
-        const url = message.data;
-        console.log(`UI | Got context URL: "${url}"`)
-        setContext((ctx: any) => ({ ...ctx, url }));
-      }
-
-      if(message.type === "tabs:updated") {
-        const updateData: IUpdatedTabsData = message.data;
-        if(updateData.canvasTabs) tabsUpdated(dispatch, updateData.canvasTabs, tabs.canvasTabs, setCanvasTabs);
-        if(updateData.browserTabs) tabsUpdated(dispatch, updateData.browserTabs, tabs.browserTabs, setBrowserTabs);
-        // setTimeout(() => {
-        //   updateTabs(dispatch);
-        // }, 1000);
-      }
-
-      if (message.type === 'socket-event') {
-        const sockevent = message.data.event;
-        console.log(`UI | Got a new socket event: "${sockevent}"`);
-        switch (sockevent) {
-          case "connecting":
-            setConnected(false);
-            setRetrying(true);
-            break;
-          case 'connect':
-            setConnected(true);
-            setRetrying(false);
-            break;
-          case 'disconnect':
-            setConnected(false);
-            setRetrying(false);
-            break;
-          case 'connect_error':
-            setConnected(false); // maybe could show the last connection error
-            setRetrying(false);
-            break;
-          case 'connect_timeout':
-            setConnected(false); // maybe could show timeout error
-            setRetrying(false);
-            break;
-          default:
-            console.log(`ERROR: UI | Unknown socket event: "${sockevent}"`);
-        }
-      }
-    }
-
-    chrome.runtime.onMessage.addListener(messageListener);
+    browser.runtime.onMessage.addListener(messageListener(dispatch, variables));
 
     return () => {
-      chrome.runtime.onMessage.removeListener(messageListener);
+      browser.runtime.onMessage.removeListener(messageListener(dispatch, variables));
     }
-  }, [tabs]);
-
-  const canvasConnected = () => {
-    // fetchVariable({ action: 'config:get' }).then((config: IConfig) => {
-    //   setConfig(config);
-    // });
-    updateTabs(dispatch);
-  }
-
-  const canvasDisconnected = () => {
-
-  }
+  }, [variables.context.url]);
 
   useEffect(() => {
-    if (connected) {
-      canvasConnected();
-    } else {
-      canvasDisconnected();
+    console.log("variables.connected", variables.connected);
+    if (variables.connected) {
+      requestUpdateTabs();
     }
-  }, [connected]);
+  }, [variables.connected]);
 
   useEffect(() => {
-    console.log(connected, context, tabs);
-  }, [connected, context, tabs]);
+    console.log(variables.connected, variables.context, tabs);
+  }, [variables.connected, variables.context, tabs]);
 
   const setConnectionDetailsClicked: React.MouseEventHandler<HTMLButtonElement> = (e) => {
-    // fetchVariable({ action: 'config:get' }).then((config: IConfig) => {
-    //   setConfig(config);
-    // });
+    // requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
     setPopupOpen(true);
   }
 
@@ -132,26 +62,25 @@ const App: React.FC = () => {
     setPopupOpen(false);
   }
 
+  console.log(variables, config);
+
   return (
     <>
-      {connected && config ? <Header url={context?.url} /> : null}
+      {variables.connected && config ? <Header url={variables.context?.url} /> : null}
       <main>
         {
-          connected && config ?
-            <ConnectedState 
-              retrying={retrying}
-            /> :
+          variables.connected && config ?
+            <ConnectedState /> :
             <DisconnectedState
-              retrying={retrying}
-              setRetrying={setRetrying}
               setConnectionDetailsClicked={setConnectionDetailsClicked}
               connectionHost={`${config?.transport.protocol}://${config?.transport.host}:${config?.transport.port}`}
             />
         }
       </main>
-      {connected ? <Footer /> : null}
+      {variables.connected ? <Footer /> : null}
 
-      {config ? <ConnectionPopup open={popupOpen} closePopup={closePopup} retrying={retrying} /> : null}
+      {config ? <ConnectionPopup open={popupOpen} closePopup={closePopup} /> : null}
+      <ToastContainer />
     </>
   );
 };

@@ -1,7 +1,8 @@
 import config from "@/general/config";
 import index from "./TabIndex";
 import { canvasFetchTabsForContext, canvasInsertTabArray } from "./canvas";
-import { browserOpenTabArray } from "./utils";
+import { browser, browserOpenTabArray } from "./utils";
+import { RUNTIME_MESSAGES } from "@/general/constants";
 
 const DEFAULT_URL = 'universe:///';
 
@@ -53,9 +54,9 @@ export const setContextUrl = async (url) => {
 }
 
 export const contextUrlChanged = () => {
-  chrome.runtime.sendMessage({ type: 'context:url', data: context.url }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.log(`background.js | Unable to connect to UI, error: ${chrome.runtime.lastError}`);
+  browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url }, (response) => {
+    if (browser.runtime.lastError) {
+      console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
     } else {
       console.log('background.js | Message to UI sent successfully');
     }

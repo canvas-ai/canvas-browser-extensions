@@ -1,9 +1,10 @@
 import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
-import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, stripTabProperties } from "./utils";
+import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { context } from "./context";
+import { RUNTIME_MESSAGES } from "@/general/constants";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
@@ -35,12 +36,12 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
    * Browser event listeners
    */
 
-  chrome.tabs.onCreated.addListener((tab) => {
+  browser.tabs.onCreated.addListener((tab) => {
     // noop, we need to wait for the onUpdated event to get the url
     console.log(`background.js | Tab created: ${tab.id}`);
   })
 
-  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
     // Check if the changed properties matters
@@ -53,6 +54,8 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       // Update the current index
       index.updateBrowserTabs().then(() => {
         console.log('background.js | Index updated: ', index.counts());
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
       });
 
       // Update backend
@@ -68,6 +71,8 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         if (res.status === "success") {
           console.log(`background.js | Tab ${tabId} inserted: `, res);
           index.insertCanvasTab(tab);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
         } else {
           console.error(`background.js | Insert failed for tab ${tabId}:`)
           console.error(res);
@@ -76,7 +81,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     }
   })
 
-  chrome.tabs.onMoved.addListener((tabId, moveInfo) => {
+  browser.tabs.onMoved.addListener((tabId, moveInfo) => {
     console.log('background.js | Tab moved: ', tabId, moveInfo);
 
     // Update the current index
@@ -88,7 +93,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     //console.log('background.js | TODO: Disabled as we currently do not track move changes');
     //return;
 
-    chrome.tabs.get(tabId).then(async tab => {
+    browser.tabs.get(tabId).then(async tab => {
       let tabDocument = TabDocumentSchema
       tabDocument.data = stripTabProperties(tab)
 
@@ -138,7 +143,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
   });
 
-  chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+  browser.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
     console.log('background.js | Tab removed: ', tabId, removeInfo);
 
     // Lets fetch the tab based on ID from our index
@@ -167,83 +172,84 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
    * UI Message Handlers
    */
 
-  chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     console.log('background.js | UI Message received: ', message);
 
     switch (message.action) {
 
       // socket.io
-      case 'socket:status':
+      case RUNTIME_MESSAGES.socket_status:
         console.log({ socket });
-        sendResponse(socket && socket.isConnected());
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: socket && socket.isConnected() });
         break;
 
       // Config
-      case 'config:get':
-        sendResponse(config);
+      case RUNTIME_MESSAGES.config_get:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
         break;
 
-      case 'config:get:item':
+      case RUNTIME_MESSAGES.config_get_item:
         if (!message.key) return console.error('background.js | No config key specified');
-        sendResponse(config[message.key]);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
         break;
 
-      case 'config:set:item':
+      case RUNTIME_MESSAGES.config_set_item:
         if (!message.key || !message.value) return console.error('background.js | No config key or value specified');
         await config.set(message.key, message.value);
         config[message.key] = message.value;
-        sendResponse(config[message.key]);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
         break;
 
       // Context
-      case 'context:get':
-        sendResponse(context);
+      case RUNTIME_MESSAGES.context_get:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get, payload: context });
         break;
 
-      case 'context:get:url':
-        sendResponse(context.url);
+      case RUNTIME_MESSAGES.context_get_url:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url });
         break;
 
-      case 'context:get:path':
-        sendResponse(context.path);
+      case RUNTIME_MESSAGES.context_get_path:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_path, payload: context.path });
         break;
 
-      case 'context:get:pathArray':
-        sendResponse(context.pathArray);
+      case RUNTIME_MESSAGES.context_get_pathArray:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_pathArray, payload: context.pathArray });
         break;
 
-      case 'context:get:color':
-        sendResponse(context.color);
+      case RUNTIME_MESSAGES.context_get_color:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_color, payload: context.color });
         break;
 
-      case 'context:get:tree':
-        sendResponse(context.tree);
+      case RUNTIME_MESSAGES.context_get_tree:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: context.tree });
         break;
 
-      case 'context:set:url':
+      case RUNTIME_MESSAGES.context_set_url:
         if (!message.url) return console.error('background.js | No context url specified');
         canvasInsertData('context:set:url', message.url).then((res: any) => {
-          if (!res || res.status === 'error') return console.error('background.js | Error setting context url')
+          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error setting context url' });
           console.log('background.js | Context url set: ', res.data)
-          sendResponse(res);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_set_url, payload: res });
         });
         break;
 
-      case 'context:tab:remove':
+      case RUNTIME_MESSAGES.context_tab_remove:
         if (!message.tab) return console.error('background.js | No tab specified');
         canvasRemoveTab(message.tab).then((res: any) => {
-          if (!res || res.status === 'error') return console.error('background.js | Error removing tab from Canvas')
-          console.log('background.js | Tab removed from the current context in Canvas: ', res.data)
-          sendResponse(res);
+          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error removing tab from Canvas' });
+          console.log('background.js | Tab removed from the current context in Canvas: ', res.data);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+          // sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_tab_remove, payload: res });
         });
         break;
 
       // Browser
-      case 'browser:tabs:update':
+      case RUNTIME_MESSAGES.browser_tabs_update:
         return Promise.resolve(index.updateBrowserTabs());
         break;
 
-      case 'browser:tabs:open':
+      case RUNTIME_MESSAGES.browser_tabs_open:
         if (message.tabs) {
           console.log('background.js | Tabs to sync: ' + message.tabs.length);
         } else {
@@ -254,21 +260,21 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         browserOpenTabArray(message.tabs);
         break;
 
-      case 'browser:tabs:close':
+      case RUNTIME_MESSAGES.browser_tabs_close:
         if (!message.tabs) return console.error('background.js | No tabs specified');
         browserCloseTabArray(message.tabs);
         break;
 
       // Canvas
-      case 'canvas:tabs:fetch':
+      case RUNTIME_MESSAGES.canvas_tabs_fetch:
         const res: any = await canvasFetchTabsForContext();
-        if (!res || res.status === 'error') return console.error('background.js | Error fetching tabs from Canvas')
+        if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas' });
         console.log('background.js | Tabs fetched from Canvas: ', res.data)
         index.insertCanvasTabArray(res.data);
-        sendResponse(res);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_fetch, payload: res });
         break;
 
-      case 'canvas:tabs:openInBrowser':
+      case RUNTIME_MESSAGES.canvas_tabs_openInBrowser:
         if (message.tabs) {
           console.log('background.js | Tabs to open: ' + message.tabs.length);
         } else {
@@ -278,13 +284,14 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
         browserOpenTabArray(message.tabs)
         index.updateBrowserTabs().then(() => {
-          sendResponse(index.counts());
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_openInBrowser, payload: index.counts() });
         }).catch((error) => {
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error updating browser tabs'});
           console.error('background.js | Error updating browser tabs:', error);
         });
         break;
 
-      case 'canvas:tabs:insert':
+      case RUNTIME_MESSAGES.canvas_tabs_insert:
         let tabs;
         if (message.tabs) {
           console.log('background.js | Tabs to sync: ' + message.tabs.length);
@@ -296,68 +303,68 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
 
         canvasInsertTabArray(tabs).then((res: any) => {
-          if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tabs to Canvas' });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas'});
           console.log('background.js | Tabs inserted to Canvas: ', res);
 
           index.insertCanvasTabArray(tabs);
           onContextTabsUpdated({ browserTabs: { removedTabs: tabs } });
-          sendResponse(res);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: res });
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
-          sendResponse(false);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: false });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error updating browser tabs'});
           console.error('background.js | Error updating browser tabs:', error);
         })
 
         break;
 
-      case 'canvas:tab:delete':
+      case RUNTIME_MESSAGES.canvas_tab_delete:
         if (!message.tab) return console.error('background.js | No tab specified');
         canvasDeleteTab(message.tab).then((res: any) => {
-          if (!res || res.status === 'error') return console.error('background.js | Error deleting tab from Canvas');
+          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
           index.removeCanvasTab(message.tab.url);
-          console.log('background.js | Tab deleted from Canvas: ', res.data)
-          sendResponse(res);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab deleted from Canvas: '});
+          // sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_delete, payload: res });
         });
         break;
 
       // Index
-      case 'index:get:counts':
-        sendResponse(index.counts());
+      case RUNTIME_MESSAGES.index_get_counts:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_counts, payload: index.counts() });
         break;
 
-      case 'index:get:browserTabArray':
-        sendResponse(index.getBrowserTabArray());
+      case RUNTIME_MESSAGES.index_get_browserTabArray:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_browserTabArray, payload: index.getBrowserTabArray() });
         break;
 
-      case 'index:get:canvasTabArray':
-        sendResponse(index.getCanvasTabArray());
+      case RUNTIME_MESSAGES.index_get_canvasTabArray:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_canvasTabArray, payload: index.getCanvasTabArray() });
         break;
 
-      case 'index:get:deltaBrowserToCanvas':
+      case RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas:
         index.updateBrowserTabs().then(() => {
           console.log('background.js | Index updated: ', index.counts());
-          sendResponse(index.counts());
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
         });
-        sendResponse(index.deltaBrowserToCanvas());
         break;
 
-      case 'index:get:deltaCanvasToBrowser':
+      case RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser:
         index.updateBrowserTabs().then(() => {
           console.log('background.js | Index updated: ', index.counts());
-          sendResponse(index.counts());
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         });
-        sendResponse(index.deltaCanvasToBrowser());
         break;
 
-      case 'index:updateBrowserTabs':
+      case RUNTIME_MESSAGES.index_updateBrowserTabs:
 
         break;
 
-      case 'index:clear':
-        sendResponse(index.clearIndex());
+      case RUNTIME_MESSAGES.index_clear:
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_clear, payload: index.clearIndex() });
         break;
 
-      case 'socket:retry':
+      case RUNTIME_MESSAGES.socket_retry:
         socket.initializeSocket();
         break;
 

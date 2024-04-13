@@ -1,8 +1,12 @@
 import { Dispatch } from "redux";
 import { setBrowserTabs, setCanvasTabs } from "./redux/tabs/tabActions";
+import { RUNTIME_MESSAGES } from "@/general/constants";
+import { toast } from "react-toastify";
 
-export const fetchVariable = (message: { action: string }) => {
-  return chrome.runtime.sendMessage(message);
+export const browser: typeof chrome = globalThis.browser || chrome;
+
+export const requestVariableUpdate = (message: { action: string }) => {
+  return browser.runtime.sendMessage(message);
 }
 
 export const sanitizeContextUrl = (url: string | undefined) => {
@@ -36,30 +40,36 @@ export const getContextBreadcrumbs = (url: string | undefined) => {
   });
 }
 
-export const updateTabs = (dispatch: Dispatch<any>) => {
-  Promise.all([
-    fetchVariable({ action: 'index:get:deltaBrowserToCanvas' }),
-    fetchVariable({ action: 'index:get:deltaCanvasToBrowser' })
-  ]).then((values) => {
-    // Update tab lists
-    dispatch(setBrowserTabs(values[0]));
-    dispatch(setCanvasTabs(values[1]));
-    // setBrowserToCanvasTabsDelta(values[0]);
-    // setCanvasToBrowserTabsDelta(values[1]);
-    console.log('UI | UI updated');
-  }).catch(error => {
-    console.error('UI | Error updating UI:', error);
-  });;
+export const requestUpdateTabs = () => {
+  requestVariableUpdate({ action: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas });
+  requestVariableUpdate({ action: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser });
 }
 
-export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, tabs: chrome.tabs.Tab[], setter: (tabs: chrome.tabs.Tab[]) => void) => {
+export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, adder: (tabs: chrome.tabs.Tab[]) => void, remover: (tabs: chrome.tabs.Tab[]) => void) => {
   if(updateData.insertedTabs && updateData.insertedTabs.length) {
-    dispatch(setter([...tabs, ...updateData.insertedTabs]));
+    tabsInserted(dispatch, updateData.insertedTabs, adder);
   }
   if(updateData.removedTabs && updateData.removedTabs.length) {
-    const updatedTabs = tabs.filter(
-      (t: chrome.tabs.Tab) => !(updateData?.removedTabs || []).some(tab => tab.url === t.url)
-    );
-    dispatch(setter(updatedTabs));
+    tabsRemoved(dispatch, updateData.removedTabs, remover);
   }
+}
+
+export const tabsInserted = (dispatch: Dispatch<any>, insertedTabs: chrome.tabs.Tab[], adder: (insertedTabs: chrome.tabs.Tab[]) => void) => {
+  dispatch(adder(insertedTabs));
+}
+
+export const tabsRemoved = (dispatch: Dispatch<any>, removedTabs: chrome.tabs.Tab[], remover: (removedTabs: chrome.tabs.Tab[]) => void) => {
+  dispatch(remover(removedTabs));
+}
+
+export const showErrorMessage = (message: string) => {
+  toast(message, {
+    
+  });
+}
+
+export const showSuccessMessage = (message: string) => {
+  toast(message, {
+    
+  });
 }

@@ -3,6 +3,8 @@ import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
 import { canvasFetchContext, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
 import index from './TabIndex';
 import { setContextUrl, updateContext } from './context';
+import { browser } from './utils';
+import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,
@@ -28,7 +30,7 @@ class MySocket {
   }
 
   reconnect() {
-    // this.sendSocketEvent("connecting");
+    // this.sendSocketEvent(SOCKET_EVENTS.connecting);
     if (this.socket) this.socket.disconnect();
     this.connect();
   }
@@ -39,7 +41,7 @@ class MySocket {
     this.socket.on('connect', () => {
       console.log('background.js | [socket.io] Browser Client connected to Canvas');
   
-      this.sendSocketEvent("connect");
+      this.sendSocketEvent(SOCKET_EVENTS.connect);
 
       canvasFetchContext().then((res: any) => {
         console.log('background.js | [socket.io] Received context object: ', res.data);
@@ -59,31 +61,31 @@ class MySocket {
       this.socket.emit("authenticate", { token: config.transport.token }, result => {
         if (result === 'success') {
           console.log('background.js | [socket.io] Authenticated successfully!');
-          this.sendSocketEvent("authenticated");
+          this.sendSocketEvent(SOCKET_EVENTS.authenticated);
 
           // on authenticate...
   
         } else {
           console.log('background.js | [socket.io] Invalid auth token! disconnecting...');
-          this.sendSocketEvent("invalid_token");
+          this.sendSocketEvent(SOCKET_EVENTS.invalid_token);
           this.socket.disconnect();
         }
       });
     });
   
     this.socket.on('connect_error', (error) => {
-      this.sendSocketEvent("connect_error");
+      this.sendSocketEvent(SOCKET_EVENTS.connect_error);
       console.log(`background.js | [socket.io] Browser Connection to "${this.connectionUri()}" failed`);
       console.log("ERROR: " + error.message);
     });
     
     this.socket.on('connect_timeout', () => {
-      this.sendSocketEvent("connect_timeout");
+      this.sendSocketEvent(SOCKET_EVENTS.connect_timeout);
       console.log('background.js | [socket.io] Canvas Connection Timeout');
     });
   
     this.socket.on('disconnect', () => {
-      this.sendSocketEvent("disconnect");
+      this.sendSocketEvent(SOCKET_EVENTS.disconnect);
       console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
     });
 
@@ -91,9 +93,9 @@ class MySocket {
   }
 
   sendSocketEvent(e: string) {
-    chrome.runtime.sendMessage({ type: 'socket-event', data: { event: e } }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.log(`background.js | Unable to connect to UI, error: ${chrome.runtime.lastError}`);
+    browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.socket_event, payload: { event: e } }, (response) => {
+      if (browser.runtime.lastError) {
+        console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
       } else {
         console.log('background.js | Message to UI sent successfully');
       }

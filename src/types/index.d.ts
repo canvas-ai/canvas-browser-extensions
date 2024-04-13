@@ -58,3 +58,14 @@ interface IUpdatedTabsData {
   canvasTabs?: IUpdateTypes;
   browserTabs?: IUpdateTypes;
 }
+
+interface IVarState {
+  connected: boolean;
+  context: IContext;
+  retrying: boolean;
+}
+
+interface ITabsInfo {
+  canvasTabs: chrome.tabs.Tab[];
+  browserTabs: chrome.tabs.Tab[];
+}

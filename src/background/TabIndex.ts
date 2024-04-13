@@ -1,4 +1,4 @@
-import { browserIsValidTabUrl } from "./utils";
+import { browser, browserIsValidTabUrl } from "./utils";
 
 export class TabIndex {
 	browserTabIdToUrl: Map<any, any>;
@@ -76,19 +76,20 @@ export class TabIndex {
 	async updateBrowserTabs() {
 		console.log("background.js | Updating browser tabs in index");
 		try {
-			const tabs = await chrome.tabs.query({});
-			console.log(
-				`background.js | Found ${tabs.length} open browser tabs, updating index`
-			);
-
-			const processedTabs = tabs.reduce((acc, tab) => {
-				if (tab.url && browserIsValidTabUrl(tab.url)) {
-					acc.push(this.#stripTabProperties(tab) as never);
-				}
-				return acc;
-			}, []);
-
-			this.insertBrowserTabArray(processedTabs);
+			browser.tabs.query({}, tabs => {
+				console.log(
+					`background.js | Found ${tabs.length} open browser tabs, updating index`
+				);
+	
+				const processedTabs = tabs.reduce((acc, tab) => {
+					if (tab.url && browserIsValidTabUrl(tab.url)) {
+						acc.push(this.#stripTabProperties(tab) as never);
+					}
+					return acc;
+				}, []);
+	
+				this.insertBrowserTabArray(processedTabs);	
+			});
 		} catch (error) {
 			console.error("background.js | Error updating browser tabs:", error);
 			throw error; // Or handle it as you see fit
@@ -152,7 +153,7 @@ export class TabIndex {
 
 			url: tab.url,
 			title: tab.title,
-			favIconUrl: tab.favIconUrl ? tab.favIconUrl : chrome.runtime.getURL('icons/logo_64x64.png'),
+			favIconUrl: tab.favIconUrl ? tab.favIconUrl : browser.runtime.getURL('icons/logo_64x64.png'),
 
 			// Restore may fail if windowId does not exist hence omitted
 			// TODO: Handle this case with windows.create()

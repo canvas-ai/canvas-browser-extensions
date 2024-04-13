@@ -1,63 +1,56 @@
 import React, { useState } from 'react';
 import styles from "./CanvasToBrowser.module.scss";
 import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
-import { Dispatch } from 'redux';
-import { updateTabs } from '@/popup/utils';
+import { browser, requestUpdateTabs } from '@/popup/utils';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface CanvasToBrowserTypes {
 }
 
 const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
-  const canvasTabs = useSelector((state: any) => state.tabs.canvasTabs);
-  const dispatch = useDispatch<Dispatch<any>>();
+  const canvasTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.canvasTabs);
 
   const removeCanvasToBrowserTabClicked = (tab: chrome.tabs.Tab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if(!tab.id) return;
-    chrome.runtime.sendMessage({ action: 'context:tab:remove', tab }).then((res) => {
-      chrome.runtime.sendMessage({ action: 'index:updateBrowserTabs' });
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.context_tab_remove, tab }).then((res) => {
+      browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.index_updateBrowserTabs });
       console.log(res)
-      updateTabs(dispatch);
+      requestUpdateTabs();
     }).catch((error) => {
         console.error('UI | Error deleting tabs from canvas:', error);
     });
-    // Remove the tab from the list
-    // dispatch(setCanvasTabs(canvasTabs.filter((t: chrome.tabs.Tab) => t.id !== tab.id)));
   };
 
   const deleteCanvasToBrowserTabClicked = (tab: chrome.tabs.Tab) => {
     console.log('UI | Delete icon clicked: ', tab.url);
     if(!tab.id) return;
-    chrome.runtime.sendMessage({ action: 'canvas:tab:delete', tab }).then((res) => {
-      chrome.runtime.sendMessage({ action: 'index:updateBrowserTabs' });
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_delete, tab }).then((res) => {
+      browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.index_updateBrowserTabs });
       console.log(res)
-      updateTabs(dispatch);
+      requestUpdateTabs();
     }).catch((error) => {
         console.error('UI | Error deleting tabs from canvas:', error);
     });
-
-    // Remove the tab from the list
-    // dispatch(setCanvasTabs(canvasTabs.filter((t: chrome.tabs.Tab) => t.id !== tab.id)));
   };
 
   const openAllClicked = () => {
     console.log('UI | Opening all tabs from canvas');
-    chrome.runtime.sendMessage({ action: 'canvas:tabs:openInBrowser' }).then((res) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_openInBrowser }).then((res) => {
         console.log(res)
-        chrome.runtime.sendMessage({ action: 'index:updateBrowserTabs' });
-        updateTabs(dispatch);
-    }).catch((error) => {
+        browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.index_updateBrowserTabs });
+        requestUpdateTabs();
+      }).catch((error) => {
         console.error('UI | Error opening tabs from canvas:', error);
     });
   }
 
   const openTabClicked = (tab: chrome.tabs.Tab) => {
     console.log('UI | Opening clicked tab from canvas');
-    chrome.runtime.sendMessage({ action: 'canvas:tabs:openInBrowser', tabs: [tab] }).then((res) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_openInBrowser, tabs: [tab] }).then((res) => {
         console.log(res)
-        chrome.runtime.sendMessage({ action: 'index:updateBrowserTabs' });
-        updateTabs(dispatch);
+        browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.index_updateBrowserTabs });
+        requestUpdateTabs();
     }).catch((error) => {
         console.error('UI | Error opening tabs from canvas:', error);
     });
@@ -66,14 +59,14 @@ const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
   return (
     <div className="container">
       <h5>Open all tabs
-        (<span className="" id="canvas-tab-delta-count">{canvasTabs.length}</span>)
+        (<span className="" id="canvas-tab-delta-count">{canvasTabs?.length}</span>)
         <span>
           <a className="black white-text waves-effect waves-light btn-small right" onClick={openAllClicked}>Open all<i className="material-icons right">sync</i></a>
         </span>
       </h5>
       <ul className="collection">
         {
-          !canvasTabs.length ? 
+          !canvasTabs?.length ? 
           (<li className="collection-item">No canvas tabs to sync</li>) : 
           canvasTabs.map((tab: chrome.tabs.Tab, idx: number) => {
             if(!tab.url) return null;

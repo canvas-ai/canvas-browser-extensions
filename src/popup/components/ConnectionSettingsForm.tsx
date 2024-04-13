@@ -5,14 +5,15 @@ import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';
 import { Dispatch } from 'redux';
+import { browser } from '../utils';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
-  retrying: boolean;
 }
 
-const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePopup, retrying }) => {
-  const config: IConfigProps = useSelector((state: any) => state.config);
+const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePopup }) => {
+  const variables: IVarState = useSelector((state: { variables: IVarState }) => state.variables);
+  const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
   const dispatch = useDispatch<Dispatch<any>>();
   const [transport, setTransport] = useState({...config.transport});
   useEffect(() => {
@@ -22,8 +23,8 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const saveConnectionSettings = (e: any, config: IConfigProps) => {
     if(closePopup) closePopup(e);
     dispatch(setConfig(config));
-    chrome.runtime.sendMessage({ action: 'config:set:item', key: "transport", value: transport }, (response) => {
-      chrome.runtime.sendMessage({ action: 'socket:retry' });
+    browser.runtime.sendMessage({ action: 'config:set:item', key: "transport", value: transport }, (response) => {
+      browser.runtime.sendMessage({ action: 'socket:retry' });
     });
   }
 
@@ -79,7 +80,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         <button 
           className="btn blue waves-effect waves-light" 
           style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }} 
-          disabled={retrying} 
+          disabled={variables.retrying} 
           onClick={(e) => saveConnectionSettings(e, { ...config, transport })}
         >Save and Connect</button>
       </div>

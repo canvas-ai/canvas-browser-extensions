@@ -1,29 +1,29 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "Canvas Browser Sync",
   "description": "Tab sync browser extension for Canvas",
-  "version": "1.0.0",
+  "version": "2.2.0",
+  "homepage_url": "https://getcanvas.org",
   "icons": {
     "64": "popup/icons/logo_64x64.png",
-    "128": "popup/icons/logo_128x128.png"
+    "128": "popup/icons/logo_128x128.png",
+    "256": "popup/icons/logo_256x256.png"
   },
-  "action": {
-    "default_title": "Canvas Browser Sync",
-    "default_popup": "popup/popup.html",
-    "default_icon": {
-      "64": "popup/icons/logo_64x64.png",
-      "128": "popup/icons/logo_128x128.png"
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "canvas-ui-firefox@getcanvas.org",
+      "strict_min_version": "50.0"
     }
   },
-  "permissions": [
-    "activeTab",
-    "tabs",
-    "storage",
 
-    "nativeMessaging",
-    "notifications",
-    "unlimitedStorage"
-  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+
   "content_scripts": [
     {
       "matches": [
@@ -32,27 +32,25 @@
       "js": [
         "content-script.js"
       ],
-      "run_at": "document_end",
-      "all_frames": true
-    }
-  ],
-  "background": {
-    "scripts": ["background.js"]
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [],
-      "matches": [
-        "<all_urls>"
-      ]
+      "css": []
     }
   ],
 
-  "homepage_url": "https://getcanvas.org",
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "canvas-ui-firefox@getcanvas.org",
-      "strict_min_version": "50.0"
-    }
-  }
+  "browser_action": {
+    "default_icon": "popup/icons/logo_128x128.png",
+    "browser_style": false,
+    "default_popup": "/popup/popup.html"
+  },
+
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "nativeMessaging",
+    "notifications",
+    "storage",
+    "unlimitedStorage",
+    "http://*/*",
+    "https://*/*"
+  ]
+
 }

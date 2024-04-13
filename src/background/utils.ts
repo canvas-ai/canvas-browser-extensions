@@ -1,4 +1,7 @@
+import { RUNTIME_MESSAGES } from "@/general/constants";
 import index from "./TabIndex";
+
+export const browser: typeof chrome = globalThis.browser || chrome;
 
 export function browserIsValidTabUrl(tabUrl: string) {
   return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
@@ -11,7 +14,7 @@ export function browserOpenTab(tab: chrome.tabs.Tab) {
     console.log(`background.js | Opening tab: `, tab);
 
     try {
-      chrome.tabs.create({
+      browser.tabs.create({
         url: tab.url,
         // cookieStoreId: tab.cookieStoreId // removed
         //windowId: tab.windowId, // Restore may fail if windowId does not exist, TODO: Handle this case with windows.create()
@@ -39,17 +42,18 @@ export async function browserOpenTabArray(tabArray: chrome.tabs.Tab[] | undefine
   console.log(`background.js | Opening tab array: `, tabArray);
 
   try {
-    let windows = await chrome.windows.getAll();
-    if (windows.length === 0) {
-      await chrome.windows.create({});
-    }
-
-    for (const tab of tabArray) {
-      if (tab.url && !index.hasBrowserTab(tab.url)) {
-        console.log(`background.js | Opening tab ${tab.url}`);
-        await browserOpenTab(tab);  // assuming browserOpenTab is an export async function
+    chrome.windows.getAll(async windows => {
+      if (windows.length === 0) {
+        await chrome.windows.create({});
       }
-    }
+  
+      for (const tab of tabArray) {
+        if (tab.url && !index.hasBrowserTab(tab.url)) {
+          console.log(`background.js | Opening tab ${tab.url}`);
+          await browserOpenTab(tab);  // assuming browserOpenTab is an export async function
+        }
+      }
+    });
   } catch (error) {
     console.error('background.js | Error opening tab array:', error);
   }
@@ -58,29 +62,30 @@ export async function browserOpenTabArray(tabArray: chrome.tabs.Tab[] | undefine
 
 export function browserCloseTab(id: number | undefined) {
   if (!id) return false;
-  return chrome.tabs.remove(id);
+  return browser.tabs.remove(id);
 }
 
 export function browserCloseTabArray(tabArray: number[] | undefined) {
   if (!tabArray || !tabArray.length) return false;
-  return chrome.tabs.remove(tabArray);
+  return browser.tabs.remove(tabArray);
 }
 
 export async function browserCloseNonContextTabs() {
   try {
-    let tabs = await chrome.tabs.query({});
-    let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url));
-    if (tabsToRemove.length === 0) return;
-
-    if (tabs.length === tabsToRemove.length) {
-      // Open a new tab before closing all others to ensure at least one remains
-      await chrome.tabs.create({});
-    }
-
-    for (const tab of tabsToRemove) {
-      console.log(`background.js | Removing tab ${tab.id}`);
-      if (tab.id) await chrome.tabs.remove(tab.id);  // Using await here to ensure tab is removed
-    }
+    browser.tabs.query({}, async tabs => {
+      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url));
+      if (tabsToRemove.length === 0) return;
+  
+      if (tabs.length === tabsToRemove.length) {
+        // Open a new tab before closing all others to ensure at least one remains
+        await browser.tabs.create({});
+      }
+  
+      for (const tab of tabsToRemove) {
+        console.log(`background.js | Removing tab ${tab.id}`);
+        if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+      }  
+    });
   } catch (error) {
     console.error('Error in closing non-context tabs:', error);
   }
@@ -137,5 +142,9 @@ export const sleep = (ms: number = 1000) => new Promise(r => setTimeout(r, ms));
 
 
 export const onContextTabsUpdated = (updateInfo: IUpdatedTabsData) => {
-  chrome.runtime.sendMessage({ type: 'tabs:updated', data: updateInfo }).catch(e => console.log(e));
+  browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.tabs_updated, payload: updateInfo }).catch(e => console.log(e));
+}
+
+export const sendRuntimeMessage = async (message: { type: string, payload: any }) => {
+  return browser.runtime.sendMessage(message).catch(e => console.log(e));
 }

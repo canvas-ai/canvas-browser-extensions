@@ -9,10 +9,9 @@ import { Dispatch } from 'redux';
 import SyncSettingsForm from '../SyncSettingsForm';
 
 interface SettingsTypes {
-  retrying: boolean;
 }
 
-const Settings: React.FC<SettingsTypes> = ({ retrying }) => {
+const Settings: React.FC<SettingsTypes> = ({ }) => {
   return (
     <div id="settings" className="container">
       <h5>Settings</h5>
@@ -31,7 +30,7 @@ const Settings: React.FC<SettingsTypes> = ({ retrying }) => {
           icon={<Icon>cloud_sync</Icon>}
           node="div"
         >
-          <ConnectionSettingsForm retrying={retrying} />
+          <ConnectionSettingsForm />
         </CollapsibleItem>
       </Collapsible>
     </div>

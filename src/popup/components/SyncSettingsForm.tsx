@@ -5,17 +5,19 @@ import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';
 import { Dispatch } from 'redux';
+import { browser } from '../utils';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface SyncSettingsFormTypes {
 }
 
 const SyncSettingsForm: React.FC<SyncSettingsFormTypes> = ({ }) => {
-  const config: IConfigProps = useSelector((state: any) => state.config);
+  const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
   const dispatch = useDispatch<Dispatch<any>>();
 
   const saveSyncSettings = (config: IConfigProps, sync: IConfigProps["sync"]) => {
     dispatch(setConfig({ ...config, sync }));
-    chrome.runtime.sendMessage({ action: 'config:set:item', key: "sync", value: sync }, (response) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key: "sync", value: sync }, (response) => {
     });
   }
 
