@@ -3,7 +3,7 @@ import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
 import { canvasFetchContext, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
 import index from './TabIndex';
 import { setContextUrl, updateContext } from './context';
-import { browser } from './utils';
+import { browser, sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
@@ -49,12 +49,17 @@ class MySocket {
       });
 
       canvasFetchTabsForContext().then((res: any) => {
-        if (!res || res.status !== 'success') return console.log('ERROR: background.js | Error fetching tabs from Canvas')
+        if (!res || res.status !== 'success') {
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'}); 
+          return console.log('ERROR: background.js | Error fetching tabs from Canvas');
+        }
         console.log("recieved canvas tabs array", res.data);
         index.insertCanvasTabArray(res.data);
       }).then(() => {
         index.updateBrowserTabs().then(() => {
           console.log('background.js | Index updated: ', index.counts());
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         })
       });
   

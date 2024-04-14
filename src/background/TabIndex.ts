@@ -88,7 +88,7 @@ export class TabIndex {
 					return acc;
 				}, []);
 	
-				this.insertBrowserTabArray(processedTabs);	
+				this.insertBrowserTabArray(processedTabs);
 			});
 		} catch (error) {
 			console.error("background.js | Error updating browser tabs:", error);
