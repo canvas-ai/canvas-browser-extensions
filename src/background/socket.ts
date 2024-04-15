@@ -1,6 +1,6 @@
 import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContext, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
+import { canvasFetchContext, canvasFetchContextUrl, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
 import index from './TabIndex';
 import { setContextUrl, updateContext } from './context';
 import { browser, sendRuntimeMessage } from './utils';
@@ -43,9 +43,9 @@ class MySocket {
   
       this.sendSocketEvent(SOCKET_EVENTS.connect);
 
-      canvasFetchContext().then((res: any) => {
-        console.log('background.js | [socket.io] Received context object: ', res.payload);
-        updateContext({ url: res.payload, color: "#fff" });
+      canvasFetchContextUrl().then((url: string) => {
+        console.log('background.js | [socket.io] Received context url: ', url);
+        updateContext({ url, color: "#fff" });
       });
 
       canvasFetchTabsForContext().then((res: any) => {

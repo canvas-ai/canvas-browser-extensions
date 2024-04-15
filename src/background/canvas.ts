@@ -83,10 +83,10 @@ export function canvasFetchTabsForContext() {
   });
 }
 
-export function canvasFetchContextUrl() {
+export function canvasFetchContextUrl(): Promise<string> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:get:url", (res) => {
+    socket.emit("context:get:url", {}, (res) => {
       if (!res || res.status !== "success") {
         console.error("background.js | Error fetching context URL", res);
         reject("Error fetching context url from Canvas");
