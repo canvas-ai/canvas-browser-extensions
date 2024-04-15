@@ -44,8 +44,8 @@ class MySocket {
       this.sendSocketEvent(SOCKET_EVENTS.connect);
 
       canvasFetchContext().then((res: any) => {
-        console.log('background.js | [socket.io] Received context object: ', res.data);
-        updateContext(res.data);
+        console.log('background.js | [socket.io] Received context object: ', res.payload);
+        updateContext({ url: res.payload, color: "#fff" });
       });
 
       canvasFetchTabsForContext().then((res: any) => {

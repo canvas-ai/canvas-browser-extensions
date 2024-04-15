@@ -49,7 +49,7 @@ export function canvasInsertData(resource, data) {
 export function canvasFetchContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:get", (res) => {
+    socket.emit("context:get:url", (res) => {
       if (!res || res.status !== "success") {
         reject("background.js | Error fetching context url from Canvas");
       } else {
