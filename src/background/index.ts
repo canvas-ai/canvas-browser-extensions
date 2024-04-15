@@ -116,7 +116,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
   // TODO: Eval if we need this event at all, as we already have onUpdated
   // (which may not trigger on url change, but we can check for that)
   const browserAction = chrome.action || chrome.browserAction;
-  browserAction.onClicked.addListener((tab: chrome.tabs.Tab) => {
+  browserAction.onClicked.addListener((tab: ICanvasTab) => {
     console.log('background.js | Browser action clicked: ', tab, socket.isConnected());
 
     // Ignore non-valid tabs(about:*, empty tabs etc)

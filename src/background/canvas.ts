@@ -73,7 +73,7 @@ export function canvasFetchTabsForContext() {
         } else {
           const parsed = res.payload
             .filter((tab) => tab !== null)
-            .map((tab) => tab.data);
+            .map((tab) => ({...tab.data, docId: tab.data.docId || tab.data.id}));
           res.data = parsed;
           console.log("background.js | Tabs fetched from Canvas: ", res.data.length);
           resolve(res);
@@ -108,12 +108,12 @@ export function canvasFetchTabSchema() {
   });
 }
 
-export function canvasFetchTab(id) {
+export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
       "context:document:get",
-      { type: "data/abstraction/tab", id: id },
+      { type: "data/abstraction/tab", docId },
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);

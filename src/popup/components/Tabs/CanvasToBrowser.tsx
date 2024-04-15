@@ -10,7 +10,7 @@ interface CanvasToBrowserTypes {
 const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
   const canvasTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.canvasTabs);
 
-  const removeCanvasToBrowserTabClicked = (tab: chrome.tabs.Tab) => {
+  const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if(!tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.context_tab_remove, tab }).then((res) => {
@@ -22,7 +22,7 @@ const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
     });
   };
 
-  const deleteCanvasToBrowserTabClicked = (tab: chrome.tabs.Tab) => {
+  const deleteCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Delete icon clicked: ', tab.url);
     if(!tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_delete, tab }).then((res) => {
@@ -45,7 +45,7 @@ const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
     });
   }
 
-  const openTabClicked = (tab: chrome.tabs.Tab) => {
+  const openTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Opening clicked tab from canvas');
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_openInBrowser, tabs: [tab] }).then((res) => {
         console.log(res)
@@ -68,7 +68,7 @@ const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
         {
           !canvasTabs?.length ? 
           (<li className="collection-item">No canvas tabs to sync</li>) : 
-          canvasTabs.map((tab: chrome.tabs.Tab, idx: number) => {
+          canvasTabs.map((tab: ICanvasTab, idx: number) => {
             if(!tab.url) return null;
             return <li key={idx + tab.url} className="collection-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <a 

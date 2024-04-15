@@ -50,8 +50,8 @@ interface IConfig extends IConfigProps {
 }
 
 interface IUpdateTypes {
-  insertedTabs?: chrome.tabs.Tab[];
-  removedTabs?: chrome.tabs.Tab[];
+  insertedTabs?: ICanvasTab[];
+  removedTabs?: ICanvasTab[];
 }
 
 interface IUpdatedTabsData {
@@ -66,6 +66,10 @@ interface IVarState {
 }
 
 interface ITabsInfo {
-  canvasTabs: chrome.tabs.Tab[];
-  browserTabs: chrome.tabs.Tab[];
+  canvasTabs: ICanvasTab[];
+  browserTabs: ICanvasTab[];
+}
+
+interface ICanvasTab extends chrome.tabs.Tab {
+  docId?: number;
 }

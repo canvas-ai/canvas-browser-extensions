@@ -10,16 +10,16 @@ interface BrowserToCanvasTypes {
 }
 
 const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
-  const browserTabs = useSelector((state: ITabsInfo) => state.tabs.browserTabs);
+  const browserTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.browserTabs);
   const dispatch = useDispatch<Dispatch<any>>();
 
-  const removeBrowserToCanvasTabClicked = (tab: chrome.tabs.Tab) => {
+  const removeBrowserToCanvasTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if(!tab.id) return;
     browser.tabs.remove(tab.id);
 
     // Remove the tab from the list
-    dispatch(setBrowserTabs(browserTabs.filter((t: chrome.tabs.Tab) => t.id !== tab.id)));
+    dispatch(setBrowserTabs(browserTabs.filter((t: ICanvasTab) => t.id !== tab.id)));
   };
 
   const syncAllClicked = () => {
@@ -32,7 +32,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
     });
   }
 
-  const syncTabClicked = (tab: chrome.tabs.Tab) => {
+  const syncTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Syncing a tab to canvas');
     browser.runtime.sendMessage({ action: 'canvas:tabs:insert', tabs: [tab] }).then((res) => {
         console.log('UI | Res: ' + res);
@@ -58,7 +58,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
         {
           !browserTabs?.length ? 
           (<li className="collection-item">No browser tabs to sync</li>) : 
-          browserTabs.map((tab: chrome.tabs.Tab, idx: number) => {
+          browserTabs.map((tab: ICanvasTab, idx: number) => {
             if(!tab.url) return null;
             return <li key={idx + tab.url} className="collection-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <a 

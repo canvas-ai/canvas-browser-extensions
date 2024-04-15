@@ -48,6 +48,7 @@ export const messageListener =
       break;
     }
     case RUNTIME_MESSAGES.success_message: {
+      console.log("got success message", message.payload);
       showSuccessMessage(message.payload);
       break;
     }

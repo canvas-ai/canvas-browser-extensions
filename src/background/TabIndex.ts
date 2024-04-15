@@ -42,7 +42,7 @@ export class TabIndex {
 		return this.browserTabs.get(url);
 	}
 
-	insertBrowserTab(tab: chrome.tabs.Tab) {
+	insertBrowserTab(tab: ICanvasTab) {
 		if (!tab.id || !tab.url)
 			return console.error("background.js | Invalid tab object: ", tab);
 		this.browserTabIdToUrl.set(tab.id, tab.url);
@@ -55,7 +55,7 @@ export class TabIndex {
 		this.browserTabs.delete(url);
 	}
 
-	insertBrowserTabArray(tabArray: chrome.tabs.Tab[], clear = true) {
+	insertBrowserTabArray(tabArray: ICanvasTab[], clear = true) {
 		if (clear) {
 			this.browserTabs.clear();
 			this.browserTabIdToUrl.clear();
@@ -96,7 +96,7 @@ export class TabIndex {
 		}
 	}
 
-	insertCanvasTab(tab: chrome.tabs.Tab) {
+	insertCanvasTab(tab: ICanvasTab) {
 		this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
 	}
 
@@ -104,7 +104,7 @@ export class TabIndex {
 		this.canvasTabs.delete(url);
 	}
 
-	insertCanvasTabArray(tabArray: chrome.tabs.Tab[], clear = true) {
+	insertCanvasTabArray(tabArray: ICanvasTab[], clear = true) {
 		if (clear) this.canvasTabs.clear();
 		console.log(
 			"background.js | Inserting canvas tab array in index: ",
@@ -145,10 +145,10 @@ export class TabIndex {
 		this.clearCanvasTabs();
 	}
 
-	#stripTabProperties(tab: chrome.tabs.Tab) {
+	#stripTabProperties(tab: ICanvasTab) {
 		return {
 			id: tab.id,
-			docId: tab.id,
+			docId: tab.docId || tab.id,
 			index: tab.index,
 
 			url: tab.url,

@@ -9,32 +9,32 @@ export const REMOVE_CANVAS_TABS = 'REMOVE_CANVAS_TABS';
 
 interface SetBrowserTabs {
   type: typeof SET_BROWSER_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 interface SetCanvasTabs {
   type: typeof SET_CANVAS_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 interface AddBrowserTabs {
   type: typeof ADD_BROWSER_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 interface AddCanvasTabs {
   type: typeof ADD_CANVAS_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 interface RemoveBrowserTabs {
   type: typeof REMOVE_BROWSER_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 interface RemoveCanvasTabs {
   type: typeof REMOVE_CANVAS_TABS;
-  payload: chrome.tabs.Tab[];
+  payload: ICanvasTab[];
 }
 
 

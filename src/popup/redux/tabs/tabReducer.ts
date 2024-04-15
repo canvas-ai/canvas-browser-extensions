@@ -1,6 +1,6 @@
 import { ADD_BROWSER_TABS, ADD_CANVAS_TABS, BrowserTabActionTypes, CanvasTabActionTypes, REMOVE_BROWSER_TABS, REMOVE_CANVAS_TABS, SET_BROWSER_TABS, SET_CANVAS_TABS } from './tabActionTypes';
 
-const tabReducer = (state = { canvasTabs: [], browserTabs: [] }, action: BrowserTabActionTypes | CanvasTabActionTypes): { canvasTabs: chrome.tabs.Tab[], browserTabs: chrome.tabs.Tab[] } => {
+const tabReducer = (state = { canvasTabs: [], browserTabs: [] }, action: BrowserTabActionTypes | CanvasTabActionTypes): { canvasTabs: ICanvasTab[], browserTabs: ICanvasTab[] } => {
   switch (action.type) {
     case SET_BROWSER_TABS:
       return {
@@ -15,7 +15,7 @@ const tabReducer = (state = { canvasTabs: [], browserTabs: [] }, action: Browser
     case REMOVE_BROWSER_TABS:
       return {
         ...state,
-        browserTabs: state.browserTabs.filter((bt: chrome.tabs.Tab) => !action.payload.some(pt => pt.url === bt.url)),
+        browserTabs: state.browserTabs.filter((bt: ICanvasTab) => !action.payload.some(pt => pt.url === bt.url)),
       };
       
     case SET_CANVAS_TABS:
@@ -32,7 +32,7 @@ const tabReducer = (state = { canvasTabs: [], browserTabs: [] }, action: Browser
     case REMOVE_CANVAS_TABS:
       return {
         ...state,
-        canvasTabs: state.canvasTabs.filter((ct: chrome.tabs.Tab) => !action.payload.some(pt => pt.url === ct.url)),
+        canvasTabs: state.canvasTabs.filter((ct: ICanvasTab) => !action.payload.some(pt => pt.url === ct.url)),
       };
   
     default:

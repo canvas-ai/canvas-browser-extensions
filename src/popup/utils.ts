@@ -45,7 +45,7 @@ export const requestUpdateTabs = () => {
   requestVariableUpdate({ action: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser });
 }
 
-export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, adder: (tabs: chrome.tabs.Tab[]) => void, remover: (tabs: chrome.tabs.Tab[]) => void) => {
+export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, adder: (tabs: ICanvasTab[]) => void, remover: (tabs: ICanvasTab[]) => void) => {
   if(updateData.insertedTabs && updateData.insertedTabs.length) {
     tabsInserted(dispatch, updateData.insertedTabs, adder);
   }
@@ -54,11 +54,11 @@ export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, a
   }
 }
 
-export const tabsInserted = (dispatch: Dispatch<any>, insertedTabs: chrome.tabs.Tab[], adder: (insertedTabs: chrome.tabs.Tab[]) => void) => {
+export const tabsInserted = (dispatch: Dispatch<any>, insertedTabs: ICanvasTab[], adder: (insertedTabs: ICanvasTab[]) => void) => {
   dispatch(adder(insertedTabs));
 }
 
-export const tabsRemoved = (dispatch: Dispatch<any>, removedTabs: chrome.tabs.Tab[], remover: (removedTabs: chrome.tabs.Tab[]) => void) => {
+export const tabsRemoved = (dispatch: Dispatch<any>, removedTabs: ICanvasTab[], remover: (removedTabs: ICanvasTab[]) => void) => {
   dispatch(remover(removedTabs));
 }
 

@@ -7,7 +7,7 @@ export function browserIsValidTabUrl(tabUrl: string) {
   return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
 }
 
-export function browserOpenTab(tab: chrome.tabs.Tab) {
+export function browserOpenTab(tab: ICanvasTab) {
   return new Promise((res, rej) => {
     if (!tab || !tab.url) return false;
     if (!browserIsValidTabUrl(tab.url)) return false;
@@ -37,7 +37,7 @@ export function browserOpenTab(tab: chrome.tabs.Tab) {
 }
 
 
-export async function browserOpenTabArray(tabArray: chrome.tabs.Tab[] | undefined) {
+export async function browserOpenTabArray(tabArray: ICanvasTab[] | undefined) {
   if (!tabArray || !tabArray.length) return false;
   console.log(`background.js | Opening tab array: `, tabArray);
 
@@ -102,7 +102,7 @@ export function sanitizeContextPath(path: string | undefined) {
   return path
 }
 
-export function stripTabProperties(tab: chrome.tabs.Tab) {
+export function stripTabProperties(tab: ICanvasTab) {
   return {
     id: tab.id,
     index: tab.index,
