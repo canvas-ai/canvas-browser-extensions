@@ -73,7 +73,7 @@ export function canvasFetchTabsForContext() {
         } else {
           const parsed = res.payload
             .filter((tab) => tab !== null)
-            .map((tab) => ({...tab.data, docId: tab.data.docId || tab.data.id}));
+            .map((tab) => ({...tab.data, docId: tab.docId || tab.id }));
           res.data = parsed;
           console.log("background.js | Tabs fetched from Canvas: ", res.data.length);
           resolve(res);
@@ -215,6 +215,6 @@ export function canvasCheckConnection() {
 export function formatTabProperties(tab) {
   return {
     type: "data/abstraction/tab",
-    data: tab,
+    data: { ...tab, id: tab.docId || tab.id },
   };
 }

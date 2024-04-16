@@ -66,10 +66,9 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           config.sync.autoSyncBrowserTabs === "Always" ||
           tabs.some(tab => tab.id === tabId) // update if its already synced
       ) {
-        let tabDocument = formatTabProperties(tab);
-        const res: any = await canvasInsertTab(tabDocument);
+        const res: any = await canvasInsertTabArray([tab]);
         if (res.status === "success") {
-          console.log(`background.js | Tab ${tabId} inserted: `, res);
+          console.log(`background.js | Tab ${tabId} inserted/updated: `, res);
           index.insertCanvasTab(tab);
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
