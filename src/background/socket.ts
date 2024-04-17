@@ -48,20 +48,7 @@ class MySocket {
         updateContext({ url, color: "#fff" });
       });
 
-      canvasFetchTabsForContext().then((res: any) => {
-        if (!res || res.status !== 'success') {
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'}); 
-          return console.log('ERROR: background.js | Error fetching tabs from Canvas');
-        }
-        console.log("recieved canvas tabs array", res.data);
-        index.insertCanvasTabArray(res.data);
-      }).then(() => {
-        index.updateBrowserTabs().then(() => {
-          console.log('background.js | Index updated: ', index.counts());
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
-        })
-      });
+      updateLocalCanvasTabsData();
   
       this.socket.emit("authenticate", { token: config.transport.token }, result => {
         if (result === 'success') {
@@ -123,6 +110,23 @@ export const getSocket = async () => {
   if(socket) return socket;
   socket = new MySocket();
   return socket;
+}
+
+export const updateLocalCanvasTabsData = () => {
+  canvasFetchTabsForContext().then((res: any) => {
+    if (!res || res.status !== 'success') {
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'}); 
+      return console.log('ERROR: background.js | Error fetching tabs from Canvas');
+    }
+    console.log("recieved canvas tabs array", res.data);
+    index.insertCanvasTabArray(res.data);
+  }).then(() => {
+    index.updateBrowserTabs().then(() => {
+      console.log('background.js | Index updated: ', index.counts());
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+    })
+  });
 }
 
 export default MySocket;
