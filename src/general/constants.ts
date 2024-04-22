@@ -44,3 +44,23 @@ export const SOCKET_EVENTS = {
   authenticated: "authenticated",
   invalid_token: "invalid_token"
 }
+
+export const SOCKET_MESSAGES = {
+  DOCUMENT: {
+    GET: "context:document:get",
+    GET_ARRAY: "context:document:getArray",
+    REMOVE: "context:document:remove",
+    DELETE: "context:document:delete",
+    INSERT: "context:document:insert",
+    INSERT_ARRAY: "context:document:insertArray"
+  },
+
+  CONTEXT: {
+    GET_URL: "context:get:url",
+    SET_URL: "context:set:url"
+  },
+
+  SCHEMAS: {
+    GET: "schemas:get"
+  }
+}

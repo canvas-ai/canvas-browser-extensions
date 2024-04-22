@@ -121,11 +121,7 @@ export const updateLocalCanvasTabsData = () => {
     console.log("recieved canvas tabs array", res.data);
     index.insertCanvasTabArray(res.data);
   }).then(() => {
-    index.updateBrowserTabs().then(() => {
-      console.log('background.js | Index updated: ', index.counts());
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
-    })
+    index.updateBrowserTabs();
   });
 }
 

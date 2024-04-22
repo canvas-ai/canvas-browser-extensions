@@ -2,6 +2,7 @@
  * General functions for interacting with the Canvas backend
  */
 
+import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { onContextTabsUpdated } from "./utils";
@@ -49,7 +50,7 @@ export function canvasInsertData(resource, data) {
 export function canvasFetchContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:get:url", (res) => {
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, (res) => {
       if (!res || res.status !== "success") {
         reject("background.js | Error fetching context url from Canvas");
       } else {
@@ -64,7 +65,7 @@ export function canvasFetchTabsForContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
-      "context:document:getArray",
+      SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
       "data/abstraction/tab",
       (res) => {
         if (res.status === "error") {
@@ -86,7 +87,7 @@ export function canvasFetchTabsForContext() {
 export function canvasFetchContextUrl(): Promise<string> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:get:url", {}, (res) => {
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, {}, (res) => {
       if (!res || res.status !== "success") {
         console.error("background.js | Error fetching context URL", res);
         reject("Error fetching context url from Canvas");
@@ -101,7 +102,7 @@ export function canvasFetchContextUrl(): Promise<string> {
 export function canvasFetchTabSchema() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("schemas:get", { type: "data/abstraction/tab" }, (res) => {
+    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: "data/abstraction/tab" }, (res) => {
       console.log("background.js | Tab schema fetched: ", res);
       resolve(res);
     });
@@ -112,7 +113,7 @@ export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
-      "context:document:get",
+      SOCKET_MESSAGES.DOCUMENT.GET,
       { type: "data/abstraction/tab", docId },
       (res) => {
         console.log("background.js | Tab fetched: ", res);
@@ -135,7 +136,7 @@ export function canvasInsertTab(tab) {
       reject("background.js | Invalid tab");
     }
     tab = formatTabProperties(tab);
-    socket.emit("context:document:insert", tab, (res) => {
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, tab, (res) => {
       console.log("background.js | tab inserted", tab, res);
       resolve(res);
     });
@@ -148,14 +149,15 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
   });
 }
 
-export function canvasRemoveTab(tab) {
+export function canvasRemoveTab(tab: ICanvasTab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:remove", tab.docId, (res) => {
+    if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.REMOVE, tab.docId, (res) => {
       console.log("background.js | Tab removed: ", res);
       if (res.status === "success") {
         console.log(`background.js | Tab ${tab.id} removed from Canvas: `, res);
-        index.removeCanvasTab(tab.url);
+        index.removeCanvasTab(tab.url as string);
         onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
         resolve(res);
       } else {
@@ -167,13 +169,14 @@ export function canvasRemoveTab(tab) {
   });
 }
 
-export function canvasDeleteTab(tab) {
+export function canvasDeleteTab(tab: ICanvasTab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit("context:document:delete", tab.docId, (res) => {
+    if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.DELETE, tab.docId, (res: ISocketResponse<any>) => {
       if (res.status === "success") {
         console.log("background.js | Tab deleted: ", res);
-        index.removeCanvasTab(tab.url);
+        index.removeCanvasTab(tab.url as string);
         onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
         resolve(res);
       } else {
@@ -185,14 +188,13 @@ export function canvasDeleteTab(tab) {
   });
 }
 
-export function canvasInsertTabArray(tabArray) {
+export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasInsertResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
-    tabArray = tabArray.map((tab) => formatTabProperties(tab));
-    socket.emit("context:document:insertArray", tabArray, (res) => {
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), (res) => {
       resolve(res);
     });
   });
@@ -212,9 +214,13 @@ export function canvasCheckConnection() {
   });
 }
 
-export function formatTabProperties(tab) {
+export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
+  if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
   return {
     type: "data/abstraction/tab",
+    meta: {
+      url: tab.url
+    },
     data: { ...tab, id: tab.docId || tab.id },
   };
 }

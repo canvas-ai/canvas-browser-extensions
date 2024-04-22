@@ -62,8 +62,6 @@ const App: React.FC = () => {
     setPopupOpen(false);
   }
 
-  console.log(variables, config);
-
   return (
     <>
       {variables.connected && config ? <Header url={variables.context?.url} /> : null}

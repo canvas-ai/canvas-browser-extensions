@@ -73,3 +73,40 @@ interface ITabsInfo {
 interface ICanvasTab extends chrome.tabs.Tab {
   docId?: number;
 }
+
+type IVersionInput = 0;
+
+type IEncodings = "utf8";
+
+interface ICanvasInsertMetaRequestInputs {
+  url: string;
+}
+
+interface ISocketResponse<T> {
+  status: "success" | "error";
+  message?: string;
+  payload: T;
+}
+
+type IRequestTypes = "data/abstraction/tab";
+
+interface ICanvasInsertResponsePayload {
+  id: number;
+  type: IRequestTypes;
+  version: IVersionInput;
+  checksum: string;
+  meta: {
+    contentEncoding: IEncodings;
+    contentType: "application/json";
+    created: string;
+    modified: string;  
+  } & ICanvasInsertMetaRequestInputs
+}
+
+type ICanvasInsertResponse = ISocketResponse<ICanvasInsertResponsePayload[]>;
+
+interface IFormattedTabProperties {
+  type: IRequestTypes,
+  meta: Partial<ICanvasInsertMetaRequestInputs>,
+  data: ICanvasTab,
+}

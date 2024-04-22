@@ -1,10 +1,10 @@
-import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
+import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
 import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket, updateLocalCanvasTabsData } from "./socket";
 import index from "./TabIndex";
 import { context } from "./context";
-import { RUNTIME_MESSAGES } from "@/general/constants";
+import { RUNTIME_MESSAGES, SOCKET_MESSAGES } from "@/general/constants";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
@@ -48,34 +48,32 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     if (!Object.keys(changeInfo).some(cik => watchTabProperties.properties.some(wtpk => cik === wtpk)))
       return;
 
-    // Trigger on url change if the tab url is valid
-    if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
-
-      // Update the current index
-      index.updateBrowserTabs().then(() => {
-        console.log('background.js | Index updated: ', index.counts());
+    if(changeInfo.status === "complete" && config.sync.autoSyncBrowserTabs === "Always") {
+      index.updateBrowserTabs();
+      // Update backend
+      console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`);
+      const res = await canvasInsertTabArray([tab]);
+      if (res.status === "success") {
+        console.log(`background.js | Tab ${tabId} inserted/updated: `, res);
+        index.insertCanvasTab({ ...tab, docId: res.payload[0].id });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-      });
+      } else {
+        console.error(`background.js | Insert failed for tab ${tabId}:`)
+        console.error(res);
+      }
+    }
 
-      // Update backend
-      console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`)
+    // Trigger on url change if the tab url is valid
+    if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
+      index.updateBrowserTabs();
 
-      const tabs = index.getCanvasTabArray();
-      if(
-          config.sync.autoSyncBrowserTabs === "Always" ||
-          tabs.some(tab => tab.id === tabId) // update if its already synced
-      ) {
-        const res: any = await canvasInsertTabArray([tab]);
-        if (res.status === "success") {
-          console.log(`background.js | Tab ${tabId} inserted/updated: `, res);
-          index.insertCanvasTab(tab);
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-        } else {
-          console.error(`background.js | Insert failed for tab ${tabId}:`)
-          console.error(res);
-        }  
+      if(config.sync.autoSyncBrowserTabs === "Always") {
+        const oldUrl = index.browserTabIdToUrl.get(tabId);
+        const newUrl = changeInfo.url;
+        if(oldUrl === newUrl) return;
+        const canvasTab = index.canvasTabs.get(index.browserTabIdToUrl.get(tabId));
+        canvasRemoveTab(canvasTab);
       }
     }
   })
@@ -84,9 +82,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     console.log('background.js | Tab moved: ', tabId, moveInfo);
 
     // Update the current index
-    index.updateBrowserTabs().then(() => {
-      console.log('background.js | Index updated: ', index.counts());
-    });
+    index.updateBrowserTabs();
 
     // noop
     //console.log('background.js | TODO: Disabled as we currently do not track move changes');
@@ -115,22 +111,20 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
   // TODO: Eval if we need this event at all, as we already have onUpdated
   // (which may not trigger on url change, but we can check for that)
   const browserAction = chrome.action || chrome.browserAction;
-  browserAction.onClicked.addListener((tab: ICanvasTab) => {
+  browserAction.onClicked.addListener((tab: chrome.tabs.Tab) => {
     console.log('background.js | Browser action clicked: ', tab, socket.isConnected());
 
     // Ignore non-valid tabs(about:*, empty tabs etc)
     if (!tab.url || !browserIsValidTabUrl(tab.url)) return
 
     // Update the current index
-    index.updateBrowserTabs().then(() => {
-      console.log('background.js | Index updated: ', index.counts());
-    });
+    index.updateBrowserTabs();
 
     // Update our backend
     let tabDocument = TabDocumentSchema
     tabDocument.data = stripTabProperties(tab);
 
-    canvasUpdateTab(tabDocument).then((res: any) => {
+    canvasUpdateTab(tabDocument).then((res: ISocketResponse<any>) => {
       if (res.status === "success") {
         console.log(`background.js | Tab ${tab.id} updated: `, res);
         index.insertCanvasTab(tab)
@@ -153,9 +147,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     console.log('background.js | Tab object URL from index: ', tab.url);
 
     // Update the current index (remove tab), maybe we should move it in the callback?
-    index.updateBrowserTabs().then(() => {
-      console.log('background.js | Index updated: ', index.counts());
-    });
+    index.updateBrowserTabs();
 
     // TODO: Will be removed, as internal Index will have a stripTabProperties method
     let tabDocument = TabDocumentSchema
@@ -163,7 +155,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
     // Send update to backend
     if(config.sync.autoSyncBrowserTabs === "Always")
-      await canvasDeleteTab(tab);
+      await canvasRemoveTab(tab);
   });
 
 
@@ -226,7 +218,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case RUNTIME_MESSAGES.context_set_url:
         if (!message.url) return console.error('background.js | No context url specified');
-        canvasInsertData('context:set:url', message.url).then((res: any) => {
+        canvasInsertData(SOCKET_MESSAGES.CONTEXT.SET_URL, message.url).then((res: any) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error setting context url' });
           console.log('background.js | Context url set: ', res.data)
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_set_url, payload: res });
@@ -268,7 +260,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       case RUNTIME_MESSAGES.canvas_tabs_fetch:
         const res: any = await canvasFetchTabsForContext();
         if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas' });
-        console.log('background.js | Tabs fetched from Canvas: ', res.data)
+        console.log('background.js | Tabs fetched from Canvas: ', res.data);
         index.insertCanvasTabArray(res.data);
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_fetch, payload: res });
         break;
@@ -291,7 +283,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         break;
 
       case RUNTIME_MESSAGES.canvas_tabs_insert:
-        let tabs;
+        let tabs: ICanvasTab[];
         if (message.tabs) {
           console.log('background.js | Tabs to sync: ' + message.tabs.length);
           tabs = message.tabs;
@@ -300,16 +292,16 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           tabs = index.getBrowserTabArray();
         }
 
-
-        canvasInsertTabArray(tabs).then((res: any) => {
+        canvasInsertTabArray(tabs).then((res: ICanvasInsertResponse) => {
+          console.log(res, tabs);
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tabs to Canvas' });
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas'});
-          updateLocalCanvasTabsData();
-          // console.log('background.js | Tabs inserted to Canvas: ', res);
+          index.insertCanvasTabArray(tabs.map((tab: ICanvasTab) => ({ ...tab, docId: res.payload.find(p => p.meta.url === tab.url)?.id })), false);
+          console.log('background.js | Tabs inserted to Canvas: ', res);
+          onContextTabsUpdated({ browserTabs: { removedTabs: tabs } });
+          // updateLocalCanvasTabsData();
 
-          // index.insertCanvasTabArray(tabs);
-          // onContextTabsUpdated({ browserTabs: { removedTabs: tabs } });
-          // sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: res });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: res });
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: false });
@@ -323,8 +315,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         if (!message.tab) return console.error('background.js | No tab specified');
         canvasDeleteTab(message.tab).then((res: any) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
-          index.removeCanvasTab(message.tab.url);
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab deleted from Canvas: '});
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab deleted from Canvas'});
           // sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_delete, payload: res });
         });
         break;
@@ -343,17 +334,11 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         break;
 
       case RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas:
-        index.updateBrowserTabs().then(() => {
-          console.log('background.js | Index updated: ', index.counts());
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-        });
+        index.updateBrowserTabs();
         break;
 
       case RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser:
-        index.updateBrowserTabs().then(() => {
-          console.log('background.js | Index updated: ', index.counts());
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
-        });
+        index.updateBrowserTabs();
         break;
 
       case RUNTIME_MESSAGES.index_updateBrowserTabs:

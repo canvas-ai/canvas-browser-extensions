@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from "./CanvasToBrowser.module.scss";
 import { useSelector } from 'react-redux';
-import { browser, requestUpdateTabs } from '@/popup/utils';
+import { browser, getContextBreadcrumbs, requestUpdateTabs } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface CanvasToBrowserTypes {
@@ -9,6 +9,7 @@ interface CanvasToBrowserTypes {
 
 const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
   const canvasTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.canvasTabs);
+  const variables = useSelector((state: { variables: IVarState }) => state.variables);
 
   const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
@@ -87,12 +88,19 @@ const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
                 />
                 {tab.title || ""}
               </a>
-              <i 
-                className="material-icons"
-                style={{ cursor: "pointer" }}
-                title="Remove tab from current context"
-                onClick={(e) => { e.preventDefault(); removeCanvasToBrowserTabClicked(tab); }}
-              >close</i>
+              {
+                getContextBreadcrumbs(variables.context.url).length === 1 && 
+                getContextBreadcrumbs(variables.context.url)[0].textContent.trim().toLowerCase() === "universe" ? 
+                null : 
+                (
+                  <i 
+                    className="material-icons"
+                    style={{ cursor: "pointer" }}
+                    title="Remove tab from current context"
+                    onClick={(e) => { e.preventDefault(); removeCanvasToBrowserTabClicked(tab); }}
+                  >close</i>  
+                )
+              }
               <i 
                 className="material-icons"
                 style={{ cursor: "pointer", color: "#d90000" }}

@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux';
 import { setBrowserTabs } from '@/popup/redux/tabs/tabActions';
 import { Dispatch } from 'redux';
 import { browser } from '@/popup/utils';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 
 interface BrowserToCanvasTypes {
 }
@@ -24,7 +25,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
   const syncAllClicked = () => {
     console.log('UI | Syncing all tabs to canvas');
-    browser.runtime.sendMessage({ action: 'canvas:tabs:insert' }).then((res) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert }).then((res) => {
         console.log('UI | Res: ' + res)
         // updateTabs(dispatch);
     }).catch((error) => {
@@ -34,7 +35,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
   const syncTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Syncing a tab to canvas');
-    browser.runtime.sendMessage({ action: 'canvas:tabs:insert', tabs: [tab] }).then((res) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert, tabs: [tab] }).then((res) => {
         console.log('UI | Res: ' + res);
         // updateTabs(dispatch);
     }).catch((error) => {

@@ -1,4 +1,5 @@
-import { browser, browserIsValidTabUrl } from "./utils";
+import { RUNTIME_MESSAGES } from "@/general/constants";
+import { browser, browserIsValidTabUrl, sendRuntimeMessage } from "./utils";
 
 export class TabIndex {
 	browserTabIdToUrl: Map<any, any>;
@@ -33,7 +34,11 @@ export class TabIndex {
 		return this.deltaCanvasToBrowser().length;
 	}
 
-	getBrowserTabArray() {
+	getCanvasDocumentIdByTabUrl(url: string): number | undefined {
+		return this.canvasTabs.get(url)?.docId;
+	}
+
+	getBrowserTabArray(): chrome.tabs.Tab[] {
 		return [...this.browserTabs.values()];
 	}
 
@@ -89,6 +94,9 @@ export class TabIndex {
 				}, []);
 	
 				this.insertBrowserTabArray(processedTabs);
+
+				sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
 			});
 		} catch (error) {
 			console.error("background.js | Error updating browser tabs:", error);
@@ -148,7 +156,7 @@ export class TabIndex {
 	#stripTabProperties(tab: ICanvasTab) {
 		return {
 			id: tab.id,
-			docId: tab.docId || tab.id,
+			docId: tab.docId,
 			index: tab.index,
 
 			url: tab.url,
