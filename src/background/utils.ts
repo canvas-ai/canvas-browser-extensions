@@ -148,3 +148,10 @@ export const onContextTabsUpdated = (updateInfo: IUpdatedTabsData) => {
 export const sendRuntimeMessage = async (message: { type: string, payload: any }) => {
   return browser.runtime.sendMessage(message).catch(e => console.log(e));
 }
+
+export const getCurrentBrowser: () => IBrowserType = () => {
+  const userAgent = navigator.userAgent;
+  if(userAgent.includes("Edg")) return "Edge";
+  if(userAgent.includes("Firefox")) return "Firefox";
+  return "Chrome";
+}

@@ -1,5 +1,5 @@
 import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
-import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
+import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket, updateLocalCanvasTabsData } from "./socket";
 import index from "./TabIndex";
@@ -14,7 +14,9 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
   // Runtime defaults
   let TabDocumentSchema: ITabDocumentSchema = {
     type: 'data/abstraction/tab',
-    meta: {},
+    meta: {
+      browser: getCurrentBrowser()
+    },
     data: {}
   };
 

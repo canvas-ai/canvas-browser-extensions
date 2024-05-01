@@ -5,7 +5,7 @@
 import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
-import { onContextTabsUpdated } from "./utils";
+import { getCurrentBrowser, onContextTabsUpdated } from "./utils";
 
 export function canvasFetchData(resource) {
   return new Promise(async (resolve, reject) => {
@@ -219,7 +219,8 @@ export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
   return {
     type: "data/abstraction/tab",
     meta: {
-      url: tab.url
+      url: tab.url,
+      browser: getCurrentBrowser()
     },
     data: { ...tab, id: tab.docId || tab.id },
   };

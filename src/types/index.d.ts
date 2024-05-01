@@ -78,8 +78,11 @@ type IVersionInput = 0;
 
 type IEncodings = "utf8";
 
+type IBrowserType = "Edge" | "Firefox" | "Chrome";
+
 interface ICanvasInsertMetaRequestInputs {
   url: string;
+  browser: IBrowserType;
 }
 
 interface ISocketResponse<T> {
