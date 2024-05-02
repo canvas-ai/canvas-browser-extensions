@@ -17,6 +17,7 @@ export const RUNTIME_MESSAGES = {
   canvas_tabs_fetch: 'canvas:tabs:fetch',
   canvas_tabs_openInBrowser: 'canvas:tabs:openInBrowser',
   canvas_tabs_insert: 'canvas:tabs:insert',
+  canvas_tab_insert: 'canvas:tab:insert',
   canvas_tab_delete: 'canvas:tab:delete',
   index_get_counts: 'index:get:counts',
   index_get_browserTabArray: 'index:get:browserTabArray',

@@ -108,6 +108,8 @@ interface ICanvasInsertResponsePayload {
 
 type ICanvasInsertResponse = ISocketResponse<ICanvasInsertResponsePayload[]>;
 
+type ICanvasInsertOneResponse = ISocketResponse<ICanvasInsertResponsePayload>;
+
 interface IFormattedTabProperties {
   type: IRequestTypes,
   meta: Partial<ICanvasInsertMetaRequestInputs>,

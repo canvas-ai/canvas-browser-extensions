@@ -1,6 +1,6 @@
 import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContext, canvasFetchContextUrl, canvasFetchTabsForContext, canvasInsertTabArray } from './canvas';
+import { canvasFetchContextUrl, canvasFetchTabsForContext } from './canvas';
 import index from './TabIndex';
 import { setContextUrl, updateContext } from './context';
 import { browser, sendRuntimeMessage } from './utils';

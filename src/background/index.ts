@@ -1,4 +1,4 @@
-import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
+import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
 import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket, updateLocalCanvasTabsData } from "./socket";
@@ -54,10 +54,10 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       index.updateBrowserTabs();
       // Update backend
       console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`);
-      const res = await canvasInsertTabArray([tab]);
+      const res = await canvasInsertTab(tab);
       if (res.status === "success") {
         console.log(`background.js | Tab ${tabId} inserted/updated: `, res);
-        index.insertCanvasTab({ ...tab, docId: res.payload[0].id });
+        index.insertCanvasTab({ ...tab, docId: res.payload.id });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
       } else {
@@ -313,6 +313,25 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
         break;
 
+      case RUNTIME_MESSAGES.canvas_tab_insert:
+        canvasInsertTab(message.tab).then((res: ICanvasInsertOneResponse) => {
+          console.log(res, message.tab);
+          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting the tab to Canvas' });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'The tab inserted to Canvas'});
+          index.insertCanvasTab({ ...message.tab, docId: res.payload.id });
+          console.log('background.js | Tab inserted to Canvas: ', res);
+          onContextTabsUpdated({ browserTabs: { removedTabs: [message.tab] } });
+
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_insert, payload: res });
+          console.log('background.js | Index updated: ', index.counts());
+        }).catch((error) => {
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_insert, payload: false });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error updating browser tabs'});
+          console.error('background.js | Error updating browser tabs:', error);
+        })
+
+        break;
+  
       case RUNTIME_MESSAGES.canvas_tab_delete:
         if (!message.tab) return console.error('background.js | No tab specified');
         canvasDeleteTab(message.tab).then((res: any) => {

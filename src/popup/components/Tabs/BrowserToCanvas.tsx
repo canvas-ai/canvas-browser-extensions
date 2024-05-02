@@ -35,10 +35,7 @@ const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
 
   const syncTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Syncing a tab to canvas');
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert, tabs: [tab] }).then((res) => {
-        console.log('UI | Res: ' + res);
-        // updateTabs(dispatch);
-    }).catch((error) => {
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_insert, tab }).catch((error) => {
         console.error('UI | Error syncing tab to canvas:', error);
     });
   }

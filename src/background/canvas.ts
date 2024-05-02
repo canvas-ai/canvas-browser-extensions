@@ -129,15 +129,23 @@ export function canvasHasTab(id) {
   });
 }
 
-export function canvasInsertTab(tab) {
+export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     if (!tab) {
       reject("background.js | Invalid tab");
     }
-    tab = formatTabProperties(tab);
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, tab, (res) => {
-      console.log("background.js | tab inserted", tab, res);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), resolve);
+  });
+}
+
+export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasInsertResponse> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    if (!tabArray || !tabArray.length) {
+      reject("background.js | Invalid tab array");
+    }
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), (res) => {
       resolve(res);
     });
   });
@@ -184,18 +192,6 @@ export function canvasDeleteTab(tab: ICanvasTab) {
         console.error(res);
         resolve(false);
       }
-    });
-  });
-}
-
-export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasInsertResponse> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    if (!tabArray || !tabArray.length) {
-      reject("background.js | Invalid tab array");
-    }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), (res) => {
-      resolve(res);
     });
   });
 }
