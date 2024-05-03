@@ -1,11 +1,6 @@
-import React, { useState } from 'react';
-import styles from "./Search.module.scss";
+import React from 'react';
 
-interface SearchTypes {
-}
-
-const Search: React.FC<SearchTypes> = ({ }) => {
-
+const Search: React.FC<any> = ({ }) => {
   return (
     <div id="tab-search" className="container">
 

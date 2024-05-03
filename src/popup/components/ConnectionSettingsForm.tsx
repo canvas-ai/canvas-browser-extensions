@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import cx from 'classnames';
-import styles from "./ConnectionSettingsForm.module.css";
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';

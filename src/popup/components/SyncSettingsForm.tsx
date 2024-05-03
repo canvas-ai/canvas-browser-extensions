@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import cx from 'classnames';
-import styles from "./SyncSettingsForm.module.css";
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';
@@ -8,10 +6,7 @@ import { Dispatch } from 'redux';
 import { browser } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 
-interface SyncSettingsFormTypes {
-}
-
-const SyncSettingsForm: React.FC<SyncSettingsFormTypes> = ({ }) => {
+const SyncSettingsForm: React.FC<any> = ({ }) => {
   const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
   const dispatch = useDispatch<Dispatch<any>>();
 
@@ -51,13 +46,11 @@ const SyncSettingsForm: React.FC<SyncSettingsFormTypes> = ({ }) => {
         </select>
       </div>
     </div>
-      {/* <SyncSettingCheckbox 
-    prop={'autoCloseTabs'} 
-    title="Auto-sync browser tabs to Canvas" />
-
-  <SyncSettingCheckbox 
-    prop={'autoRestoreSession'} 
-    title="Automatically switch tab-sets on context change" /> */}
+      {/* 
+        <SyncSettingCheckbox 
+          prop={'autoRestoreSession'} 
+          title="Automatically switch tab-sets on context change" /> 
+      */}
 
   </div>
   );

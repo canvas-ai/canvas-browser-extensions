@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import styles from "./BrowserToCanvas.module.scss";
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setBrowserTabs } from '@/popup/redux/tabs/tabActions';
@@ -7,10 +6,7 @@ import { Dispatch } from 'redux';
 import { browser } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 
-interface BrowserToCanvasTypes {
-}
-
-const BrowserToCanvas: React.FC<BrowserToCanvasTypes> = ({ }) => {
+const BrowserToCanvas: React.FC<any> = ({ }) => {
   const browserTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.browserTabs);
   const dispatch = useDispatch<Dispatch<any>>();
 

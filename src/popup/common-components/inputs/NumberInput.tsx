@@ -1,20 +1,10 @@
-import React from 'react';
-import cx from 'classnames';
+import React, { DetailedHTMLProps, InputHTMLAttributes } from 'react';
 import styles from "./NumberInput.module.css";
+import { cx } from '@/popup/utils';
 
-interface InputProps {
-  className?: string;
-  onChange?: React.ChangeEventHandler<HTMLInputElement> | undefined;
-  placeholder?: string;
-  disabled?: boolean;
-  min?: number;
-  max?: number;
-  value: number | null;
-}
-
-const NumberInput: React.FC<InputProps> = ({ className, placeholder, onChange, min, max, disabled, value }) => {
+const NumberInput: React.FC<DetailedHTMLProps<InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>> = (props) => {
   return (
-    <input type="number" onChange={onChange} className={cx(styles.numberInput, className)} min={min} max={max} placeholder={placeholder} disabled={disabled} value={value || ''} />
+    <input type="number" {...props} className={cx(styles.numberInput, props.className)} />
   );
 };
 

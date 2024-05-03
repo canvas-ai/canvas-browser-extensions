@@ -1,5 +1,4 @@
 import { Dispatch } from "redux";
-import { setBrowserTabs, setCanvasTabs } from "./redux/tabs/tabActions";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { toast } from "react-toastify";
 
@@ -14,20 +13,18 @@ export const sanitizeContextUrl = (url: string | undefined) => {
   console.log(url)
   if (!url || url == '/' || url == 'universe:///') return 'Universe'
   url = url
-      // .replace(/^universe/, 'Universe')
       .replace(/\/\//g, '/')
       .replace(/\:/g, '')
       .split("")
       .map((ch, i, self) => i && self[i-1] !== '/' ? ch : ch.toUpperCase())
       .join("");
-      //.replace(/universe/g,'∞')
   return url
 }
 
 export const getContextBreadcrumbs = (url: string | undefined) => {
   console.log('UI | Updating breadcrumbs')
-  if (!url) return []; // console.error('UI | No URL provided')
-  if (typeof url !== 'string') return []; // console.error('UI | URL is not a string')
+  if (!url) return [];
+  if (typeof url !== 'string') return [];
 
   url = sanitizeContextUrl(url)
   const breadcrumbNames = url.split("/").filter((name) => name !== "");
@@ -63,13 +60,13 @@ export const tabsRemoved = (dispatch: Dispatch<any>, removedTabs: ICanvasTab[], 
 }
 
 export const showErrorMessage = (message: string) => {
-  toast(message, {
-    
-  });
+  toast(message, { });
 }
 
 export const showSuccessMessage = (message: string) => {
-  toast(message, {
-    
-  });
+  toast(message, { });
+}
+
+export const cx = (...classNames: (string | undefined)[]) => {
+  return classNames.filter(c => c).join(" ");
 }

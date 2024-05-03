@@ -1,12 +1,8 @@
 import React from 'react';
-import cx from 'classnames';
 import styles from "./Footer.module.scss";
+import { cx } from '../utils';
 
-interface FooterTypes {
-  // onStart: React.MouseEventHandler<HTMLInputElement>;
-}
-
-const Footer: React.FC<FooterTypes> = () => {
+const Footer: React.FC<any> = () => {
   return (
     <footer className={cx(styles.footer, "page-footer grey darken-3")}>
       <div className="container white-text">

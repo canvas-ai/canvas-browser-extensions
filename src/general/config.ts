@@ -1,4 +1,6 @@
-const store = chrome.storage.local;
+import { browser } from "@/background/utils";
+
+const store = browser.storage.local;
 
 export const DEFAULT_CONFIG: {
   sync: IConfig["sync"],
@@ -12,12 +14,6 @@ export const DEFAULT_CONFIG: {
     autoSaveSession: true,
     autoOpenTabs: true,
     autoCloseTabs: true,
-    // autoCloseTabsBehavior:
-    // - saveToCurrentContext
-    // - saveToNewContext
-    // - saveToTrash
-    // - saveToUniverse
-    // - ignore (leave open, do not sync to Canvas)
     autoCloseTabsBehavior: 'ignore'
   },
   session: {},

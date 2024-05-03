@@ -31,10 +31,7 @@ export const setContextUrl = async (url) => {
   await index.updateBrowserTabs();
 
   index.insertCanvasTabArray(res.data);
-
-  // Automatically close existing tabs if enabled
-  // if (config.sync.autoCloseTabs) await browserCloseNonContextTabs();
-
+  
   if (config.sync.autoSyncBrowserTabs !== "Never") {
     const tabs = index.getBrowserTabArray();
     canvasInsertTabArray(tabs).then((res: any) => {
@@ -45,9 +42,13 @@ export const setContextUrl = async (url) => {
     })
   }
 
-  // Automatically open new canvas tabs if enabled
-  if (config.sync.autoOpenCanvasTabs === "On Context Change")
+  if (config.sync.autoOpenCanvasTabs === "On Context Change") {
+    // Automatically open new canvas tabs
     await browserOpenTabArray(index.getCanvasTabArray());
+
+    // Automatically close existing tabs that are outside of context
+    // await browserCloseNonContextTabs();
+  }
 
   // Try to update the UI (might not be loaded(usually the case))
   contextUrlChanged();

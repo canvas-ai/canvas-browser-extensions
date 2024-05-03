@@ -10,9 +10,6 @@
   "dependencies": {
     "@primer/octicons-react": "^18.3.0",
     "@reduxjs/toolkit": "^2.2.2",
-    "@types/react-redux": "^7.1.33",
-    "classnames": "^2.3.2",
-    "dompurify": "^3.0.3",
     "materialize-css": "^1.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -31,10 +28,10 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.9",
     "@types/chrome": "^0.0.244",
-    "@types/dompurify": "^3.0.2",
     "@types/node": "^16.18.25",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.1",
+    "@types/react-redux": "^7.1.33",
     "@types/react-toastify": "^4.1.0",
     "@types/socket.io-client": "^3.0.0",
     "@types/webextension-polyfill": "^0.10.0",

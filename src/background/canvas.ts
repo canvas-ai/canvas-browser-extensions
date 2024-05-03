@@ -1,7 +1,3 @@
-/**
- * General functions for interacting with the Canvas backend
- */
-
 import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
@@ -42,10 +38,6 @@ export function canvasInsertData(resource, data) {
   });
 }
 
-
-/**
- * Functions for interacting with the Canvas backend
- */
 
 export function canvasFetchContext() {
   return new Promise(async (resolve, reject) => {
@@ -120,12 +112,6 @@ export function canvasFetchTab(docId: number) {
         resolve(res);
       }
     );
-  });
-}
-
-export function canvasHasTab(id) {
-  return new Promise((resolve, reject) => {
-    // TODO: Implement the logic for checking if the tab exists
   });
 }
 

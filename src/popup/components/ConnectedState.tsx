@@ -1,5 +1,4 @@
 import React from 'react';
-import styles from "./ConnectedState.module.css";
 import { Tab, Tabs } from 'react-materialize';
 import BrowserToCanvas from './Tabs/BrowserToCanvas';
 import CanvasToBrowser from './Tabs/CanvasToBrowser';

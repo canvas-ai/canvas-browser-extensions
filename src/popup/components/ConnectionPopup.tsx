@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import styles from "./ConnectionPopup.module.css";
+import React from 'react';
 import ConnectionSettingsForm from './ConnectionSettingsForm';
 
 interface ConnectionPopupTypes {

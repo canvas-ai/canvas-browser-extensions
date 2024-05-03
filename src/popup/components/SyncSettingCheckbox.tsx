@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import styles from "./SyncSettingCheckbox.module.scss";
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
 import { setConfig } from '../redux/config/configActions';

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import cx from 'classnames';
 import "./App.css";
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -9,13 +8,12 @@ import { browser, requestUpdateTabs, requestVariableUpdate } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
 import store from './redux/store';
 import { useSelector } from 'react-redux';
-import { loadInitialConfigState, setConfig } from './redux/config/configActions';
+import { loadInitialConfigState } from './redux/config/configActions';
 import { useDispatch } from 'react-redux';
 import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { messageListener } from './listener';
-import { ToastContainer, toast } from "react-toastify";
-import { Toast } from 'react-materialize';
+import { ToastContainer } from "react-toastify";
 
 const App: React.FC = () => {
   const config = useSelector((state: { config: IConfigProps }) => state.config);
@@ -54,7 +52,6 @@ const App: React.FC = () => {
   }, [variables.connected, variables.context, tabs]);
 
   const setConnectionDetailsClicked: React.MouseEventHandler<HTMLButtonElement> = (e) => {
-    // requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
     setPopupOpen(true);
   }
 

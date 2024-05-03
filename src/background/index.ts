@@ -1,7 +1,7 @@
 import { canvasDeleteTab, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasUpdateTab, formatTabProperties } from "./canvas";
 import { browser, browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
-import { getSocket, updateLocalCanvasTabsData } from "./socket";
+import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { context } from "./context";
 import { RUNTIME_MESSAGES, SOCKET_MESSAGES } from "@/general/constants";
@@ -112,7 +112,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
   // TODO: Eval if we need this event at all, as we already have onUpdated
   // (which may not trigger on url change, but we can check for that)
-  const browserAction = chrome.action || chrome.browserAction;
+  const browserAction = browser.action || browser.browserAction;
   browserAction.onClicked.addListener((tab: chrome.tabs.Tab) => {
     console.log('background.js | Browser action clicked: ', tab, socket.isConnected());
 

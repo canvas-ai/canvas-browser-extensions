@@ -22,12 +22,6 @@ interface IConfigProps {
     autoSaveSession: boolean,
     autoOpenTabs: boolean,
     autoCloseTabs: boolean,
-    // autoCloseTabsBehavior:
-    // - saveToCurrentContext
-    // - saveToNewContext
-    // - saveToTrash
-    // - saveToUniverse
-    // - ignore (leave open, do not sync to Canvas)
     autoCloseTabsBehavior: "ignore" | "saveToUniverse" | "saveToTrash" | "saveToNewContext" | "saveToCurrentContext"
   },
 

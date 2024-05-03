@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import cx from 'classnames';
+import React from 'react';
 import styles from "./DisconnectedState.module.scss";
-import { browser } from '../utils';
+import { browser, cx } from '../utils';
 import { setRetrying } from '../redux/variables/varActions';
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';

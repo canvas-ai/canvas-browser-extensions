@@ -1,13 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import styles from "./CanvasToBrowser.module.scss";
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { browser, getContextBreadcrumbs, requestUpdateTabs } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 
-interface CanvasToBrowserTypes {
-}
-
-const CanvasToBrowser: React.FC<CanvasToBrowserTypes> = ({ }) => {
+const CanvasToBrowser: React.FC<any> = ({ }) => {
   const canvasTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.canvasTabs);
   const variables = useSelector((state: { variables: IVarState }) => state.variables);
 

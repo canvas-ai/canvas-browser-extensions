@@ -16,17 +16,11 @@ export function browserOpenTab(tab: ICanvasTab) {
     try {
       browser.tabs.create({
         url: tab.url,
-        // cookieStoreId: tab.cookieStoreId // removed
-        //windowId: tab.windowId, // Restore may fail if windowId does not exist, TODO: Handle this case with windows.create()
-        //index: tab.index, 
-        //active: tab.active,
-        //muted: tab.muted,
-        //openInReaderMode: tab.openInReaderMode,
-        //pinned: tab.pinned,
-        //selected: tab.selected            
       }).then(newTab => {
-        newTab.discarded = tab.discarded;
-        newTab.title = tab.title;
+        ["mutedInfo", "discarded", "active", "pinned", "title"].forEach(prop => {
+          if(tab.hasOwnProperty(prop)) 
+            newTab[prop] = tab[prop];
+        });
         res(newTab);
       });
     } catch (error) {
@@ -42,9 +36,9 @@ export async function browserOpenTabArray(tabArray: ICanvasTab[] | undefined) {
   console.log(`background.js | Opening tab array: `, tabArray);
 
   try {
-    chrome.windows.getAll(async windows => {
+    browser.windows.getAll(async windows => {
       if (windows.length === 0) {
-        await chrome.windows.create({});
+        await browser.windows.create({});
       }
   
       for (const tab of tabArray) {
@@ -94,11 +88,6 @@ export async function browserCloseNonContextTabs() {
 
 export function sanitizeContextPath(path: string | undefined) {
   if (!path || path == '/') return 'universe:///'
-  path = path
-  //.replace(/\/\//g, '/')
-  //.replace(/\:/g, '')
-  //.replace(/universe/g,'∞')
-
   return path
 }
 
@@ -106,34 +95,22 @@ export function stripTabProperties(tab: ICanvasTab) {
   return {
     id: tab.id,
     index: tab.index,
-    // Restore may fail if windowId does not exist
-    // TODO: Handle this case with windows.create()
-    // windowId: tab.windowId,
     highlighted: tab.highlighted,
     active: tab.active,
     pinned: tab.pinned,
-
-    // hidden: tab.hidden, // commented out
 
     // boolean. Whether the tab is created and made visible in the tab bar without any content
     // loaded into memory, a state known as discarded. The tab's content is loaded when the tab
     // is activated.
     // Defaults to true to conserve memory on restore
     discarded: true, // tab.discarded,
+
     incognito: tab.incognito,
-    //width: 1872,
-    //height: 1004,
-    //lastAccessed: 1675111332554,
     audible: tab.audible,
     mutedInfo: tab.mutedInfo,
     url: tab.url,
     title: tab.title,
     favIconUrl: tab.favIconUrl
-
-    // removed:
-    // isArticle: tab.isArticle,
-    // isInReaderMode: tab.isInReaderMode,
-    // sharingState: tab.sharingState,
   }
 }
 

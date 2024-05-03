@@ -1,17 +1,9 @@
-import React, { useState } from 'react';
-import styles from "./Settings.module.scss";
+import React from 'react';
 import ConnectionSettingsForm from '../ConnectionSettingsForm';
 import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
-import SyncSettingCheckbox from '../SyncSettingCheckbox';
-import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
-import { Dispatch } from 'redux';
 import SyncSettingsForm from '../SyncSettingsForm';
 
-interface SettingsTypes {
-}
-
-const Settings: React.FC<SettingsTypes> = ({ }) => {
+const Settings: React.FC<any> = ({ }) => {
   return (
     <div id="settings" className="container">
       <h5>Settings</h5>
@@ -24,6 +16,7 @@ const Settings: React.FC<SettingsTypes> = ({ }) => {
         >
           <SyncSettingsForm />
         </CollapsibleItem>
+        
         <CollapsibleItem
           expanded={true}
           header="Canvas Settings"

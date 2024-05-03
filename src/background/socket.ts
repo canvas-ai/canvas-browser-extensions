@@ -30,7 +30,6 @@ class MySocket {
   }
 
   reconnect() {
-    // this.sendSocketEvent(SOCKET_EVENTS.connecting);
     if (this.socket) this.socket.disconnect();
     this.connect();
   }
@@ -49,20 +48,6 @@ class MySocket {
       });
 
       updateLocalCanvasTabsData();
-  
-      this.socket.emit("authenticate", { token: config.transport.token }, result => {
-        if (result === 'success') {
-          console.log('background.js | [socket.io] Authenticated successfully!');
-          this.sendSocketEvent(SOCKET_EVENTS.authenticated);
-
-          // on authenticate...
-  
-        } else {
-          console.log('background.js | [socket.io] Invalid auth token! disconnecting...');
-          this.sendSocketEvent(SOCKET_EVENTS.invalid_token);
-          this.socket.disconnect();
-        }
-      });
     });
   
     this.socket.on('connect_error', (error) => {
@@ -118,7 +103,6 @@ export const updateLocalCanvasTabsData = () => {
       sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'}); 
       return console.log('ERROR: background.js | Error fetching tabs from Canvas');
     }
-    console.log("recieved canvas tabs array", res.data);
     index.insertCanvasTabArray(res.data);
   }).then(() => {
     index.updateBrowserTabs();
