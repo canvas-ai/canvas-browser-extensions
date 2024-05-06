@@ -1,9 +1,10 @@
 import React from 'react';
-import { browser } from '../utils';
+import { browser, cx } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Dispatch } from 'redux';
 import { setBrowserTabs } from '../redux/tabs/tabActions';
+import { setPinnedTabs } from '../redux/variables/varActions';
 
 interface BrowserTabsCollectionTypes {
   browserTabs: ICanvasTab[]
@@ -11,6 +12,7 @@ interface BrowserTabsCollectionTypes {
 
 const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTabs }) => {
   const dispatch = useDispatch<Dispatch<any>>();
+  const variables = useSelector((state: { variables: IVarState }) => state.variables);
   
   const removeBrowserToCanvasTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
@@ -28,12 +30,25 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
     });
   }
 
+  const togglePinned = (url: string) => {
+    const pinnedTabs = variables.pinnedTabs.filter(pt => pt !== url);
+    if(pinnedTabs.length !== variables.pinnedTabs.length) return dispatch(setPinnedTabs(pinnedTabs));
+    return dispatch(setPinnedTabs([...pinnedTabs, url]));
+  }
+
+  const sortByPinnedTabs: (browserTabs: ICanvasTab[], pinnedTabs: string[]) => ICanvasTab[] = (browserTabs, pinnedTabs) => {
+    return [
+      ...(pinnedTabs.map(pt => browserTabs.find(tab => tab.url === pt)).filter(t => t) as ICanvasTab[]),
+      ...browserTabs.filter(tab => !pinnedTabs.some(pt => pt === tab.url))
+    ];
+  }
+
   return (
     <ul className="collection">
       {
         !browserTabs?.length ?
           (<li className="collection-item">No browser tabs found</li>) :
-          browserTabs.map((tab: ICanvasTab, idx: number) => {
+          sortByPinnedTabs(browserTabs, variables.pinnedTabs).map((tab: ICanvasTab, idx: number) => {
             if (!tab.url) return null;
             return <li key={idx + tab.url} className="collection-item" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <a
@@ -53,6 +68,12 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
                 {tab.title || ""}
               </a>
               <span className="icons">
+                <i
+                  className={cx("material-icons", variables.pinnedTabs.some(pt => pt === tab.url) ? "pinned-tab" : "")}
+                  style={{ cursor: "pointer" }}
+                  title={variables.pinnedTabs.some(pt => pt === tab.url) ? "Remove pin" : "Pin tab"}
+                  onClick={(e) => { e.preventDefault(); togglePinned(tab.url as string); }}
+                >push_pin</i>
                 <i
                   className="material-icons"
                   style={{ cursor: "pointer" }}

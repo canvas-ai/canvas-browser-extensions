@@ -14,6 +14,7 @@ import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { messageListener } from './listener';
 import { ToastContainer } from "react-toastify";
+import { loadInitialPinnedTabsState } from './redux/variables/varActions';
 
 const App: React.FC = () => {
   const config = useSelector((state: { config: IConfigProps }) => state.config);
@@ -25,6 +26,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     store.dispatch(loadInitialConfigState());
+    store.dispatch(loadInitialPinnedTabsState());
     requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
   }, []);
 

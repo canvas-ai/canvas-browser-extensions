@@ -57,6 +57,7 @@ interface IVarState {
   connected: boolean;
   context: IContext;
   retrying: boolean;
+  pinnedTabs: string[];
 }
 
 interface ITabsInfo {

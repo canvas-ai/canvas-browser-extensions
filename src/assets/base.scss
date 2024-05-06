@@ -180,3 +180,8 @@ li.tab {
 .collapsible-header {
   line-height: 2.2;
 }
+
+.material-icons.pinned-tab {
+    color: gray;
+    transform: rotate3d(0, 1, 1, 45deg);
+}
