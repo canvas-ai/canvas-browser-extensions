@@ -1,7 +1,7 @@
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { showErrorMessage, showSuccessMessage, tabsUpdated } from "./utils";
 import { setConnected, setContext, setRetrying } from "./redux/variables/varActions";
-import { addBrowserTabs, addCanvasTabs, removeBrowserTabs, removeCanvasTabs, setBrowserTabs, setCanvasTabs } from "./redux/tabs/tabActions";
+import { addBrowserTabs, addCanvasTabs, addOpenedCanvasTabs, addSyncedBrowserTabs, removeBrowserTabs, removeCanvasTabs, removeOpenedCanvasTabs, removeSyncedBrowserTabs, setBrowserTabs, setCanvasTabs, setOpenedCanvasTabs, setSyncedBrowserTabs } from "./redux/tabs/tabActions";
 import { Dispatch } from "redux";
 import { setConfig } from "./redux/config/configActions";
 
@@ -41,6 +41,14 @@ export const messageListener =
     }
     case RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser: {
       dispatch(setCanvasTabs(message.payload));
+      break;
+    }
+    case RUNTIME_MESSAGES.synced_browser_tabs: {
+      dispatch(setSyncedBrowserTabs(message.payload));
+      break;
+    }
+    case RUNTIME_MESSAGES.opened_canvas_tabs: {
+      dispatch(setOpenedCanvasTabs(message.payload));
       break;
     }
     case RUNTIME_MESSAGES.error_message: {
@@ -88,6 +96,10 @@ const tabUpdateEventHandler = (dispatch: Dispatch<any>, payload: any) => {
   const updateData: IUpdatedTabsData = payload;
   if (updateData.canvasTabs) 
     tabsUpdated(dispatch, updateData.canvasTabs, addCanvasTabs, removeCanvasTabs);
+  if (updateData.openedCanvasTabs) 
+    tabsUpdated(dispatch, updateData.openedCanvasTabs, addOpenedCanvasTabs, removeOpenedCanvasTabs);
   if (updateData.browserTabs) 
     tabsUpdated(dispatch, updateData.browserTabs, addBrowserTabs, removeBrowserTabs);
+  if (updateData.syncedBrowserTabs) 
+    tabsUpdated(dispatch, updateData.syncedBrowserTabs, addSyncedBrowserTabs, removeSyncedBrowserTabs);
 }

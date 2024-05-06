@@ -60,6 +60,8 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         index.insertCanvasTab({ ...tab, docId: res.payload.id });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
+				sendRuntimeMessage({ type: RUNTIME_MESSAGES.opened_canvas_tabs, payload: index.getOpenedCanvasTabs() });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.synced_browser_tabs, payload: index.getSyncedBrowserTabs() });
       } else {
         console.error(`background.js | Insert failed for tab ${tabId}:`)
         console.error(res);

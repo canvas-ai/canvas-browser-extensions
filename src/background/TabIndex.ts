@@ -97,6 +97,8 @@ export class TabIndex {
 
 				sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
+				sendRuntimeMessage({ type: RUNTIME_MESSAGES.opened_canvas_tabs, payload: index.getOpenedCanvasTabs() });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.synced_browser_tabs, payload: index.getSyncedBrowserTabs() });
 			});
 		} catch (error) {
 			console.error("background.js | Error updating browser tabs:", error);
@@ -144,6 +146,18 @@ export class TabIndex {
 		console.log("background.js | Computing delta canvas to browser");
 		return [...this.canvasTabs.values()].filter(
 			(tab) => !this.browserTabs.has(tab.url)
+		);
+	}
+
+	getSyncedBrowserTabs() {
+		return [...this.browserTabs.values()].filter(
+			(tab) => this.canvasTabs.has(tab.url)
+		);
+	}
+
+	getOpenedCanvasTabs() {
+		return [...this.canvasTabs.values()].filter(
+			(tab) => this.browserTabs.has(tab.url)
 		);
 	}
 

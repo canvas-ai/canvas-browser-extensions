@@ -3,9 +3,10 @@ import { useSelector } from 'react-redux';
 import { browser, requestUpdateTabs } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import CanvasTabsCollection from '../CanvasTabsCollection';
+import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 
 const CanvasToBrowser: React.FC<any> = ({ }) => {
-  const canvasTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.canvasTabs);
+  const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
 
   const openAllClicked = () => {
     console.log('UI | Opening all tabs from canvas');
@@ -19,14 +20,32 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
   }
 
   return (
-    <div className="container">
+    <div className="container tab-collection-container">
       <h5>Open all tabs
-        (<span className="" id="canvas-tab-delta-count">{canvasTabs?.length}</span>)
+        (<span className="" id="canvas-tab-delta-count">{tabs.canvasTabs?.length}</span>)
         <span>
           <a className="black white-text waves-effect waves-light btn-small right" onClick={openAllClicked}>Open all<i className="material-icons right">sync</i></a>
         </span>
       </h5>
-      <CanvasTabsCollection canvasTabs={canvasTabs} />
+      <Collapsible accordion={false}>
+        <CollapsibleItem
+          expanded={true}
+          header="Closed Canvas Tabs"
+          icon={<Icon>sync</Icon>}
+          node="div"
+        >
+          <CanvasTabsCollection canvasTabs={tabs.canvasTabs} />
+        </CollapsibleItem>
+        
+        <CollapsibleItem
+          expanded={false}
+          header="Opened Canvas Tabs"
+          icon={<Icon>cloud_sync</Icon>}
+          node="div"
+        >
+          <CanvasTabsCollection canvasTabs={tabs.openedCanvasTabs} />
+        </CollapsibleItem>
+      </Collapsible>
     </div>
   );
 };

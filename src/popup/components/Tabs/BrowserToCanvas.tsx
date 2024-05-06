@@ -3,9 +3,10 @@ import { useSelector } from 'react-redux';
 import { browser } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import BrowserTabsCollection from '../BrowserTabsCollection';
+import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 
 const BrowserToCanvas: React.FC<any> = ({ }) => {
-  const browserTabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs.browserTabs);
+  const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
 
   const syncAllClicked = () => {
     console.log('UI | Syncing all tabs to canvas');
@@ -18,9 +19,9 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
   }
   
   return (
-    <div className="container">
+    <div className="container tab-collection-container">
       <h5>Sync to Canvas
-        (<span className="">{browserTabs?.length}</span>)
+        (<span className="">{tabs.browserTabs?.length}</span>)
         <span>
           <a onClick={syncAllClicked}
             className="black white-text waves-effect waves-light btn-small right">
@@ -29,7 +30,25 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
           </a>
         </span>
       </h5>
-      <BrowserTabsCollection browserTabs={browserTabs} />
+      <Collapsible accordion={false}>
+        <CollapsibleItem
+          expanded={true}
+          header="Syncable Browser Tabs"
+          icon={<Icon>sync</Icon>}
+          node="div"
+        >
+          <BrowserTabsCollection browserTabs={tabs.browserTabs} />
+        </CollapsibleItem>
+        
+        <CollapsibleItem
+          expanded={false}
+          header="Synced Browser Tabs"
+          icon={<Icon>cloud_sync</Icon>}
+          node="div"
+        >
+          <BrowserTabsCollection browserTabs={tabs.syncedBrowserTabs} />
+        </CollapsibleItem>
+      </Collapsible>
     </div>
   );
 };

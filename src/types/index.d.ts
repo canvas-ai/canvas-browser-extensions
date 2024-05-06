@@ -50,7 +50,9 @@ interface IUpdateTypes {
 
 interface IUpdatedTabsData {
   canvasTabs?: IUpdateTypes;
+  openedCanvasTabs?: IUpdateTypes;
   browserTabs?: IUpdateTypes;
+  syncedBrowserTabs?: IUpdateTypes;
 }
 
 interface IVarState {
@@ -63,6 +65,8 @@ interface IVarState {
 interface ITabsInfo {
   canvasTabs: ICanvasTab[];
   browserTabs: ICanvasTab[];
+  openedCanvasTabs: ICanvasTab[];
+  syncedBrowserTabs: ICanvasTab[];
 }
 
 interface ICanvasTab extends chrome.tabs.Tab {

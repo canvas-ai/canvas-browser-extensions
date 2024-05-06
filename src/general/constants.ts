@@ -27,6 +27,8 @@ export const RUNTIME_MESSAGES = {
   index_updateBrowserTabs: 'index:updateBrowserTabs',
   index_clear: 'index:clear',
   socket_retry: 'socket:retry',
+  opened_canvas_tabs: 'opened:canvas:tabs',
+  synced_browser_tabs: 'synced:browser:tabs',
 
   socket_event: 'socket:event',
   tabs_updated: 'tabs:updated',

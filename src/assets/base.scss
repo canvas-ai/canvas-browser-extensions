@@ -185,3 +185,14 @@ li.tab {
     color: gray;
     transform: rotate3d(0, 1, 1, 45deg);
 }
+
+.tab-collection-container {
+    .collapsible {
+        .collapsible-header {
+            background: whitesmoke;
+        }
+        .collapsible-body {
+            padding: 0;
+        }
+    }
+}
