@@ -1,11 +1,11 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { setConfig } from '../redux/config/configActions';
+import { setConfig } from '../../redux/config/configActions';
 import { Dispatch } from 'redux';
-import { browser } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
-import SyncSettingCheckbox from './SyncSettingCheckbox';
+import SettingCheckbox from '@/popup/common-components/inputs/SettingCheckbox';
+import { browser } from '@/general/utils';
 
 const SyncSettingsForm: React.FC<any> = ({ }) => {
   const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
@@ -13,8 +13,7 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
 
   const saveSyncSettings = (config: IConfigProps, sync: IConfigProps["sync"]) => {
     dispatch(setConfig({ ...config, sync }));
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key: "sync", value: sync }, (response) => {
-    });
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key: "sync", value: sync }, (response) => {});
   }
 
   return (
@@ -34,8 +33,8 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
       </div>
     </div>
     
-    <SyncSettingCheckbox 
-      prop={'autoOpenCanvasTabs'} 
+    <SettingCheckbox
+      prop={'sync.autoOpenCanvasTabs'} 
       title="Automatically open tabs on context change" /> 
 
   </div>

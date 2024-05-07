@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { setConfig } from '../redux/config/configActions';
+import { setConfig } from '../../redux/config/configActions';
 import { Dispatch } from 'redux';
-import { browser } from '../utils';
+import { browser } from '@/general/utils';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;

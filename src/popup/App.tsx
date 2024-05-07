@@ -4,7 +4,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ConnectedState from './components/ConnectedState';
 import DisconnectedState from './components/DisconnectedState';
-import { browser, requestUpdateTabs, requestVariableUpdate } from './utils';
+import { requestUpdateTabs, requestVariableUpdate } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
 import store from './redux/store';
 import { useSelector } from 'react-redux';
@@ -15,6 +15,7 @@ import { RUNTIME_MESSAGES } from '@/general/constants';
 import { messageListener } from './listener';
 import { ToastContainer } from "react-toastify";
 import { loadInitialPinnedTabsState } from './redux/variables/varActions';
+import { browser } from '@/general/utils';
 
 const App: React.FC = () => {
   const config = useSelector((state: { config: IConfigProps }) => state.config);

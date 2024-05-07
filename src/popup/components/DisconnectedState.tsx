@@ -1,10 +1,11 @@
 import React from 'react';
 import styles from "./DisconnectedState.module.scss";
-import { browser, cx } from '../utils';
+import { cx } from '../utils';
 import { setRetrying } from '../redux/variables/varActions';
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
+import { browser } from '@/general/utils';
 
 interface DisconnectedStateTypes {
   connectionHost: string;

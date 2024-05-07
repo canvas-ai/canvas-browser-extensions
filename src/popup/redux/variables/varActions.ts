@@ -1,6 +1,6 @@
 import { Dispatch } from "redux";
 import { SET_CONNECTED, SET_CONTEXT, SET_PINNED_TABS, SET_RETRYING, VariableActionTypes } from "./varActionTypes";
-import { browser } from "@/popup/utils";
+import { browser } from "@/general/utils";
 
 export const setRetrying = (retrying: boolean): VariableActionTypes => ({
   type: SET_RETRYING,

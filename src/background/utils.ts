@@ -1,8 +1,7 @@
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import index from "./TabIndex";
-import { canvasInsertTabArray } from "./canvas";
-
-export const browser: typeof chrome = globalThis.browser || chrome;
+import { browser, getPinnedTabs, savePinnedTabsToStorage } from "@/general/utils";
+import config from "@/general/config";
 
 export function browserIsValidTabUrl(tabUrl: string) {
   return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
@@ -65,49 +64,24 @@ export function browserCloseTabArray(tabArray: number[] | undefined) {
   return browser.tabs.remove(tabArray);
 }
 
-export async function browserCloseNonContextTabs() {
+export async function browserCloseNonContextTabs(beforeRemove: ((tabsToRemove: ICanvasTab[]) => Promise<any>) | ((tabsToRemove: ICanvasTab[]) => any) = async (t) => {}) {
   try {
     browser.tabs.query({}, async tabs => {
-      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url));
+      const pinnedTabs = await getPinnedTabs();
+      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url) && !pinnedTabs.some(url => tab.url === url));
       if (tabsToRemove.length === 0) return;
   
       if (tabs.length === tabsToRemove.length) {
         // Open a new tab before closing all others to ensure at least one remains
         await browser.tabs.create({});
       }
+
+      await beforeRemove(tabsToRemove);
   
       for (const tab of tabsToRemove) {
         console.log(`background.js | Removing tab ${tab.id}`);
         if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
       }  
-    });
-  } catch (error) {
-    console.error('Error in closing non-context tabs:', error);
-  }
-}
-
-export async function browserSaveAndCloseNonContextTabs() {
-  try {
-    browser.tabs.query({}, async tabs => {
-      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url));
-      if (tabsToRemove.length === 0) return;
-  
-      if (tabs.length === tabsToRemove.length) {
-        // Open a new tab before closing all others to ensure at least one remains
-        await browser.tabs.create({});
-      }
-      
-      canvasInsertTabArray(tabsToRemove).then(async (res: any) => {
-        if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-        console.log('background.js | Tabs auto-inserted to Canvas: ', res);
-        
-        for (const tab of tabsToRemove) {
-          console.log(`background.js | Removing tab ${tab.id}`);
-          if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
-        }    
-      }).catch((error) => {
-        console.error('background.js | Error updating browser tabs:', error);
-      });
     });
   } catch (error) {
     console.error('Error in closing non-context tabs:', error);
@@ -159,4 +133,18 @@ export const getCurrentBrowser: () => IBrowserType = () => {
   if(userAgent.includes("Edg")) return "Edge";
   if(userAgent.includes("Firefox")) return "Firefox";
   return "Chrome";
+}
+
+export const filterRemovedPinnedTabs = async (tabsArray: ICanvasTab[]) => {
+  const pinnedTabs = await getPinnedTabs();
+  await savePinnedTabsToStorage(pinnedTabs.filter(url => tabsArray.some(tab => tab.url === url)));
+}
+
+export const getSchemaTypes = () => {
+  const types = ['data/abstraction/tab'];
+  const bt = config.browserIdentity.browserTag;
+  if(bt.trim().length) {
+    types.push(`custom/tag/${bt.trim()}`);
+  }
+  return types;
 }

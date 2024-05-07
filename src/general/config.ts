@@ -1,11 +1,12 @@
-const browser: typeof chrome = globalThis.browser || chrome;
+import { browser } from "./utils";
 
 const store = browser.storage.local;
 
 export const DEFAULT_CONFIG: {
   sync: IConfig["sync"],
   session: IConfig["session"],
-  transport: IConfig["transport"]
+  transport: IConfig["transport"],
+  browserIdentity: IConfig["browserIdentity"]
 } = {
   sync: {
     autoBrowserTabsSync: "Never",
@@ -16,6 +17,10 @@ export const DEFAULT_CONFIG: {
     autoOpenTabs: true,
     autoCloseTabs: true,
     autoCloseTabsBehavior: 'ignore'
+  },
+  browserIdentity: {
+    syncOnlyTaggedTabs: false,
+    browserTag: ""
   },
   session: {},
   transport: {
@@ -31,11 +36,13 @@ class Config {
   sync: IConfig["sync"];
   session: IConfig["session"];
   transport: IConfig["transport"];
+  browserIdentity: IConfig["browserIdentity"]
 
   constructor() {
     this.sync = DEFAULT_CONFIG.sync;
     this.session = DEFAULT_CONFIG.session;
     this.transport = DEFAULT_CONFIG.transport;
+    this.browserIdentity = DEFAULT_CONFIG.browserIdentity;
 
     this.initialize();
   }
@@ -52,7 +59,7 @@ class Config {
 
   initialize() {
     return new Promise((res) => {
-      store.get(['sync', 'transport', 'session'], (cfg: any) => {
+      store.get(['sync', 'transport', 'session', 'browserIdentity'], (cfg: any) => {
         Object.keys(cfg).forEach(key => {
           this[key] = cfg[key] || this[key] || DEFAULT_CONFIG[key];
         });

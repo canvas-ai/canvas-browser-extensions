@@ -1,5 +1,5 @@
 import React from 'react';
-import ConnectionSettingsForm from './ConnectionSettingsForm';
+import ConnectionSettingsForm from './forms/ConnectionSettingsForm';
 
 interface ConnectionPopupTypes {
   open: boolean;

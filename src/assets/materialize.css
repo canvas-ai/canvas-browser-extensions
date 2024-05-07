@@ -2696,12 +2696,12 @@ i {
 
 i.left {
   float: left;
-  margin-right: 15px;
+  margin-right: 8px;
 }
 
 i.right {
   float: right;
-  margin-left: 15px;
+  margin-left: 8px;
 }
 
 i.tiny {

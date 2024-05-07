@@ -1,9 +1,10 @@
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { showErrorMessage, showSuccessMessage, tabsUpdated } from "./utils";
-import { setConnected, setContext, setRetrying } from "./redux/variables/varActions";
+import { setConnected, setContext, setPinnedTabs, setRetrying } from "./redux/variables/varActions";
 import { addBrowserTabs, addCanvasTabs, addOpenedCanvasTabs, addSyncedBrowserTabs, removeBrowserTabs, removeCanvasTabs, removeOpenedCanvasTabs, removeSyncedBrowserTabs, setBrowserTabs, setCanvasTabs, setOpenedCanvasTabs, setSyncedBrowserTabs } from "./redux/tabs/tabActions";
 import { Dispatch } from "redux";
 import { setConfig } from "./redux/config/configActions";
+import { getPinnedTabs } from "@/general/utils";
 
 export const messageListener = 
   (dispatch: Dispatch<any>, variables: IVarState) => (message: { type: string, payload: any }, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
@@ -25,6 +26,12 @@ export const messageListener =
     }
     case RUNTIME_MESSAGES.tabs_updated: {
       tabUpdateEventHandler(dispatch, message.payload);
+      break;
+    }
+    case RUNTIME_MESSAGES.pinned_tabs_updated: {
+      getPinnedTabs().then(pinnedTabs => {
+        dispatch(setPinnedTabs(pinnedTabs));        
+      })
       break;
     }
     case RUNTIME_MESSAGES.socket_event: {

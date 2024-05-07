@@ -1,9 +1,9 @@
 import React from 'react';
 import { Tab, Tabs } from 'react-materialize';
-import BrowserToCanvas from './Tabs/BrowserToCanvas';
-import CanvasToBrowser from './Tabs/CanvasToBrowser';
-import Search from './Tabs/Search';
-import Settings from './Tabs/Settings';
+import BrowserToCanvas from './tabs/BrowserToCanvas';
+import CanvasToBrowser from './tabs/CanvasToBrowser';
+import Search from './tabs/Search';
+import Settings from './tabs/Settings';
 
 interface ConnectedStateTypes {
 }

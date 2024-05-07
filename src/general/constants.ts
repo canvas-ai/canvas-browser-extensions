@@ -11,6 +11,7 @@ export const RUNTIME_MESSAGES = {
   context_get_tree: 'context:get:tree',
   context_set_url: 'context:set:url',
   context_tab_remove: 'context:tab:remove',
+  context_tabs_remove: 'context:tabs:remove',
   browser_tabs_update: 'browser:tabs:update',
   browser_tabs_open: 'browser:tabs:open',
   browser_tabs_close: 'browser:tabs:close',
@@ -19,6 +20,7 @@ export const RUNTIME_MESSAGES = {
   canvas_tabs_insert: 'canvas:tabs:insert',
   canvas_tab_insert: 'canvas:tab:insert',
   canvas_tab_delete: 'canvas:tab:delete',
+  canvas_tabs_delete: 'canvas:tabs:delete',
   index_get_counts: 'index:get:counts',
   index_get_browserTabArray: 'index:get:browserTabArray',
   index_get_canvasTabArray: 'index:get:canvasTabArray',
@@ -32,6 +34,10 @@ export const RUNTIME_MESSAGES = {
 
   socket_event: 'socket:event',
   tabs_updated: 'tabs:updated',
+
+  update_tabs_list: 'update:tabs:list',
+
+  pinned_tabs_updated: 'pinned:tabs:updated',
 
   error_message: 'error_message',
   success_message: 'success_message'

@@ -1,8 +1,7 @@
 import { Dispatch } from "redux";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { toast } from "react-toastify";
-
-export const browser: typeof chrome = globalThis.browser || chrome;
+import { browser } from "@/general/utils";
 
 export const requestVariableUpdate = (message: { action: string }) => {
   return browser.runtime.sendMessage(message);
@@ -69,4 +68,8 @@ export const showSuccessMessage = (message: string) => {
 
 export const cx = (...classNames: (string | undefined)[]) => {
   return classNames.filter(c => c).join(" ");
+}
+
+export const isOnUniverse = (url: string) => {
+  return getContextBreadcrumbs(url).length === 1 && getContextBreadcrumbs(url)[0].textContent.trim().toLowerCase() === "universe";
 }

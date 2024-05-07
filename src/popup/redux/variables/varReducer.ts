@@ -1,5 +1,5 @@
-import { browser } from "@/popup/utils";
 import { SET_CONNECTED, SET_CONTEXT, SET_PINNED_TABS, SET_RETRYING, VariableActionTypes } from "./varActionTypes";
+import { savePinnedTabsToStorage } from "@/general/utils";
 
 const DEFAULT_STATE = {
   connected: false,
@@ -10,11 +10,6 @@ const DEFAULT_STATE = {
   retrying: false,
   pinnedTabs: []
 }
-
-const savePinnedTabsToStorage = (pinnedTabs: string[]) => {
-  console.log("saving pinnedTabs to storage...", pinnedTabs);
-  browser.storage.local.set({ "pinnedTabs": pinnedTabs });
-};
 
 const varReducer = (state = DEFAULT_STATE, action: VariableActionTypes): IVarState => {
   switch (action.type) {

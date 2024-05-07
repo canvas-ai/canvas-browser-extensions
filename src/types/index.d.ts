@@ -1,5 +1,5 @@
 interface ITabDocumentSchema {
-  type: string,
+  type: string | string[],
   meta: any,
   data: any
 }
@@ -24,6 +24,11 @@ interface IConfigProps {
     autoOpenTabs: boolean,
     autoCloseTabs: boolean,
     autoCloseTabsBehavior: "ignore" | "saveToUniverse" | "saveToTrash" | "saveToNewContext" | "saveToCurrentContext"
+  },
+
+  browserIdentity: {
+    syncOnlyTaggedTabs: boolean,
+    browserTag: string
   },
 
   session: {},
@@ -91,7 +96,7 @@ interface ISocketResponse<T> {
   payload: T;
 }
 
-type IRequestTypes = "data/abstraction/tab";
+type IRequestTypes = "data/abstraction/tab" | string[];
 
 interface ICanvasInsertResponsePayload {
   id: number;

@@ -1,7 +1,7 @@
 import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
-import { getCurrentBrowser, onContextTabsUpdated } from "./utils";
+import { getCurrentBrowser, getSchemaTypes, onContextTabsUpdated } from "./utils";
 
 export function canvasFetchData(resource) {
   return new Promise(async (resolve, reject) => {
@@ -58,7 +58,7 @@ export function canvasFetchTabsForContext() {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
-      "data/abstraction/tab",
+      getSchemaTypes(),
       (res) => {
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
@@ -94,7 +94,7 @@ export function canvasFetchContextUrl(): Promise<string> {
 export function canvasFetchTabSchema() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: "data/abstraction/tab" }, (res) => {
+    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: getSchemaTypes() }, (res) => {
       console.log("background.js | Tab schema fetched: ", res);
       resolve(res);
     });
@@ -106,7 +106,7 @@ export function canvasFetchTab(docId: number) {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET,
-      { type: "data/abstraction/tab", docId },
+      { type: getSchemaTypes(), docId },
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);
@@ -163,6 +163,14 @@ export function canvasRemoveTab(tab: ICanvasTab) {
   });
 }
 
+export function canvasRemoveTabs(tabs: ICanvasTab[]) { // TODO add SOCKET_MESSAGES.DOCUMENT.REMOVE_ARRAY
+  return Promise.all(tabs.map(canvasRemoveTab));
+}
+
+export function canvasDeleteTabs(tabs: ICanvasTab[]) { // TODO add SOCKET_MESSAGES.DOCUMENT.DELETE_ARRAY
+  return Promise.all(tabs.map(canvasDeleteTab));
+}
+
 export function canvasDeleteTab(tab: ICanvasTab) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
@@ -196,14 +204,16 @@ export function canvasCheckConnection() {
   });
 }
 
-export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
+export async function formatTabProperties(tab: ICanvasTab): Promise<IFormattedTabProperties> {
   if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-  return {
-    type: "data/abstraction/tab",
+  const result = {
+    type: getSchemaTypes(),
     meta: {
       url: tab.url,
       browser: getCurrentBrowser()
     },
     data: { ...tab, id: tab.docId || tab.id },
   };
+  console.log("sending", result);
+  return result;
 }

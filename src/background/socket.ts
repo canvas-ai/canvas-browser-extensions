@@ -3,10 +3,9 @@ import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
 import { canvasFetchContextUrl, canvasFetchTabsForContext } from './canvas';
 import index from './TabIndex';
 import { setContextUrl, updateContext } from './context';
-import { browser, sendRuntimeMessage } from './utils';
+import { sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
-
-console.log(config);
+import { browser } from '@/general/utils';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,

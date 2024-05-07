@@ -1,5 +1,9 @@
 import { RUNTIME_MESSAGES } from "@/general/constants";
-import { browser, browserIsValidTabUrl, sendRuntimeMessage } from "./utils";
+import { browserIsValidTabUrl, filterRemovedPinnedTabs, sendRuntimeMessage } from "./utils";
+import { browser } from "@/general/utils";
+
+
+let timeout: any;
 
 export class TabIndex {
 	browserTabIdToUrl: Map<any, any>;
@@ -66,7 +70,7 @@ export class TabIndex {
 			this.browserTabIdToUrl.clear();
 		}
 
-		tabArray.forEach((tab) => this.insertBrowserTab(tab));
+		tabArray.forEach((tab) => this.insertBrowserTab(tab));		
 	}
 
 	hasBrowserTab(url: string) {
@@ -85,7 +89,7 @@ export class TabIndex {
 				console.log(
 					`background.js | Found ${tabs.length} open browser tabs, updating index`
 				);
-	
+
 				const processedTabs = tabs.reduce((acc, tab) => {
 					if (tab.url && browserIsValidTabUrl(tab.url)) {
 						acc.push(this.#stripTabProperties(tab) as never);
@@ -94,6 +98,10 @@ export class TabIndex {
 				}, []);
 	
 				this.insertBrowserTabArray(processedTabs);
+
+				filterRemovedPinnedTabs(processedTabs).then(() => {
+					sendRuntimeMessage({ type: RUNTIME_MESSAGES.pinned_tabs_updated, payload: {} });
+				});		
 
 				sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
@@ -106,12 +114,24 @@ export class TabIndex {
 		}
 	}
 
+	updatePopupTabsWithDelay() {
+		clearTimeout(timeout);
+		timeout = setTimeout(() => {
+			sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
+			sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
+			sendRuntimeMessage({ type: RUNTIME_MESSAGES.opened_canvas_tabs, payload: index.getOpenedCanvasTabs() });
+			sendRuntimeMessage({ type: RUNTIME_MESSAGES.synced_browser_tabs, payload: index.getSyncedBrowserTabs() });	
+		}, 100);
+	}
+
 	insertCanvasTab(tab: ICanvasTab) {
 		this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
+		this.updatePopupTabsWithDelay();
 	}
 
 	removeCanvasTab(url: string) {
 		this.canvasTabs.delete(url);
+		this.updatePopupTabsWithDelay();
 	}
 
 	insertCanvasTabArray(tabArray: ICanvasTab[], clear = true) {
