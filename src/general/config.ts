@@ -1,4 +1,4 @@
-import { browser } from "@/background/utils";
+const browser: typeof chrome = globalThis.browser || chrome;
 
 const store = browser.storage.local;
 
@@ -8,8 +8,9 @@ export const DEFAULT_CONFIG: {
   transport: IConfig["transport"]
 } = {
   sync: {
-    autoSyncBrowserTabs: "Never",
-    autoOpenCanvasTabs: "Never",
+    autoBrowserTabsSync: "Never",
+    tabBehaviorOnContextChange: "Keep",
+    autoOpenCanvasTabs: false,
     autoRestoreSession: true,
     autoSaveSession: true,
     autoOpenTabs: true,
@@ -53,7 +54,7 @@ class Config {
     return new Promise((res) => {
       store.get(['sync', 'transport', 'session'], (cfg: any) => {
         Object.keys(cfg).forEach(key => {
-          this[key] = cfg[key] || this[key];
+          this[key] = cfg[key] || this[key] || DEFAULT_CONFIG[key];
         });
         res(true);
       });

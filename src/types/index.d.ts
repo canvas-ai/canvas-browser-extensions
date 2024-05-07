@@ -16,8 +16,9 @@ type IProtocol = "http" | "https";
 
 interface IConfigProps {
   sync: {
-    autoSyncBrowserTabs: "Never" | "On Context Change" | "Always";
-    autoOpenCanvasTabs: "Never" | "On Context Change",
+    autoBrowserTabsSync: "Never" | "On Context Change" | "Always";
+    tabBehaviorOnContextChange: "Close" | "Save and Close" | "Keep";
+    autoOpenCanvasTabs: boolean,
     autoRestoreSession: boolean,
     autoSaveSession: boolean,
     autoOpenTabs: boolean,

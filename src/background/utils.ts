@@ -1,5 +1,6 @@
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import index from "./TabIndex";
+import { canvasInsertTabArray } from "./canvas";
 
 export const browser: typeof chrome = globalThis.browser || chrome;
 
@@ -85,6 +86,33 @@ export async function browserCloseNonContextTabs() {
   }
 }
 
+export async function browserSaveAndCloseNonContextTabs() {
+  try {
+    browser.tabs.query({}, async tabs => {
+      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url));
+      if (tabsToRemove.length === 0) return;
+  
+      if (tabs.length === tabsToRemove.length) {
+        // Open a new tab before closing all others to ensure at least one remains
+        await browser.tabs.create({});
+      }
+      
+      canvasInsertTabArray(tabsToRemove).then(async (res: any) => {
+        if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+        console.log('background.js | Tabs auto-inserted to Canvas: ', res);
+        
+        for (const tab of tabsToRemove) {
+          console.log(`background.js | Removing tab ${tab.id}`);
+          if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+        }    
+      }).catch((error) => {
+        console.error('background.js | Error updating browser tabs:', error);
+      });
+    });
+  } catch (error) {
+    console.error('Error in closing non-context tabs:', error);
+  }
+}
 
 export function sanitizeContextPath(path: string | undefined) {
   if (!path || path == '/') return 'universe:///'

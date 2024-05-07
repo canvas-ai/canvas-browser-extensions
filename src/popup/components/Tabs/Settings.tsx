@@ -8,7 +8,7 @@ const Settings: React.FC<any> = ({ }) => {
       <h5>Settings</h5>
       <hr />
       <div className="settings-box">
-        <h6>Extension Settings</h6>
+        <h6>Context Sync Settings</h6>
         <div>
           <SyncSettingsForm />
         </div>

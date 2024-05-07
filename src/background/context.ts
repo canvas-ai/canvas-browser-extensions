@@ -1,7 +1,7 @@
 import config from "@/general/config";
 import index from "./TabIndex";
 import { canvasFetchTabsForContext, canvasInsertTabArray } from "./canvas";
-import { browser, browserOpenTabArray } from "./utils";
+import { browser, browserCloseNonContextTabs, browserOpenTabArray, browserSaveAndCloseNonContextTabs } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 
 const DEFAULT_URL = 'universe:///';
@@ -32,7 +32,7 @@ export const setContextUrl = async (url) => {
 
   index.insertCanvasTabArray(res.data);
   
-  if (config.sync.autoSyncBrowserTabs !== "Never") {
+  if (config.sync.autoBrowserTabsSync !== "Never") {
     const tabs = index.getBrowserTabArray();
     canvasInsertTabArray(tabs).then((res: any) => {
       if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
@@ -42,12 +42,24 @@ export const setContextUrl = async (url) => {
     })
   }
 
-  if (config.sync.autoOpenCanvasTabs === "On Context Change") {
+  if (config.sync.autoOpenCanvasTabs) {
     // Automatically open new canvas tabs
     await browserOpenTabArray(index.getCanvasTabArray());
+  }
 
-    // Automatically close existing tabs that are outside of context
-    // await browserCloseNonContextTabs();
+  switch(config.sync.tabBehaviorOnContextChange) {
+    case "Close": {
+      // Automatically close existing tabs that are outside of context
+      await browserCloseNonContextTabs();
+      break;
+    }
+    case "Save and Close": {
+      await browserSaveAndCloseNonContextTabs();
+      break;
+    }
+    case "Keep": {
+      // do nothing
+    }
   }
 
   // Try to update the UI (might not be loaded(usually the case))

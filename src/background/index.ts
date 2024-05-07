@@ -50,7 +50,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     if (!Object.keys(changeInfo).some(cik => watchTabProperties.properties.some(wtpk => cik === wtpk)))
       return;
 
-    if(changeInfo.status === "complete" && config.sync.autoSyncBrowserTabs === "Always") {
+    if(changeInfo.status === "complete" && config.sync.autoBrowserTabsSync === "Always") {
       index.updateBrowserTabs();
       // Update backend
       console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`);
@@ -72,7 +72,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
       index.updateBrowserTabs();
 
-      if(config.sync.autoSyncBrowserTabs === "Always") {
+      if(config.sync.autoBrowserTabsSync === "Always") {
         const oldUrl = index.browserTabIdToUrl.get(tabId);
         const newUrl = changeInfo.url;
         if(oldUrl === newUrl) return;
@@ -158,7 +158,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     tabDocument.data = stripTabProperties(tab)
 
     // Send update to backend
-    if(config.sync.autoSyncBrowserTabs === "Always")
+    if(config.sync.autoBrowserTabsSync === "Always")
       await canvasRemoveTab(tab);
   });
 

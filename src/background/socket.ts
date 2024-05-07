@@ -6,12 +6,14 @@ import { setContextUrl, updateContext } from './context';
 import { browser, sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
 
+console.log(config);
+
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,
   upgrade: false,
   secure: false,
   transports: ['websocket'],
-  auth: { token: config.transport.token } 
+  auth: { token: config.transport.token || "" } 
 };
 
 class MySocket {

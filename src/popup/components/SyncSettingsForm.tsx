@@ -5,6 +5,7 @@ import { setConfig } from '../redux/config/configActions';
 import { Dispatch } from 'redux';
 import { browser } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
+import SyncSettingCheckbox from './SyncSettingCheckbox';
 
 const SyncSettingsForm: React.FC<any> = ({ }) => {
   const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
@@ -19,38 +20,23 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
   return (
     <div className="sync-settings-form">
     <div className="input-container">
-      <label className="form-label">Auto-sync browser tabs to Canvas</label>
+      <label className="form-label">Handle existing tabs on context change</label>
       <div className="form-control">
         <select 
           className="browser-default" 
-          defaultValue={config.sync.autoSyncBrowserTabs} 
-          onChange={(e) => saveSyncSettings(config, {...config.sync, autoSyncBrowserTabs: e.target.value as IConfigProps["sync"]["autoSyncBrowserTabs"] })}
+          defaultValue={config.sync.tabBehaviorOnContextChange} 
+          onChange={(e) => saveSyncSettings(config, {...config.sync, tabBehaviorOnContextChange: e.target.value as IConfigProps["sync"]["tabBehaviorOnContextChange"] })}
         >
-          <option value="Never">Never</option>
-          <option value="On Context Change">On Context Change</option>
-          <option value="Always">Always</option>
+          <option value="Close">Close</option>
+          <option value="Save and Close">Save and Close</option>
+          <option value="Keep">Keep</option>
         </select>
       </div>
     </div>
-
-    <div className="input-container">
-      <label className="form-label">Auto-open canvas tabs in browser</label>
-      <div className="form-control">
-        <select 
-          className="browser-default" 
-          defaultValue={config.sync.autoOpenCanvasTabs} 
-          onChange={(e) => saveSyncSettings(config, {...config.sync, autoOpenCanvasTabs: e.target.value as IConfigProps["sync"]["autoOpenCanvasTabs"] })}
-        >
-          <option value="Never">Never</option>
-          <option value="On Context Change">On Context Change</option>
-        </select>
-      </div>
-    </div>
-      {/* 
-        <SyncSettingCheckbox 
-          prop={'autoRestoreSession'} 
-          title="Automatically switch tab-sets on context change" /> 
-      */}
+    
+    <SyncSettingCheckbox 
+      prop={'autoOpenCanvasTabs'} 
+      title="Automatically open tabs on context change" /> 
 
   </div>
   );
