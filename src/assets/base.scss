@@ -165,14 +165,20 @@ li.tab {
       input {
         background-color: rgba(255, 255, 255, 0.9);
         width: 100%;
-        padding: 5px;
+        padding: 0 5px;
         border: 1px solid #f2f2f2;
         border-radius: 2px;
         height: 3rem;
+        font-size: 14px;
 
         &:focus {
           outline: 1px solid #c9f3ef;
         }
+      }
+
+      select {
+        font-size: 14px;
+        padding: 0 5px;
       }
     }
 }
@@ -195,4 +201,13 @@ li.tab {
             padding: 0;
         }
     }
+}
+
+.no-tabs-found {
+    font-size: 14px;
+    color: darkred;
+    font-style: italic;
+    padding: 8px;
+    margin-bottom: 10px;
+    background: whitesmoke;
 }

@@ -20,7 +20,7 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
   }
 
   return (
-    <div className="container tab-collection-container">
+    <div className="tab-collection-container">
       <h5>Open all tabs
         (<span className="" id="canvas-tab-delta-count">{tabs.canvasTabs?.length}</span>)
         <span>

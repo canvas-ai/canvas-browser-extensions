@@ -23,7 +23,7 @@ const ConnectedState: React.FC<ConnectedStateTypes> = ({ }) => {
             responsiveThreshold: Infinity,
             swipeable: false
           }}
-          title="Browser to Canvas"
+          title="Browser Tabs"
         >
           <BrowserToCanvas />
         </Tab>
@@ -34,7 +34,7 @@ const ConnectedState: React.FC<ConnectedStateTypes> = ({ }) => {
             responsiveThreshold: Infinity,
             swipeable: false
           }}
-          title="Canvas to Browser"
+          title="Canvas Tabs"
         >
           <CanvasToBrowser />
         </Tab>
@@ -45,7 +45,7 @@ const ConnectedState: React.FC<ConnectedStateTypes> = ({ }) => {
             responsiveThreshold: Infinity,
             swipeable: false,
           }}
-          title="Search"
+          title="Search Tabs"
         >
           <Search />
         </Tab>

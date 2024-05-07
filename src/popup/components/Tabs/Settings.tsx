@@ -1,31 +1,25 @@
 import React from 'react';
 import ConnectionSettingsForm from '../ConnectionSettingsForm';
-import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 import SyncSettingsForm from '../SyncSettingsForm';
 
 const Settings: React.FC<any> = ({ }) => {
   return (
-    <div id="settings" className="container">
+    <div id="settings">
       <h5>Settings</h5>
-      <Collapsible accordion={false}>
-        <CollapsibleItem
-          expanded={false}
-          header="Extension Settings"
-          icon={<Icon>settings</Icon>}
-          node="div"
-        >
+      <hr />
+      <div className="settings-box">
+        <h6>Extension Settings</h6>
+        <div>
           <SyncSettingsForm />
-        </CollapsibleItem>
-        
-        <CollapsibleItem
-          expanded={true}
-          header="Canvas Settings"
-          icon={<Icon>cloud_sync</Icon>}
-          node="div"
-        >
+        </div>
+      </div>
+      <hr />
+      <div className="settings-box">
+        <h6>Connection Settings</h6>
+        <div>
           <ConnectionSettingsForm />
-        </CollapsibleItem>
-      </Collapsible>
+        </div>
+      </div>
     </div>
   );
 };

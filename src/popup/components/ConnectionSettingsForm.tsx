@@ -45,7 +45,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       <div className="input-container">
         <label className="form-label" htmlFor="connection-setting-host">Host</label>
         <div className="form-control">
-          <input type="input" id="connection-setting-host" value={transport.host} onChange={(e) => setTransport({...transport, host: e.target.value })} />
+          <input type="text" id="connection-setting-host" value={transport.host} onChange={(e) => setTransport({...transport, host: e.target.value })} />
         </div>
       </div>
 
@@ -53,7 +53,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         <label className="form-label" htmlFor="connection-setting-port">Port</label>
         <div className="form-control">
           <input
-            type="input" id="connection-setting-port" value={transport.port}
+            type="text" id="connection-setting-port" value={transport.port}
             onChange={(e) => setTransport({
               ...transport,
               port: !e.target.value.length ? "" : (isNaN(Number(e.target.value)) ? transport.port : Number(e.target.value)) })} />
@@ -63,14 +63,14 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       <div className="input-container">
         <label className="form-label" htmlFor="connection-setting-token">Auth Token</label>
         <div className="form-control">
-          <input type="input" id="connection-setting-token" value={transport.token} onChange={(e) => setTransport({...transport, token: e.target.value })} />
+          <input type="password" id="connection-setting-token" value={transport.token} onChange={(e) => setTransport({...transport, token: e.target.value })} />
         </div>
       </div>
 
       <div className="input-container">
         <label className="form-label" htmlFor="connection-setting-pinToContext">Pin To Context</label>
         <div className="form-control">
-          <input type="input" id="connection-setting-pinToContext" value={transport.pinToContext} onChange={(e) => setTransport({...transport, pinToContext: e.target.value })} />
+          <input type="text" id="connection-setting-pinToContext" value={transport.pinToContext} onChange={(e) => setTransport({...transport, pinToContext: e.target.value })} />
         </div>
       </div>
 

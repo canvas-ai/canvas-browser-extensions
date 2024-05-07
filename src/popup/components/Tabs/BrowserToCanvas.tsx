@@ -19,7 +19,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
   }
   
   return (
-    <div className="container tab-collection-container">
+    <div className="tab-collection-container">
       <h5>Sync to Canvas
         (<span className="">{tabs.browserTabs?.length}</span>)
         <span>

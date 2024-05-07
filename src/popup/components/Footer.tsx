@@ -5,7 +5,7 @@ import { cx } from '../utils';
 const Footer: React.FC<any> = () => {
   return (
     <footer className={cx(styles.footer, "page-footer grey darken-3")}>
-      <div className="container white-text">
+      <div className="white-text">
         <div className={styles.footerContent + " row"}>
           <div className="col s6 16 left-align">©2024 Canvas UI</div>
           <div className="col s6 16 right-align">
