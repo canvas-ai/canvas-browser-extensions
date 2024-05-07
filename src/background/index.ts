@@ -185,7 +185,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       // socket.io
       case RUNTIME_MESSAGES.socket_status:
-        console.log({ socket });
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: socket && socket.isConnected() });
         break;
 
@@ -314,7 +313,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         }
 
         canvasInsertTabArray(tabs).then((res: ICanvasInsertResponse) => {
-          console.log(res, tabs);
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tabs to Canvas' });
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas' });
           index.insertCanvasTabArray(tabs.map((tab: ICanvasTab) => ({ ...tab, docId: res.payload.find(p => p.meta.url === tab.url)?.id })), false);
@@ -334,7 +332,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case RUNTIME_MESSAGES.canvas_tab_insert:
         canvasInsertTab(message.tab).then((res: ICanvasInsertOneResponse) => {
-          console.log(res, message.tab);
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting the tab to Canvas' });
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'The tab inserted to Canvas' });
           index.insertCanvasTab({ ...message.tab, docId: res.payload.id });

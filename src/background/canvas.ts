@@ -214,6 +214,5 @@ export async function formatTabProperties(tab: ICanvasTab): Promise<IFormattedTa
     },
     data: { ...tab, id: tab.docId || tab.id },
   };
-  console.log("sending", result);
   return result;
 }

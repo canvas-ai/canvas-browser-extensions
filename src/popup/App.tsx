@@ -32,7 +32,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("context url is", JSON.stringify(variables.context?.url));
     requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
     requestVariableUpdate({ action: RUNTIME_MESSAGES.context_get });
 
@@ -44,15 +43,10 @@ const App: React.FC = () => {
   }, [variables.context.url]);
 
   useEffect(() => {
-    console.log("variables.connected", variables.connected);
     if (variables.connected) {
       requestUpdateTabs();
     }
   }, [variables.connected]);
-
-  useEffect(() => {
-    console.log(variables.connected, variables.context, tabs);
-  }, [variables.connected, variables.context, tabs]);
 
   const setConnectionDetailsClicked: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     setPopupOpen(true);
