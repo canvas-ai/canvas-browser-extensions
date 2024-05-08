@@ -140,11 +140,11 @@ export const filterRemovedPinnedTabs = async (tabsArray: ICanvasTab[]) => {
   await savePinnedTabsToStorage(pinnedTabs.filter(url => tabsArray.some(tab => tab.url === url)));
 }
 
-export const getSchemaTypes = () => {
-  const types = ['data/abstraction/tab'];
+export const genFeatureArray = () => {
+  const features = ['data/abstraction/tab'];
   const bt = config.browserIdentity.browserTag;
   if(bt.trim().length) {
-    types.push(`custom/tag/${bt.trim()}`);
+    features.push(`custom/tag/${bt.trim()}`);
   }
-  return types;
+  return features;
 }

@@ -80,8 +80,8 @@ class MySocket {
     });
   }  
 
-  emit(...args: any) {
-    return this.socket.emit(args[0], args[1], args[2]);
+  emit(...args: any[]) {
+    return this.socket.emit(...args);
   }
 
   isConnected() {

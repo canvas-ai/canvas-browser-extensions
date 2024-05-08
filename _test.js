@@ -60,7 +60,7 @@ function fetchOpenTabs() {
 function fetchTabsFromCanvas() {
     let canvasTabsMap = new Map();
     return new Promise(async (resolve, reject) => {
-        socket.emit('documents:get', { type: await getSchemaTypes() }, (res) => {
+        socket.emit('documents:get', { type: await genFeatureArray() }, (res) => {
             console.log('background.js | Tabs fetched: ', res);
             if (!res || res.status === 'error') resolve(canvasTabsMap) // TODO: Handle error
 
@@ -112,7 +112,7 @@ function fetchContextUrl() {
 }
 
 function fetchTabSchema() {
-    socket.emit('db:schema:get', { type: getSchemaTypes(), version: '2' }, function (res) {
+    socket.emit('db:schema:get', { type: genFeatureArray(), version: '2' }, function (res) {
         if (!res || res.status === 'error') {
             console.error('background.js | Tab schema not found');
         }
@@ -125,7 +125,7 @@ function fetchTabSchema() {
 function fetchStoredUrls() {
     socket.emit('listDocuments', {
         context: context.url,
-        type: getSchemaTypes(),
+        type: genFeatureArray(),
     }, (data) => {
         tabUrls = data;
         console.log('background.js | Stored URLs fetched: ', tabUrls);

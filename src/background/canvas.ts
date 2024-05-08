@@ -1,7 +1,7 @@
 import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
-import { getCurrentBrowser, getSchemaTypes, onContextTabsUpdated } from "./utils";
+import { getCurrentBrowser, genFeatureArray, onContextTabsUpdated } from "./utils";
 
 export function canvasFetchData(resource) {
   return new Promise(async (resolve, reject) => {
@@ -58,7 +58,7 @@ export function canvasFetchTabsForContext() {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
-      getSchemaTypes(),
+      genFeatureArray(),
       (res) => {
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
@@ -94,7 +94,7 @@ export function canvasFetchContextUrl(): Promise<string> {
 export function canvasFetchTabSchema() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: getSchemaTypes() }, (res) => {
+    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: genFeatureArray() }, (res) => {
       console.log("background.js | Tab schema fetched: ", res);
       resolve(res);
     });
@@ -106,7 +106,7 @@ export function canvasFetchTab(docId: number) {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET,
-      { type: getSchemaTypes(), docId },
+      { type: genFeatureArray(), docId },
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);
@@ -207,7 +207,7 @@ export function canvasCheckConnection() {
 export async function formatTabProperties(tab: ICanvasTab): Promise<IFormattedTabProperties> {
   if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
   const result = {
-    type: getSchemaTypes(),
+    type: genFeatureArray(),
     meta: {
       url: tab.url,
       browser: getCurrentBrowser()
