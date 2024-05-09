@@ -141,7 +141,7 @@ export const filterRemovedPinnedTabs = async (tabsArray: ICanvasTab[]) => {
 }
 
 export const genFeatureArray = () => {
-  const features = ['data/abstraction/tab'];
+  const features = [`custom/app/${getCurrentBrowser()}`];
   const bt = config.browserIdentity.browserTag;
   if(bt.trim().length) {
     features.push(`custom/tag/${bt.trim()}`);
