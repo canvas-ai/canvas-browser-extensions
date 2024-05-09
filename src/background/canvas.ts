@@ -3,55 +3,6 @@ import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { getCurrentBrowser, genFeatureArray, onContextTabsUpdated } from "./utils";
 
-export function canvasFetchData(resource) {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    if (!resource) {
-      console.error("background.js | No resource provided");
-      reject("No resource provided");
-    }
-
-    socket.emit(resource, (response) => {
-      console.log("background.js | Canvas fetchData response:", response);
-      resolve(response);
-    });
-  });
-}
-
-export function canvasInsertData(resource, data) {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    if (!resource) {
-      console.error("background.js | No resource provided");
-      reject("No resource provided");
-    }
-
-    if (!data) {
-      console.error("background.js | No data provided");
-      reject("No data provided");
-    }
-
-    socket.emit(resource, data, (response) => {
-      console.log("background.js | Canvas insertData response:", response);
-      resolve(response);
-    });
-  });
-}
-
-
-export function canvasFetchContext() {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, (res) => {
-      if (!res || res.status !== "success") {
-        reject("background.js | Error fetching context url from Canvas");
-      } else {
-        console.log("background.js | Context fetched: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
 
 export function canvasFetchTabsForContext() {
   return new Promise(async (resolve, reject) => {

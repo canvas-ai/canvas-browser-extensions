@@ -1,4 +1,4 @@
-import { canvasDeleteTab, canvasDeleteTabs, canvasFetchTabsForContext, canvasInsertData, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
+import { canvasDeleteTab, canvasDeleteTabs, canvasFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
 import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, genFeatureArray, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { getSocket } from "./socket";
@@ -228,15 +228,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case RUNTIME_MESSAGES.context_get_tree:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: context.tree });
-        break;
-
-      case RUNTIME_MESSAGES.context_set_url:
-        if (!message.url) return console.error('background.js | No context url specified');
-        canvasInsertData(SOCKET_MESSAGES.CONTEXT.SET_URL, message.url).then((res: any) => {
-          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error setting context url' });
-          console.log('background.js | Context url set: ', res.data)
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_set_url, payload: res });
-        });
         break;
 
       case RUNTIME_MESSAGES.context_tab_remove:
