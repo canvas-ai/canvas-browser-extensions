@@ -1,7 +1,7 @@
 import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
-import { getCurrentBrowser, onContextTabsUpdated } from "./utils";
+import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./utils";
 
 
 export function canvasFetchTabsForContext() {
@@ -10,6 +10,7 @@ export function canvasFetchTabsForContext() {
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
       'data/abstraction/tab',
+      genFeatureArray(),
       (res) => {
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
@@ -42,22 +43,14 @@ export function canvasFetchContextUrl(): Promise<string> {
   });
 }
 
-export function canvasFetchTabSchema() {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.SCHEMAS.GET, { type: 'data/abstraction/tab' }, (res) => {
-      console.log("background.js | Tab schema fetched: ", res);
-      resolve(res);
-    });
-  });
-}
 
 export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET,
-      { type: 'data/abstraction/tab', docId },
+      'data/abstraction/tab',
+      docId, 
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);
@@ -72,7 +65,7 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
     if (!tab) {
       reject("background.js | Invalid tab");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), genFeatureArray(), resolve);
   });
 }
 
@@ -82,9 +75,7 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), (res) => {
-      resolve(res);
-    });
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray(), resolve);
   });
 }
 
@@ -94,19 +85,18 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
   });
 }
 
-export function canvasRemoveTab(tab: ICanvasTab) {
+function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "delete") {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.REMOVE, tab.docId, (res) => {
-      console.log("background.js | Tab removed: ", res);
+    socket.emit(ROUTE, tab.docId, (res) => {
       if (res.status === "success") {
-        console.log(`background.js | Tab ${tab.id} removed from Canvas: `, res);
+        console.log(`background.js | Successful tab(${tab.id}) ${log} from canvas: `, res);
         index.removeCanvasTab(tab.url as string);
         onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
         resolve(res);
       } else {
-        console.error(`background.js | Remove failed for tab ${tab.id}:`)
+        console.error(`background.js | Failed ${log} for tab ${tab.id}:`)
         console.error(res);
         resolve(false);
       }
@@ -114,50 +104,47 @@ export function canvasRemoveTab(tab: ICanvasTab) {
   });
 }
 
-export function canvasRemoveTabs(tabs: ICanvasTab[]) { // TODO add SOCKET_MESSAGES.DOCUMENT.REMOVE_ARRAY
-  return Promise.all(tabs.map(canvasRemoveTab));
+function deleteOrRemoveTabs(ROUTE: string, tabs: ICanvasTab[], log: "remove" | "delete") {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    tabs = tabs.map(tab => {
+      if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+      return tab;
+    });
+    socket.emit(ROUTE, tabs.map(tab => tab.docId), (res) => {
+      if (res.status === "success") {
+        console.log(`background.js | Successful ${log} tabs from canvas result: `, res);
+        tabs.forEach(tab => index.removeCanvasTab(tab.url as string));
+        onContextTabsUpdated({ canvasTabs: { removedTabs: tabs } });
+        resolve(res);
+      } else {
+        console.error(`background.js | Failed ${log} for tabs:`)
+        console.error(res);
+        resolve(false);
+      }
+    });
+  });
 }
 
-export function canvasDeleteTabs(tabs: ICanvasTab[]) { // TODO add SOCKET_MESSAGES.DOCUMENT.DELETE_ARRAY
-  return Promise.all(tabs.map(canvasDeleteTab));
+export function canvasRemoveTab(tab: ICanvasTab) {
+  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT.REMOVE, tab, "remove");
 }
 
 export function canvasDeleteTab(tab: ICanvasTab) {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.DELETE, tab.docId, (res: ISocketResponse<any>) => {
-      if (res.status === "success") {
-        console.log("background.js | Tab deleted: ", res);
-        index.removeCanvasTab(tab.url as string);
-        onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
-        resolve(res);
-      } else {
-        console.error(`background.js | Delete failed for tab ${tab.id}:`)
-        console.error(res);
-        resolve(false);
-      }
-    });
-  });
+  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT.DELETE, tab, "remove");
 }
 
-export function canvasCheckConnection() {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    let intervalId = setInterval(() => {
-      if (!socket.isConnected()) {
-        console.log("background.js | Canvas backend not yet connected");
-      } else {
-        clearInterval(intervalId);
-        resolve(true);
-      }
-    }, 1000);
-  });
+export function canvasRemoveTabs(tabs: ICanvasTab[]) {
+  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT.REMOVE_ARRAY, tabs, "remove");
 }
 
-export async function formatTabProperties(tab: ICanvasTab): Promise<IFormattedTabProperties> {
+export function canvasDeleteTabs(tabs: ICanvasTab[]) { 
+  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT.DELETE_ARRAY, tabs, "delete");
+}
+
+export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
   if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-  const result = {
+  return {
     type: 'data/abstraction/tab',
     meta: {
       url: tab.url,
@@ -165,5 +152,4 @@ export async function formatTabProperties(tab: ICanvasTab): Promise<IFormattedTa
     },
     data: { ...tab, id: tab.docId || tab.id },
   };
-  return result;
 }

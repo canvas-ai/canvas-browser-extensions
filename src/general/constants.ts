@@ -56,11 +56,13 @@ export const SOCKET_EVENTS = {
 
 export const SOCKET_MESSAGES = {
   DOCUMENT: {
-    GET: "context:document:get",
-    GET_ARRAY: "context:document:getArray",
-    REMOVE: "context:document:remove",
-    DELETE: "context:document:delete",
-    INSERT: "context:document:insert",
+    GET:          "context:document:get",
+    GET_ARRAY:    "context:document:getArray",
+    REMOVE:       "context:document:remove",
+    REMOVE_ARRAY: "context:document:removeArray",
+    DELETE:       "context:document:delete",
+    DELETE_ARRAY: "context:document:deleteArray",
+    INSERT:       "context:document:insert",
     INSERT_ARRAY: "context:document:insertArray"
   },
 

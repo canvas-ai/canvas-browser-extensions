@@ -96,7 +96,7 @@ interface ISocketResponse<T> {
   payload: T;
 }
 
-type IRequestTypes = "data/abstraction/tab" | string[];
+type IRequestTypes = "data/abstraction/tab";
 
 interface ICanvasInsertResponsePayload {
   id: number;
@@ -116,7 +116,7 @@ type ICanvasInsertResponse = ISocketResponse<ICanvasInsertResponsePayload[]>;
 type ICanvasInsertOneResponse = ISocketResponse<ICanvasInsertResponsePayload>;
 
 interface IFormattedTabProperties {
-  type: IRequestTypes,
+  type: 'data/abstraction/tab',
   meta: Partial<ICanvasInsertMetaRequestInputs>,
   data: ICanvasTab,
 }
