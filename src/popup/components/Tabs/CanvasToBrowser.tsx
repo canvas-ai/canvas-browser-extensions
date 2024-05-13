@@ -49,9 +49,7 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
 
   return (
     <div className="tab-collection-container">
-      <h5>Open all tabs
-        (<span className="" id="canvas-tab-delta-count">{tabs.canvasTabs?.length}</span>)
-      </h5>
+      <h5>Open all tabs</h5>
       <div className="button-container">
         <a className="black white-text waves-effect waves-light btn-small right" onClick={openAllClicked}>Open all<i className="material-icons right">sync</i></a>
         {checkedCanvasTabs.length ? (
@@ -73,7 +71,7 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
       <Collapsible accordion={false}>
         <CollapsibleItem
           expanded={true}
-          header="Closed Canvas Tabs"
+          header={`Closed Canvas Tabs (${tabs.canvasTabs.length})`}
           icon={<Icon>sync</Icon>}
           node="div"
         >
@@ -85,7 +83,7 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
 
         <CollapsibleItem
           expanded={false}
-          header="Opened Canvas Tabs"
+          header={`Opened Canvas Tabs (${tabs.openedCanvasTabs.length})`}
           icon={<Icon>cloud_sync</Icon>}
           node="div"
         >

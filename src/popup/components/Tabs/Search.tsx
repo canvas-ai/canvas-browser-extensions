@@ -38,7 +38,7 @@ const Search: React.FC<any> = ({ }) => {
                 (
                   <CollapsibleItem
                     expanded={true}
-                    header="Closed Canvas Tabs"
+                    header={`Closed Canvas Tabs (${filteredTabs.canvasTabs.length})`}
                     icon={<Icon>sync</Icon>}
                     node="div"
                   >
@@ -52,7 +52,7 @@ const Search: React.FC<any> = ({ }) => {
                 (
                   <CollapsibleItem
                     expanded={true}
-                    header="Opened Canvas Tabs"
+                    header={`Opened Canvas Tabs (${filteredTabs.openedCanvasTabs.length})`}
                     icon={<Icon>cloud_sync</Icon>}
                     node="div"
                   >
@@ -76,7 +76,7 @@ const Search: React.FC<any> = ({ }) => {
                 (
                   <CollapsibleItem
                     expanded={true}
-                    header="Syncable Browser Tabs"
+                    header={`Syncable Browser Tabs (${filteredTabs.browserTabs.length})`}
                     icon={<Icon>sync</Icon>}
                     node="div"
                   >
@@ -90,7 +90,7 @@ const Search: React.FC<any> = ({ }) => {
                 (
                   <CollapsibleItem
                     expanded={true}
-                    header="Synced Browser Tabs"
+                    header={`Synced Browser Tabs (${filteredTabs.syncedBrowserTabs.length})`}
                     icon={<Icon>cloud_sync</Icon>}
                     node="div"
                   >

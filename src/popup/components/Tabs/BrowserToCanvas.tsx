@@ -54,9 +54,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
 
   return (
     <div className="tab-collection-container">
-      <h5>Sync to Canvas
-        (<span className="">{tabs.browserTabs?.length}</span>)
-      </h5>
+      <h5>Sync to Canvas</h5>
       <div className="button-container">
         <a onClick={syncAllClicked}
           className="black white-text waves-effect waves-light btn-small right">
@@ -81,7 +79,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
       <Collapsible accordion={false}>
         <CollapsibleItem
           expanded={true}
-          header="Syncable Browser Tabs"
+          header={`Syncable Browser Tabs (${tabs.browserTabs.length})`}
           icon={<Icon>sync</Icon>}
           node="div"
         >
@@ -94,7 +92,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
 
         <CollapsibleItem
           expanded={false}
-          header="Synced Browser Tabs"
+          header={`Synced Browser Tabs (${tabs.syncedBrowserTabs.length})`}
           icon={<Icon>cloud_sync</Icon>}
           node="div"
         >

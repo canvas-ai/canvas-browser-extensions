@@ -9,8 +9,7 @@ export function canvasFetchTabsForContext() {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
-      'data/abstraction/tab',
-      genFeatureArray(),
+      genFeatureArray("READ"),
       (res) => {
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
@@ -49,7 +48,7 @@ export function canvasFetchTab(docId: number) {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT.GET,
-      'data/abstraction/tab',
+      genFeatureArray("READ"),
       docId, 
       (res) => {
         console.log("background.js | Tab fetched: ", res);
@@ -65,7 +64,7 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
     if (!tab) {
       reject("background.js | Invalid tab");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), genFeatureArray(), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), genFeatureArray("WRITE"), resolve);
   });
 }
 
@@ -75,7 +74,7 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray(), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray("WRITE"), resolve);
   });
 }
 

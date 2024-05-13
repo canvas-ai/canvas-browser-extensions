@@ -140,11 +140,14 @@ export const filterRemovedPinnedTabs = async (tabsArray: ICanvasTab[]) => {
   await savePinnedTabsToStorage(pinnedTabs.filter(url => tabsArray.some(tab => tab.url === url)));
 }
 
-export const genFeatureArray = () => {
-  const features = [`custom/app/${getCurrentBrowser()}`];
-  const bt = config.browserIdentity.browserTag;
-  if(bt.trim().length) {
-    features.push(`custom/tag/${bt.trim()}`);
+export const genFeatureArray = (requestType: "READ" | "WRITE" = "READ") => {
+  const features = [`data/abstraction/tab`];
+  if(requestType === "WRITE") {
+    features.push(`custom/app/${getCurrentBrowser()}`);
+  }
+  const bt = config.browserIdentity.browserTag.trim();
+  if((requestType === "WRITE" || config.browserIdentity.syncOnlyTaggedTabs) && bt.length) {
+    features.push(`custom/tag/${bt}`);
   }
   return features;
 }
