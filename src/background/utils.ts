@@ -130,9 +130,9 @@ export const sendRuntimeMessage = async (message: { type: string, payload: any }
 
 export const getCurrentBrowser: () => IBrowserType = () => {
   const userAgent = navigator.userAgent;
-  if(userAgent.includes("Edg")) return "Edge";
-  if(userAgent.includes("Firefox")) return "Firefox";
-  return "Chrome";
+  if(userAgent.includes("Edg")) return "edge";
+  if(userAgent.includes("Firefox")) return "firefox";
+  return "chrome";
 }
 
 export const filterRemovedPinnedTabs = async (tabsArray: ICanvasTab[]) => {

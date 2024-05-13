@@ -83,7 +83,7 @@ type IVersionInput = 0;
 
 type IEncodings = "utf8";
 
-type IBrowserType = "Edge" | "Firefox" | "Chrome";
+type IBrowserType = "edge" | "firefox" | "chrome";
 
 interface ICanvasInsertMetaRequestInputs {
   url: string;
