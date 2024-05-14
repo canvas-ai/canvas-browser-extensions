@@ -4,6 +4,8 @@ import { useDispatch } from 'react-redux';
 import { setConfig } from '../../redux/config/configActions';
 import { Dispatch } from 'redux';
 import { browser } from '@/general/utils';
+import SearchableSelectBox from '@/popup/common-components/inputs/SearchableSelectBox';
+import { getContextBreadcrumbs, showSuccessMessage } from '@/popup/utils';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
@@ -17,6 +19,33 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   useEffect(() => {
     setTransport({...config.transport});
   }, [config.transport]);
+
+  const [sessions, setSessions] = useState(["/work/foo", "/work/bar"]);
+  const [selectedSession, setSelectedSession] = useState(sessions[1]);  
+
+  const sessionChanged = (e) => {
+    setSelectedSession(e.value);
+  }
+
+  const addSession = (session: string) => {
+    showSuccessMessage(`Lets suppose session ${session} added`);
+    setSessions(sessions => {
+      sessions.push(session.toLowerCase());
+      return sessions;
+    })
+  }
+
+  const onAddSession = (session: string) => {
+    const s = sessions.find(s => s.toLowerCase().endsWith(`/${session.trim()}`));
+    if(s) {
+      // already added
+      setSelectedSession(s);
+    } else {
+      const addableSession = `/work/${session.replace("/work/", "")}`; // TODO make it better
+      addSession(addableSession);
+      setSelectedSession(addableSession)
+    }
+  }
 
   const saveConnectionSettings = (e: any, config: IConfigProps) => {
     if(closePopup) closePopup(e);
@@ -68,9 +97,18 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       </div>
 
       <div className="input-container">
-        <label className="form-label" htmlFor="connection-setting-pinToContext">Pin To Context</label>
+        <label className="form-label" htmlFor="connection-setting-pinToContext">Pin Session To Context</label>
         <div className="form-control">
-          <input type="text" id="connection-setting-pinToContext" value={transport.pinToContext} onChange={(e) => setTransport({...transport, pinToContext: e.target.value })} />
+          <SearchableSelectBox 
+            addable={true}
+            reversed={true}
+            options={sessions.map(session => ({ label: getContextBreadcrumbs(session).map(cb => cb.textContent).join(" > "), value: session }))}
+            onChange={sessionChanged}
+            onAdd={onAddSession}
+            addText={`Add /work/{term}`}
+            defaultValue={{ label: getContextBreadcrumbs(selectedSession).map(cb => cb.textContent).join(" > "), value: selectedSession }}
+          />
+          {/* <Select options={sessions} defaultValue={defaultValue} onChange={sessionChanged} filterOption={filterOption}/> */}
         </div>
       </div>
 
