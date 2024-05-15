@@ -16,6 +16,7 @@ interface ISelectBoxProps {
   addable?: boolean;
   onAdd?: (term: string) => void;
   reversed?: boolean;
+  alwaysShowAddOption?: boolean;
   addText?: string;
 }
 
@@ -65,7 +66,7 @@ const SearchableSelectBox: React.FC<ISelectBoxProps> = (props) => {
           <li className={styles.searchInputContainer}>
             <input type="text" ref={searchRef} placeholder="Filter options" value={searchTerm} onBlur={(e) => setIsOpen(isMouseIn)} onChange={(e) => setSearchTerm(e.target.value)} />
           </li>
-          {props.addable && searchTerm.trim().length ? (
+          {props.addable && (props.alwaysShowAddOption || searchTerm.trim().length) ? (
             <li className={styles.option} onClick={(e) => addOptionClicked(searchTerm)}>{props.addText ? props.addText.replaceAll("{term}", searchTerm) : `Add "${searchTerm}"`}</li>
           ) : !searchResults.length ? (
             <li className={styles.noResults}>No options</li>
