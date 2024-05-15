@@ -38,6 +38,10 @@ export const requestUpdateTabs = () => {
   requestVariableUpdate({ action: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser });
 }
 
+export const requestUpdateSessionsList = () => {
+  requestVariableUpdate({ action: RUNTIME_MESSAGES.update_sessions_list });
+}
+
 export const tabsUpdated = (dispatch: Dispatch<any>, updateData: IUpdateTypes, adder: (tabs: ICanvasTab[]) => void, remover: (tabs: ICanvasTab[]) => void) => {
   if(updateData.insertedTabs && updateData.insertedTabs.length) {
     tabsInserted(dispatch, updateData.insertedTabs, adder);

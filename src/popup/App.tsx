@@ -4,7 +4,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ConnectedState from './components/ConnectedState';
 import DisconnectedState from './components/DisconnectedState';
-import { requestUpdateTabs, requestVariableUpdate } from './utils';
+import { requestUpdateSessionsList, requestUpdateTabs, requestVariableUpdate } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
 import store from './redux/store';
 import { useSelector } from 'react-redux';
@@ -45,6 +45,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (variables.connected) {
       requestUpdateTabs();
+      requestUpdateSessionsList();
     }
   }, [variables.connected]);
 

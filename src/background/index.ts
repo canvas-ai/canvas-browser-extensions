@@ -6,6 +6,7 @@ import index from "./TabIndex";
 import { context } from "./context";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
+import { updateSessionsList } from "./session";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
@@ -386,7 +387,11 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       case RUNTIME_MESSAGES.socket_retry:
         socket.initializeSocket();
         break;
-
+  
+      case RUNTIME_MESSAGES.update_sessions_list:
+        updateSessionsList();
+        break;
+    
       default:
         console.error(`background.js | Unknown message action: ${message.action}`);
         break;

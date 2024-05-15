@@ -1,5 +1,5 @@
 import React from 'react';
-import { getContextBreadcrumbs, isOnUniverse, requestUpdateTabs } from '../utils';
+import { isOnUniverse } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { useSelector } from 'react-redux';
 import { browser } from '@/general/utils';
