@@ -4,7 +4,7 @@ import config from "@/general/config";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { context } from "./context";
-import { RUNTIME_MESSAGES, SOCKET_MESSAGES } from "@/general/constants";
+import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
@@ -23,18 +23,15 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     }
   };
 
-  let watchTabProperties = {
-    properties: [
-      "url",
-      "hidden",
-      "pinned",
-      "mutedInfo"
-    ]
-  };
+  let watchTabProperties = [
+    "url",
+    "hidden",
+    "pinned",
+    "mutedInfo"
+  ];
 
   // Custom index module for easier delta comparison
   console.log('background.js | Index initialized: ', index.counts());
-
 
 
   /**
@@ -50,7 +47,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     console.log('background.js | Tab updated: ', tabId, changeInfo, tab);
 
     // Check if the changed properties matters
-    if (!Object.keys(changeInfo).some(cik => watchTabProperties.properties.some(wtpk => cik === wtpk)))
+    if (!Object.keys(changeInfo).some(cik => watchTabProperties.some(wtpk => cik === wtpk)))
       return;
 
     if (changeInfo.status === "complete" && config.sync.autoBrowserTabsSync === "Always") {
@@ -205,6 +202,12 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
         break;
 
+      case RUNTIME_MESSAGES.config_set:
+        if (typeof message.value !== "object") return console.error('background.js | Invalid config', message.value);
+        await config.setMultiple(message.value);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        break;
+  
       // Context
       case RUNTIME_MESSAGES.context_get:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get, payload: context });

@@ -11,7 +11,7 @@ export const loadInitialConfigState = () => async (dispatch: Dispatch<ConfigActi
   try {
     // Retrieve sync state from Chrome storage
     const conf = await new Promise<IConfigProps>((resolve, reject) => {
-      config.initialize().then(() => {
+      config.load().then(() => {
         resolve(config.allProps());
       })
     });

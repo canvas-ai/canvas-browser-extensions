@@ -1,6 +1,6 @@
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { showErrorMessage, showSuccessMessage, tabsUpdated } from "./utils";
-import { setConnected, setContext, setPinnedTabs, setRetrying } from "./redux/variables/varActions";
+import { setConnected, setContext, setPinnedTabs, setRetrying, setSessionList } from "./redux/variables/varActions";
 import { addBrowserTabs, addCanvasTabs, addOpenedCanvasTabs, addSyncedBrowserTabs, removeBrowserTabs, removeCanvasTabs, removeOpenedCanvasTabs, removeSyncedBrowserTabs, setBrowserTabs, setCanvasTabs, setOpenedCanvasTabs, setSyncedBrowserTabs } from "./redux/tabs/tabActions";
 import { Dispatch } from "redux";
 import { setConfig } from "./redux/config/configActions";
@@ -33,6 +33,9 @@ export const messageListener =
         dispatch(setPinnedTabs(pinnedTabs));        
       })
       break;
+    }
+    case RUNTIME_MESSAGES.update_sessions_list: {
+      dispatch(setSessionList(message.payload as ISession[]));
     }
     case RUNTIME_MESSAGES.socket_event: {
       socketEventHandler(dispatch, message.payload);

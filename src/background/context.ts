@@ -1,7 +1,7 @@
 import config from "@/general/config";
 import index from "./TabIndex";
 import { canvasFetchTabsForContext, canvasInsertTabArray } from "./canvas";
-import { browserCloseNonContextTabs, browserOpenTabArray } from "./utils";
+import { browserCloseNonContextTabs, browserOpenTabArray, sendRuntimeMessage } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
 
@@ -77,11 +77,5 @@ export const setContextUrl = async (url) => {
 }
 
 export const contextUrlChanged = () => {
-  browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url }, (response) => {
-    if (browser.runtime.lastError) {
-      console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
-    } else {
-      console.log('background.js | Message to UI sent successfully');
-    }
-  });
+  sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url });
 }

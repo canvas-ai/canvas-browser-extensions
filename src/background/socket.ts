@@ -6,6 +6,7 @@ import { setContextUrl, updateContext } from './context';
 import { sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
 import { browser } from '@/general/utils';
+import { createSession, updateSessionsList } from './session';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
   withCredentials: true,
@@ -43,12 +44,15 @@ class MySocket {
   
       this.sendSocketEvent(SOCKET_EVENTS.connect);
 
-      canvasFetchContextUrl().then((url: string) => {
-        console.log('background.js | [socket.io] Received context url: ', url);
-        updateContext({ url, color: "#fff" });
+      createSession().then(() => {
+        updateSessionsList();
+        canvasFetchContextUrl().then((url: string) => {
+          console.log('background.js | [socket.io] Received context url: ', url);
+          updateContext({ url, color: "#fff" });
+        });
+        
+        updateLocalCanvasTabsData();
       });
-
-      updateLocalCanvasTabsData();
     });
   
     this.socket.on('connect_error', (error) => {
@@ -71,17 +75,11 @@ class MySocket {
   }
 
   sendSocketEvent(e: string) {
-    browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.socket_event, payload: { event: e } }, (response) => {
-      if (browser.runtime.lastError) {
-        console.log(`background.js | Unable to connect to UI, error: ${browser.runtime.lastError}`);
-      } else {
-        console.log('background.js | Message to UI sent successfully');
-      }
-    });
+    sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_event, payload: { event: e } });
   }  
 
-  emit(...args: any[]) {
-    return this.socket.emit(...args);
+  emit(endpoint: string, ...args: any[]) {
+    return this.socket.emit(endpoint, ...args);
   }
 
   isConnected() {
@@ -92,7 +90,7 @@ class MySocket {
 let socket: MySocket;
 
 export const getSocket = async () => {
-  await config.initialize();
+  await config.load();
   if(socket) return socket;
   socket = new MySocket();
   return socket;

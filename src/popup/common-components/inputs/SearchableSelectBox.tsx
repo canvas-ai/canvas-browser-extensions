@@ -4,11 +4,12 @@ import { cx } from '@/popup/utils';
 
 interface ISelectOption {
   label: string;
+  note?: string;
   value: string;
 }
 
 interface ISelectBoxProps {
-  defaultValue?: ISelectOption;
+  defaultValue?: string;
   placeholder?: string;
   onChange?: (item: ISelectOption) => void;
   options: ISelectOption[];
@@ -48,23 +49,29 @@ const SearchableSelectBox: React.FC<ISelectBoxProps> = (props) => {
     setIsOpen(!isOpen);
   }
 
+  const getOptionByValue = (value: string) => {
+    return props.options.find(o => o.value.toLowerCase() === value.toLowerCase());
+  };
+
+  const selectedOption = getOptionByValue(props.defaultValue || "");
+
   let searchResults = props.options.filter(option => option.label.toLowerCase().includes(searchTerm.trim()) || option.value.toLowerCase().includes(searchTerm.trim()));
 
   return (
     <div className={cx(styles.selectBoxContainer, isOpen ? styles.open : "", props.reversed ? styles.reversed : "")} onMouseEnter={(e) => setIsMouseIn(true)} onMouseLeave={(e) => setIsMouseIn(false)}>
       <div className={styles.selectBox}>
-        <div className={styles.selectedOption} onClick={() => selectBoxClicked()}>{props.defaultValue?.label || (<span className={styles.placeholder}>{props.placeholder || "Select an item"}</span>)}</div>
+        <div className={styles.selectedOption} onClick={() => selectBoxClicked()}>{selectedOption ? <>{selectedOption.label} <span className={styles.note}>{selectedOption.note}</span></> : (<span className={styles.placeholder}>{props.placeholder || "Select an item"}</span>)}</div>
         <ul className={styles.options}>
           <li className={styles.searchInputContainer}>
-            <input type="text" ref={searchRef} placeholder="Filter results" value={searchTerm} onBlur={(e) => setIsOpen(isMouseIn)} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" ref={searchRef} placeholder="Filter options" value={searchTerm} onBlur={(e) => setIsOpen(isMouseIn)} onChange={(e) => setSearchTerm(e.target.value)} />
           </li>
           {props.addable && searchTerm.trim().length ? (
             <li className={styles.option} onClick={(e) => addOptionClicked(searchTerm)}>{props.addText ? props.addText.replaceAll("{term}", searchTerm) : `Add "${searchTerm}"`}</li>
           ) : !searchResults.length ? (
-            <li className={styles.noResults}>No results</li>
+            <li className={styles.noResults}>No options</li>
           ) : null}
           {searchResults.map(option => (
-            <li key={option.label + option.value} className={styles.option} onClick={(e) => optionChanged(option)}>{option.label}</li>
+            <li key={option.label + option.value} className={styles.option} onClick={(e) => optionChanged(option)}>{option.label} <span className={styles.note}>{option.note}</span></li>
           ))}
         </ul>
       </div>

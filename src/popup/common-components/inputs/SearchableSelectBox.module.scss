@@ -18,10 +18,16 @@
       user-select: none;
       padding: 5px;
       cursor: pointer;
-      
+
       .placeholder {
         color: gray;
       }
+    }
+    
+    .note {
+      color: #ababab;
+      font-size: .9em;
+      margin-left: .2rem;
     }
 
     ul.options {

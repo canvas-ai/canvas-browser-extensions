@@ -121,7 +121,7 @@ export const sleep = (ms: number = 1000) => new Promise(r => setTimeout(r, ms));
 
 
 export const onContextTabsUpdated = (updateInfo: IUpdatedTabsData) => {
-  browser.runtime.sendMessage({ type: RUNTIME_MESSAGES.tabs_updated, payload: updateInfo }).catch(e => console.log(e));
+  sendRuntimeMessage({ type: RUNTIME_MESSAGES.tabs_updated, payload: updateInfo }).catch(e => console.log(e));
 }
 
 export const sendRuntimeMessage = async (message: { type: string, payload: any }) => {

@@ -8,8 +8,6 @@ export const requestVariableUpdate = (message: { action: string }) => {
 }
 
 export const sanitizeContextUrl = (url: string | undefined) => {
-  console.log('UI | Sanitizing context URL')
-  console.log(url)
   if (!url || url == '/' || url == 'universe:///') return 'Universe'
   url = url
       .replace(/\/\//g, '/')
@@ -21,7 +19,6 @@ export const sanitizeContextUrl = (url: string | undefined) => {
 }
 
 export const getContextBreadcrumbs = (url: string | undefined) => {
-  console.log('UI | Updating breadcrumbs')
   if (!url) return [];
   if (typeof url !== 'string') return [];
 

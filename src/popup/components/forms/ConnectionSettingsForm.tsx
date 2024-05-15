@@ -5,7 +5,7 @@ import { setConfig } from '../../redux/config/configActions';
 import { Dispatch } from 'redux';
 import { browser } from '@/general/utils';
 import SearchableSelectBox from '@/popup/common-components/inputs/SearchableSelectBox';
-import { getContextBreadcrumbs, showSuccessMessage } from '@/popup/utils';
+import { DEFAULT_SESSION, RUNTIME_MESSAGES } from '@/general/constants';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
@@ -20,39 +20,49 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
     setTransport({...config.transport});
   }, [config.transport]);
 
-  const [sessions, setSessions] = useState(["/work/foo", "/work/bar"]);
-  const [selectedSession, setSelectedSession] = useState(sessions[1]);  
+  const sessions: ISession[] = variables.sessions.map(session => ({ id: session.id, baseUrl: session.baseUrl }));
+  const [selectedSession, setSelectedSession] = useState('/');  
 
-  const sessionChanged = (e) => {
-    setSelectedSession(e.value);
+  useEffect(() => {
+    setSelectedSession(config.session.baseUrl || '/');
+  }, [config.session.baseUrl]);
+
+  const sessionChanged = (option: any) => {
+    setSelectedSession(option.value);
   }
 
-  const addSession = (session: string) => {
-    showSuccessMessage(`Lets suppose session ${session} added`);
-    setSessions(sessions => {
-      sessions.push(session.toLowerCase());
-      return sessions;
-    })
-  }
+  // const addSession = (session: string) => {
+  //   showSuccessMessage(`Lets suppose session ${session} added`);
+  //   setSessions(sessions => {
+  //     sessions.push(session.toLowerCase());
+  //     return sessions;
+  //   })
+  // }
 
-  const onAddSession = (session: string) => {
-    const s = sessions.find(s => s.toLowerCase().endsWith(`/${session.trim()}`));
-    if(s) {
-      // already added
-      setSelectedSession(s);
-    } else {
-      const addableSession = `/work/${session.replace("/work/", "")}`; // TODO make it better
-      addSession(addableSession);
-      setSelectedSession(addableSession)
-    }
-  }
+  // const onAddSession = (session: string) => {
+  //   const s = sessions.find(s => s.toLowerCase().endsWith(`/${session.trim()}`));
+  //   if(s) {
+  //     // already added
+  //     setSelectedSession(s);
+  //   } else {
+  //     const addableSession = `/work/${session.replace("/work/", "")}`; // TODO make it better
+  //     addSession(addableSession);
+  //     setSelectedSession(addableSession)
+  //   }
+  // }
 
   const saveConnectionSettings = (e: any, config: IConfigProps) => {
     if(closePopup) closePopup(e);
     dispatch(setConfig(config));
-    browser.runtime.sendMessage({ action: 'config:set:item', key: "transport", value: transport }, (response) => {
-      browser.runtime.sendMessage({ action: 'socket:retry' });
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set, value: config }, (response) => {
+      setTimeout(() => {
+        browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
+      }, 100);
     });
+  }
+
+  const getSessionByBaseUrl = (baseUrl: string) => {
+    return sessions.find(s => s.baseUrl === baseUrl) || DEFAULT_SESSION;
   }
 
   return (
@@ -102,13 +112,11 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
           <SearchableSelectBox 
             addable={true}
             reversed={true}
-            options={sessions.map(session => ({ label: getContextBreadcrumbs(session).map(cb => cb.textContent).join(" > "), value: session }))}
+            options={sessions.map(session => ({ label: session.id, value: session.baseUrl, note: session.baseUrl }))}
             onChange={sessionChanged}
-            onAdd={onAddSession}
             addText={`Add /work/{term}`}
-            defaultValue={{ label: getContextBreadcrumbs(selectedSession).map(cb => cb.textContent).join(" > "), value: selectedSession }}
+            defaultValue={selectedSession}
           />
-          {/* <Select options={sessions} defaultValue={defaultValue} onChange={sessionChanged} filterOption={filterOption}/> */}
         </div>
       </div>
 
@@ -117,7 +125,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
           className="btn blue waves-effect waves-light" 
           style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }} 
           disabled={variables.retrying} 
-          onClick={(e) => saveConnectionSettings(e, { ...config, transport })}
+          onClick={(e) => saveConnectionSettings(e, { ...config, transport, session: getSessionByBaseUrl(selectedSession) })}
         >Save and Connect</button>
       </div>
     </div>

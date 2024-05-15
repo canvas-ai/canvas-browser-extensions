@@ -31,7 +31,7 @@ interface IConfigProps {
     browserTag: string
   },
 
-  session: {},
+  session: ISession,
 
   transport: {
     protocol: IProtocol,
@@ -64,6 +64,7 @@ interface IUpdatedTabsData {
 interface IVarState {
   connected: boolean;
   context: IContext;
+  sessions: ISession[];
   retrying: boolean;
   pinnedTabs: string[];
 }
@@ -119,4 +120,22 @@ interface IFormattedTabProperties {
   type: 'data/abstraction/tab',
   meta: Partial<ICanvasInsertMetaRequestInputs>,
   data: ICanvasTab,
+}
+
+interface ISessionContext {
+    id: string;
+    sessionId: string;
+    baseUrl: string;
+    url: string;
+    path: string;
+    array: any[];
+    contextArray: any[];
+    featureArray: any[];
+    filterArray: any[];
+}
+
+interface ISession {
+  id: string;
+  baseUrl: string;
+  contexts?: { [key: string]: ISessionContext };
 }
