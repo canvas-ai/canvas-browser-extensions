@@ -23,7 +23,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   }, [config.transport]);
 
   const sessions: ISession[] = variables.sessions.map(session => ({ id: session.id, baseUrl: session.baseUrl }));
-  const [selectedSession, setSelectedSession] = useState('/');
+  const [selectedSession, setSelectedSession] = useState(DEFAULT_SESSION.id);
   const [addableSession, setAddableSession] = useState({
     id: "",
     baseUrl: "/"
@@ -31,8 +31,8 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const [showAddSessionForm, setShowAddSessionForm] = useState(false);
 
   useEffect(() => {
-    setSelectedSession(config.session.baseUrl || '/');
-  }, [config.session.baseUrl]);
+    setSelectedSession(config.session.id || DEFAULT_SESSION.id);
+  }, [config.session.id]);
 
   const sessionChanged = (option: any) => {
     setSelectedSession(option.value);
@@ -52,8 +52,8 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
     });
   }
 
-  const getSessionByBaseUrl = (baseUrl: string) => {
-    return sessions.find(s => s.baseUrl === baseUrl) || DEFAULT_SESSION;
+  const getSessionByID = (id: string) => {
+    return sessions.find(s => s.id === id) || DEFAULT_SESSION;
   }
 
   const validateBaseUrl = (baseUrl: string) => {
@@ -68,14 +68,12 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
     addableSession.baseUrl = '/' + addableSession.baseUrl.split("/").filter(part => part.length).map(part => part.toLowerCase()).join("/");
     if(!addableSession.id.length)
       return showErrorMessage("Session ID is required!");
-    if(sessions.some(session => session.baseUrl === addableSession.baseUrl))
-      return showErrorMessage("The base URL already exists!");
     if(sessions.some(session => session.id.toLowerCase() === addableSession.id.toLowerCase()))
       return showErrorMessage("The session ID already exists!");
 
     dispatch(setSessionList([...sessions, addableSession]));
     setShowAddSessionForm(false);
-    setSelectedSession(addableSession.baseUrl);
+    setSelectedSession(addableSession.id);
     setAddableSession({ baseUrl: "/", id: "" });
   }
 
@@ -95,7 +93,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
             <div className="form-control">
               <input
                 type="text" 
-                id="session-id"
+                id="session-base-url"
                 value={addableSession.baseUrl}
                 onChange={(e) => setAddableSession({ ...addableSession, baseUrl: validateBaseUrl(e.target.value) })}
               />
@@ -166,7 +164,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
             <label className="form-label" htmlFor="connection-setting-pinToContext">Pin Session To Context</label>
             <div className="form-control">
               <SearchableSelectBox
-                options={sessions.map(session => ({ label: session.id, value: session.baseUrl, note: session.baseUrl }))}
+                options={sessions.map(session => ({ label: session.id, value: session.id, note: session.baseUrl }))}
                 onChange={sessionChanged}
                 addText={`Add new session`}
                 defaultValue={selectedSession}
@@ -184,7 +182,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
               className="btn blue waves-effect waves-light"
               style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }}
               disabled={variables.retrying}
-              onClick={(e) => saveConnectionSettings(e, { ...config, transport, session: getSessionByBaseUrl(selectedSession) })}
+              onClick={(e) => saveConnectionSettings(e, { ...config, transport, session: getSessionByID(selectedSession) })}
             >Save and Connect</button>
           </div>
         </div>
