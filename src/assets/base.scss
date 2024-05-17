@@ -1,0 +1,266 @@
+@import "materialize.css";
+@import "themes/default/style.css";
+
+html,
+body {
+  width: 680px;
+  min-height: 580px;
+  height: auto;
+  font-family: 'Roboto', sans-serif;
+}
+
+body {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+main {
+  flex: 1 0 auto;
+  margin-bottom: 60px;
+}
+
+.context-url {
+  padding-left: 18px;
+}
+
+#breadcrumb-container {
+  margin-left: 12px;
+}
+
+.breadcrumb,
+.breadcrumb::before {
+  color: rgba(32, 32, 32, 0.7);
+  font-weight: 600;
+}
+
+.collection-item {
+  display: flex;
+  justify-content: space-between;
+  vertical-align: middle;
+  align-items: center;
+
+  a.truncate {
+    display: flex;
+    position: relative;
+    padding-left: 20px;
+    text-decoration: none;
+    flex-grow: 1;
+
+    img {
+      width: 16px;
+      height: 16px;
+      margin-right: 8px;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+  }
+
+  >p {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding-right: 32px;
+
+  }
+
+  &:hover {
+    background-color: rgba(122, 122, 122, 0.1);
+  }
+
+  .checkbox-container {
+    margin-right: 10px;
+    display: flex;
+
+    input[type="checkbox"] {
+      position: relative;
+      opacity: 1;
+      width: 18px;
+      height: 18px;
+      pointer-events: all;
+    }
+  }
+}
+
+/**
+* Overrides for tab colors
+**/
+
+.tabs.tabs-transparent .tab a,
+.tabs.tabs-transparent .tab.disabled a,
+.tabs.tabs-transparent .tab.disabled a:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tabs .tab a {
+  color: rgba(66, 66, 66, 0.7);
+}
+
+.tabs .tab a:focus,
+.tabs .tab a:focus.active {
+  background-color: rgba(66, 66, 66, 0.1);
+  outline: none;
+}
+
+.tabs .tab a:hover,
+.tabs .tab a.active {
+  background-color: transparent;
+  color: #424242;
+}
+
+.tabs .tab.disabled a,
+.tabs .tab.disabled a:hover {
+  color: rgba(66, 66, 66, 0.4);
+  cursor: default;
+}
+
+.tabs .indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background-color: #424242;
+  will-change: left, right;
+}
+
+li.tab {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  text-transform: none !important;
+}
+
+.popup-container {
+  position: fixed;
+  z-index: 99999999;
+  height: 100%;
+  width: 100%;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  visibility: hidden;
+}
+
+.popup-container.popup-opened {
+  visibility: visible;
+}
+
+.popup-container .popup-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.popup-container .popup-content {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 0 3px gray;
+  border: 1px solid gray;
+  left: -700px;
+  padding: 20px;
+  max-width: 400px;
+  min-width: 300px;
+  width: 80%;
+
+  transition: .2s ease-in;
+}
+
+.popup-container.popup-opened .popup-content {
+  left: 50%;
+}
+
+.connection-settings-popup {}
+
+.connection-settings-popup .input-field {
+  width: 100%;
+}
+
+.connection-settings-popup .input-field input {
+  width: 100%;
+}
+
+.add-session-form,
+.connection-settings-form,
+.sync-settings-form,
+.browser-identity-settings-form {
+  display: flex;
+  flex-wrap: wrap;
+
+  .input-container {
+    width: 47%;
+    margin-right: 1.5%;
+    margin-bottom: 1rem;
+
+    &:nth-child(2n) {
+      margin-left: 1.5%;
+      margin-right: 0;
+    }
+
+    input {
+      background-color: rgba(255, 255, 255, 0.9);
+      width: calc(100% - 12px);
+      padding: 0 5px;
+      border: 1px solid #f2f2f2;
+      border-radius: 2px;
+      height: 3rem;
+      font-size: 14px;
+
+      &:focus {
+        outline: 1px solid #c9f3ef;
+      }
+    }
+
+    select {
+      font-size: 14px;
+      padding: 0 5px;
+    }
+  }
+}
+
+.collapsible-header {
+  line-height: 2.2;
+}
+
+.material-icons.pinned-tab {
+  color: gray;
+  transform: rotate3d(0, 1, 1, 45deg);
+}
+
+.tab-collection-container {
+  .collapsible {
+    .collapsible-header {
+      background: whitesmoke;
+    }
+
+    .collapsible-body {
+      padding: 0;
+    }
+  }
+
+  .button-container {
+    display: flex;
+    justify-content: space-evenly;
+    
+    .btn, .btn-large, .btn-small,
+    .btn-flat {
+      padding: 0 10px;
+    }  
+  }
+}
+
+.no-tabs-found {
+  font-size: 14px;
+  color: darkred;
+  font-style: italic;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: whitesmoke;
+}
