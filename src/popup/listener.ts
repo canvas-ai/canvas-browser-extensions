@@ -36,6 +36,7 @@ export const messageListener =
     }
     case RUNTIME_MESSAGES.update_sessions_list: {
       dispatch(setSessionList(message.payload as ISession[]));
+      break;
     }
     case RUNTIME_MESSAGES.socket_event: {
       socketEventHandler(dispatch, message.payload);
@@ -74,7 +75,6 @@ export const messageListener =
 
 const socketEventHandler = (dispatch: Dispatch<any>, payload: any) => {
   const sockevent = payload.event;
-  console.log(`UI | Got a new socket event: "${sockevent}"`);
   switch (sockevent) {
     case SOCKET_EVENTS.connecting:
       dispatch(setConnected(false));

@@ -51,48 +51,17 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     if (!Object.keys(changeInfo).some(cik => watchTabProperties.some(wtpk => cik === wtpk)))
       return;
 
-    if (changeInfo.status === "complete" && config.sync.autoBrowserTabsSync === "Always") {
-      index.updateBrowserTabs();
-      // Update backend
-      const pinnedTabs = await getPinnedTabs();
-      if (!pinnedTabs.some(url => url === tab.url)) {
-        console.log(`background.js | Tab ID ${tabId} changed, sending update to backend`);
-        const res = await canvasInsertTab(tab);
-        if (res.status === "success") {
-          console.log(`background.js | Tab ${tabId} inserted/updated: `, res);
-          index.insertCanvasTab({ ...tab, docId: res.payload.id });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser, payload: index.deltaCanvasToBrowser() });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_get_deltaBrowserToCanvas, payload: index.deltaBrowserToCanvas() });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.opened_canvas_tabs, payload: index.getOpenedCanvasTabs() });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.synced_browser_tabs, payload: index.getSyncedBrowserTabs() });
-        } else {
-          console.error(`background.js | Insert failed for tab ${tabId}:`)
-          console.error(res);
-        }
-      }
-    }
-
     // Trigger on url change if the tab url is valid
     if (changeInfo.url && browserIsValidTabUrl(changeInfo.url)) {
-      index.updateBrowserTabs();
-
-      if (config.sync.autoBrowserTabsSync === "Always") {
-        const oldUrl = index.browserTabIdToUrl.get(tabId);
-        const newUrl = changeInfo.url;
-        if (oldUrl === newUrl) return;
-        const canvasTab = index.canvasTabs.get(index.browserTabIdToUrl.get(tabId));
-        const pinnedTabs = await getPinnedTabs();
-        if (!pinnedTabs.some(url => url === tab.url))
-          canvasRemoveTab(canvasTab);
-      }
+      await index.updateBrowserTabs();
     }
   })
 
-  browser.tabs.onMoved.addListener((tabId, moveInfo) => {
+  browser.tabs.onMoved.addListener(async (tabId, moveInfo) => {
     console.log('background.js | Tab moved: ', tabId, moveInfo);
 
     // Update the current index
-    index.updateBrowserTabs();
+    await index.updateBrowserTabs();
 
     // noop
     //console.log('background.js | TODO: Disabled as we currently do not track move changes');
@@ -128,7 +97,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
     if (!tab.url || !browserIsValidTabUrl(tab.url)) return
 
     // Update the current index
-    index.updateBrowserTabs();
+    await index.updateBrowserTabs();
 
     // Update our backend
     let tabDocument = TabDocumentSchema();
@@ -148,27 +117,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
   browser.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
     console.log('background.js | Tab removed: ', tabId, removeInfo);
-
-    // Lets fetch the tab based on ID from our index
-    // This is needed as the tab object is not available after removal
-    let tab = index.getBrowserTabByID(tabId);
-    if (!tab) return console.log(`background.js | Tab ${tabId} not found in index`);
-
-    console.log('background.js | Tab object URL from index: ', tab.url);
-
-    // Update the current index (remove tab), maybe we should move it in the callback?
-    index.updateBrowserTabs();
-
-    // TODO: Will be removed, as internal Index will have a stripTabProperties method
-    let tabDocument = TabDocumentSchema();
-    tabDocument.data = stripTabProperties(tab)
-
-    // Send update to backend
-    if (config.sync.autoBrowserTabsSync === "Always") {
-      const pinnedTabs = await getPinnedTabs();
-      if (!pinnedTabs.some(url => url === tab.url))
-        await canvasRemoveTab(tab);
-    }
+    await index.updateBrowserTabs();
   });
 
 
@@ -252,8 +201,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       // Browser
       case RUNTIME_MESSAGES.browser_tabs_update:
-        return Promise.resolve(index.updateBrowserTabs());
-        break;
+        return index.updateBrowserTabs();
 
       case RUNTIME_MESSAGES.browser_tabs_open:
         if (message.tabs) {
@@ -263,7 +211,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           message.tabs = index.getBrowserTabArray();
         }
 
-        browserOpenTabArray(message.tabs);
+        await browserOpenTabArray(message.tabs);
         break;
 
       case RUNTIME_MESSAGES.browser_tabs_close:
@@ -288,7 +236,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           message.tabs = index.getCanvasTabArray();
         }
 
-        browserOpenTabArray(message.tabs);
+        await browserOpenTabArray(message.tabs);
         index.updateBrowserTabs().then(() => {
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_openInBrowser, payload: index.counts() });
         }).catch((error) => {

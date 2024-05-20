@@ -10,14 +10,8 @@ export const DEFAULT_CONFIG: {
   browserIdentity: IConfig["browserIdentity"]
 } = {
   sync: {
-    autoBrowserTabsSync: "Never",
     tabBehaviorOnContextChange: "Keep",
-    autoOpenCanvasTabs: false,
-    autoRestoreSession: true,
-    autoSaveSession: true,
-    autoOpenTabs: true,
-    autoCloseTabs: true,
-    autoCloseTabsBehavior: 'ignore'
+    autoOpenCanvasTabs: false
   },
   browserIdentity: {
     syncOnlyTaggedTabs: false,

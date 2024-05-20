@@ -2,6 +2,7 @@ import { RUNTIME_MESSAGES } from "@/general/constants";
 import index from "./TabIndex";
 import { browser, getPinnedTabs, savePinnedTabsToStorage } from "@/general/utils";
 import config from "@/general/config";
+import { documentInsertTabArray } from "./canvas";
 
 export function browserIsValidTabUrl(tabUrl: string) {
   return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
@@ -36,18 +37,17 @@ export async function browserOpenTabArray(tabArray: ICanvasTab[] | undefined) {
   console.log(`background.js | Opening tab array: `, tabArray);
 
   try {
-    browser.windows.getAll(async windows => {
-      if (windows.length === 0) {
-        await browser.windows.create({});
+    const windows = await browser.windows.getAll();
+    if (windows.length === 0) {
+      await browser.windows.create({});
+    }
+
+    for (const tab of tabArray) {
+      if (tab.url && !index.hasBrowserTab(tab.url)) {
+        console.log(`background.js | Opening tab ${tab.url}`);
+        await browserOpenTab(tab);  // assuming browserOpenTab is an export async function
       }
-  
-      for (const tab of tabArray) {
-        if (tab.url && !index.hasBrowserTab(tab.url)) {
-          console.log(`background.js | Opening tab ${tab.url}`);
-          await browserOpenTab(tab);  // assuming browserOpenTab is an export async function
-        }
-      }
-    });
+    }
   } catch (error) {
     console.error('background.js | Error opening tab array:', error);
   }
@@ -64,25 +64,39 @@ export function browserCloseTabArray(tabArray: number[] | undefined) {
   return browser.tabs.remove(tabArray);
 }
 
-export async function browserCloseNonContextTabs(beforeRemove: ((tabsToRemove: ICanvasTab[]) => Promise<any>) | ((tabsToRemove: ICanvasTab[]) => any) = async (t) => {}) {
-  try {
-    browser.tabs.query({}, async tabs => {
-      const pinnedTabs = await getPinnedTabs();
-      let tabsToRemove = tabs.filter(tab => tab.url && !index.hasCanvasTab(tab.url) && !pinnedTabs.some(url => tab.url === url));
-      if (tabsToRemove.length === 0) return;
-  
-      if (tabs.length === tabsToRemove.length) {
-        // Open a new tab before closing all others to ensure at least one remains
-        await browser.tabs.create({});
-      }
+type IBeforeRemoveFunc = ((tabsToRemove: ICanvasTab[]) => Promise<ICanvasTab[]>) | ((tabsToRemove: ICanvasTab[]) => ICanvasTab[]);
 
-      await beforeRemove(tabsToRemove);
-  
-      for (const tab of tabsToRemove) {
-        console.log(`background.js | Removing tab ${tab.id}`);
-        if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
-      }  
-    });
+export const getFilteredTabs = async (canvasTabs: ICanvasTab[], pinnedTabs: string[], tabs: null | ICanvasTab[] = null) => {
+  tabs = tabs || await browser.tabs.query({});
+  return tabs.filter(tab => tab.url && !canvasTabs.some(pct => pct.url === tab.url) && !pinnedTabs.some(url => tab.url === url))
+}
+
+export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasTab[], pinnedTabs: string[], previousContextUrl: string | null = null) {
+  try {
+    const tabs = await browser.tabs.query({});
+    if(previousContextUrl) {
+      const syncableTabs = await getFilteredTabs(previousCanvasTabs, pinnedTabs, tabs);
+      try {
+        const res = await documentInsertTabArray(syncableTabs, [previousContextUrl]);
+        if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+        console.log('background.js | Documents auto-inserted to Canvas: ', res);
+      } catch (error) {
+        console.error('background.js | Error updating documents:', error);
+      }
+    }
+    
+    const closableTabs = await getFilteredTabs(index.getCanvasTabArray(), pinnedTabs, tabs);
+
+    if (tabs.length === closableTabs.length) {
+      // Open a new tab before closing all others to ensure at least one remains
+      await browser.tabs.create({});
+    }
+
+    for (const tab of closableTabs) {
+      console.log(`background.js | Removing tab ${tab.id}`);
+      if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+    }  
+    await index.updateBrowserTabs();
   } catch (error) {
     console.error('Error in closing non-context tabs:', error);
   }
