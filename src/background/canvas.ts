@@ -8,7 +8,7 @@ export function canvasFetchTabsForContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
-      SOCKET_MESSAGES.DOCUMENT.GET_ARRAY,
+      SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY,
       genFeatureArray("READ"),
       (res) => {
         if (res.status === "error") {
@@ -47,7 +47,7 @@ export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(
-      SOCKET_MESSAGES.DOCUMENT.GET,
+      SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET,
       genFeatureArray("READ"),
       docId, 
       (res) => {
@@ -64,7 +64,7 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
     if (!tab) {
       reject("background.js | Invalid tab");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT, formatTabProperties(tab), genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, formatTabProperties(tab), genFeatureArray("WRITE"), resolve);
   });
 }
 
@@ -74,7 +74,7 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray("WRITE"), resolve);
   });
 }
 
@@ -126,19 +126,29 @@ function deleteOrRemoveTabs(ROUTE: string, tabs: ICanvasTab[], log: "remove" | "
 }
 
 export function canvasRemoveTab(tab: ICanvasTab) {
-  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT.REMOVE, tab, "remove");
+  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, tab, "remove");
 }
 
 export function canvasDeleteTab(tab: ICanvasTab) {
-  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT.DELETE, tab, "remove");
+  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, tab, "remove");
 }
 
 export function canvasRemoveTabs(tabs: ICanvasTab[]) {
-  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT.REMOVE_ARRAY, tabs, "remove");
+  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE_ARRAY, tabs, "remove");
 }
 
 export function canvasDeleteTabs(tabs: ICanvasTab[]) { 
-  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT.DELETE_ARRAY, tabs, "delete");
+  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE_ARRAY, tabs, "delete");
+}
+
+export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: string[]): Promise<ICanvasInsertResponse> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    if (!tabArray || !tabArray.length) {
+      reject("background.js | Invalid tab array");
+    }
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), contextUrlArray, genFeatureArray("WRITE"), resolve);
+  });
 }
 
 export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {

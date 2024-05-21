@@ -1,7 +1,7 @@
 import config from "@/general/config";
 import index from "./TabIndex";
-import { canvasFetchTabsForContext, canvasInsertTabArray } from "./canvas";
-import { browserCloseNonContextTabs, browserOpenTabArray, sendRuntimeMessage } from "./utils";
+import { canvasFetchTabsForContext, canvasInsertTabArray, documentInsertTabArray } from "./canvas";
+import { handleContextChangeTabUpdates, browserOpenTabArray, sendRuntimeMessage } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
 
@@ -26,50 +26,37 @@ export const updateContext = (ctx: IContext | undefined) => {
 
 export const setContextUrl = async (url) => {
   console.log('background.js | [socket.io] Received context URL update: ', url);
+  const previousContextUrl = context.url;
   context.url = url.payload;
 
-  let res: any = await canvasFetchTabsForContext();
+  const previousContextTabsArray = index.getCanvasTabArray();
+
   await index.updateBrowserTabs();
 
+  let res: any = await canvasFetchTabsForContext();
   index.insertCanvasTabArray(res.data);
-  const pinnedTabs = await getPinnedTabs();
-  
-  if (config.sync.autoBrowserTabsSync !== "Never") {
-    const tabs = index.getBrowserTabArray();
-    canvasInsertTabArray(tabs.filter(({ url }) => !pinnedTabs.some(u => u === url))).then((res: any) => {
-      if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-      console.log('background.js | Tabs auto-inserted to Canvas: ', res);
-    }).catch((error) => {
-      console.error('background.js | Error updating browser tabs:', error);
-    })
-  }
 
-  if (config.sync.autoOpenCanvasTabs) {
-    // Automatically open new canvas tabs
-    await browserOpenTabArray(index.getCanvasTabArray().filter(({ url }) => !pinnedTabs.some(u => u === url)));
-  }
+  const pinnedTabs = await getPinnedTabs();
 
   switch(config.sync.tabBehaviorOnContextChange) {
     case "Close": {
       // Automatically close existing tabs that are outside of context
-      await browserCloseNonContextTabs();
+      await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs);
       break;
     }
     case "Save and Close": {
-      await browserCloseNonContextTabs(async (tabsToRemove) => {
-        try {
-          const res = await canvasInsertTabArray(tabsToRemove);
-          if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-          console.log('background.js | Tabs auto-inserted to Canvas: ', res);
-        } catch (error) {
-          console.error('background.js | Error updating browser tabs:', error);
-        }
-      })
+      await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs, previousContextUrl);
       break;
     }
     case "Keep": {
       // do nothing
     }
+  }
+
+
+  if (config.sync.autoOpenCanvasTabs) {
+    // Automatically open new canvas tabs
+    await browserOpenTabArray(index.getCanvasTabArray().filter(({ url }) => !pinnedTabs.some(u => u === url)));
   }
 
   // Try to update the UI (might not be loaded(usually the case))
