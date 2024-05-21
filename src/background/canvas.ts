@@ -7,10 +7,12 @@ import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./util
 export function canvasFetchTabsForContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
+    console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY REQUEST");
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY,
       genFeatureArray("READ"),
       (res) => {
+        console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY RESPONSE");
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
           reject("background.js | Error fetching tabs: " + res.message);

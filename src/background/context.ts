@@ -26,6 +26,10 @@ export const updateContext = (ctx: IContext | undefined) => {
 
 export const setContextUrl = async (url) => {
   console.log('background.js | [socket.io] Received context URL update: ', url);
+  if(context.url === url.payload) {
+    console.error("SERVER IS SENDING CONTEXT CHANGE MULTIPLE TIMES...");
+    return;
+  }
   const previousContextUrl = context.url;
   context.url = url.payload;
 
