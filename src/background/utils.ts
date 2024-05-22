@@ -77,9 +77,11 @@ export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasT
     if(previousContextUrl) {
       const syncableTabs = await getFilteredTabs(previousCanvasTabs, pinnedTabs, tabs);
       try {
-        const res = await documentInsertTabArray(syncableTabs, [previousContextUrl]);
-        if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-        console.log('background.js | Documents auto-inserted to Canvas: ', res);
+        if(syncableTabs.length) {
+          const res = await documentInsertTabArray(syncableTabs, [previousContextUrl]);
+          if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+          console.log('background.js | Documents auto-inserted to Canvas: ', res);  
+        }
       } catch (error) {
         console.error('background.js | Error updating documents:', error);
       }

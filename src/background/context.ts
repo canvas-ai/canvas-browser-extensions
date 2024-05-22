@@ -1,9 +1,9 @@
 import config from "@/general/config";
 import index from "./TabIndex";
-import { canvasFetchTabsForContext, canvasInsertTabArray, documentInsertTabArray } from "./canvas";
+import { canvasFetchTabsForContext } from "./canvas";
 import { handleContextChangeTabUpdates, browserOpenTabArray, sendRuntimeMessage } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
-import { browser, getPinnedTabs } from "@/general/utils";
+import { getPinnedTabs } from "@/general/utils";
 
 const DEFAULT_URL = 'universe:///';
 
