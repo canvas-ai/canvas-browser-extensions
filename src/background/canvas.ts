@@ -44,6 +44,21 @@ export function canvasFetchContextUrl(): Promise<string> {
   });
 }
 
+export function canvasFetchContext(): Promise<IContext> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error fetching context", res);
+        reject("Error fetching context from Canvas");
+      } else {
+        console.log("background.js | Context fetched: ", res);
+        resolve(res.payload);
+      }
+    });
+  });
+}
+
 
 export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
@@ -149,6 +164,7 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
+    console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
     socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), contextUrlArray, genFeatureArray("WRITE"), resolve);
   });
 }

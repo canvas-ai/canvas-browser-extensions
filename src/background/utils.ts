@@ -71,14 +71,14 @@ export const getFilteredTabs = async (canvasTabs: ICanvasTab[], pinnedTabs: stri
   return tabs.filter(tab => tab.url && !canvasTabs.some(pct => pct.url === tab.url) && !pinnedTabs.some(url => tab.url === url))
 }
 
-export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasTab[], pinnedTabs: string[], previousContextUrl: string | null = null) {
+export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasTab[], pinnedTabs: string[], previousContextIdArray: string[] | null = null) {
   try {
     const tabs = await browser.tabs.query({});
-    if(previousContextUrl) {
+    if(previousContextIdArray !== null) {
       const syncableTabs = await getFilteredTabs(previousCanvasTabs, pinnedTabs, tabs);
       try {
         if(syncableTabs.length) {
-          const res = await documentInsertTabArray(syncableTabs, [previousContextUrl]);
+          const res = await documentInsertTabArray(syncableTabs, previousContextIdArray);
           if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
           console.log('background.js | Documents auto-inserted to Canvas: ', res);  
         }
@@ -96,11 +96,15 @@ export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasT
 
     for (const tab of closableTabs) {
       console.log(`background.js | Removing tab ${tab.id}`);
-      if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
-    }  
+      try {
+        if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+      } catch (e) {
+        console.error('Error in closing non-context tabs:', e);
+      }
+    }
     await index.updateBrowserTabs();
   } catch (error) {
-    console.error('Error in closing non-context tabs:', error);
+    console.error('Error while handling context change:', error);
   }
 }
 

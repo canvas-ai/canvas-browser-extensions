@@ -9,12 +9,15 @@ const DEFAULT_URL = 'universe:///';
 
 export let context: IContext = {
   url: DEFAULT_URL,
+  contextArray: [],
   color: '#fff',
 };
 
 export const updateContext = (ctx: IContext | undefined) => {
-  context.color = ctx?.color || "#fff";
   context.url = typeof ctx?.url === "string" ? ctx.url : DEFAULT_URL;
+  console.log("updating context", ctx);
+  context.color = ctx?.color || "#fff";
+  if(ctx?.contextArray) context.contextArray = ctx.contextArray;
   if(ctx?.path) context.path = ctx.path;
   else delete context.path;
   if(ctx?.pathArray) context.pathArray = ctx.pathArray;
@@ -24,13 +27,19 @@ export const updateContext = (ctx: IContext | undefined) => {
   contextUrlChanged();
 };
 
-export const setContextUrl = async (url) => {
-  console.log('background.js | [socket.io] Received context URL update: ', url);
-  if(context.url === url.payload) {
+export const setContext = async (ctx: { payload: IContext }) => {
+  console.log("RECIEVED CONTEXT UPDATE", ctx);
+  if(ctx.payload.url === context.url) {
     console.error("SERVER IS SENDING CONTEXT CHANGE MULTIPLE TIMES...");
     return;
   }
-  const previousContextUrl = context.url;
+  updateContext(ctx.payload);
+  setContextUrl({ payload: context.url });
+}
+
+export const setContextUrl = async (url: { payload: string }) => {
+  console.log('background.js | [socket.io] Received context URL update: ', url);
+  const previousContextIdArray = context.contextArray;
   context.url = url.payload;
 
   const previousContextTabsArray = index.getCanvasTabArray();
@@ -49,7 +58,7 @@ export const setContextUrl = async (url) => {
       break;
     }
     case "Save and Close": {
-      await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs, previousContextUrl);
+      await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs, previousContextIdArray);
       break;
     }
     case "Keep": {

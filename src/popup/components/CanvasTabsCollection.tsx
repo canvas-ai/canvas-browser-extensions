@@ -57,7 +57,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
 
             <a 
               href={tab.url}
-              className="tab-title truncate black-text"
+              className="truncate"
               onClick={(e) => {
                 e.preventDefault();
                 openTabClicked(tab);
@@ -65,7 +65,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
               }}
             >
               <img src={tab.favIconUrl || ""} />
-              <span>{tab.title || ""}</span>
+              <span className="tab-title truncate black-text">{tab.title || ""}</span>
             </a>
             {
               isOnUniverse(variables.context.url) ? 

@@ -81,6 +81,7 @@ export const SOCKET_MESSAGES = {
   },
 
   CONTEXT: {
+    GET:          "context:get",
     GET_URL:      "context:get:url",
     SET_URL:      "context:set:url"
   },

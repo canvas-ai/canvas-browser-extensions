@@ -6,6 +6,7 @@ interface ITabDocumentSchema {
 
 interface IContext {
   url: string;
+  contextArray: string[];
   color: string;
   path?: string;
   pathArray?: any;
@@ -123,7 +124,7 @@ interface ISessionContext {
     url: string;
     path: string;
     array: any[];
-    contextArray: any[];
+    contextArray: string[];
     featureArray: any[];
     filterArray: any[];
 }

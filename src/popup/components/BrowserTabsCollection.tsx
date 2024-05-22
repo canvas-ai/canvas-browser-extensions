@@ -66,7 +66,7 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
               ) : null}
               <a
                 href={tab.url}
-                className="tab-title truncate black-text"
+                className="truncate"
                 onClick={(e) => {
                   e.preventDefault();
                   if (tab.id) syncTabClicked(tab);
@@ -74,7 +74,7 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
                 }}
               >
                 <img src={tab.favIconUrl || ""} />
-                <span>{tab.title || ""}</span>
+                <span className="tab-title truncate black-text">{tab.title || ""}</span>
               </a>
               <span className="icons">
                 <i
