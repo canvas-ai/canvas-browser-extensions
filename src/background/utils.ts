@@ -5,7 +5,7 @@ import config from "@/general/config";
 import { documentInsertTabArray } from "./canvas";
 
 export function browserIsValidTabUrl(tabUrl: string) {
-  return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
+  return !/^(about|chrome|moz-extension|file|view-source|view-unsafely|newtab|edge|chrome-extension):/.test(tabUrl);
 }
 
 export function browserOpenTab(tab: ICanvasTab) {
