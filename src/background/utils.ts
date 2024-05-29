@@ -19,7 +19,7 @@ export function browserOpenTab(tab: ICanvasTab) {
         url: tab.url,
       }).then(newTab => {
         ["mutedInfo", "discarded", "active", "pinned", "title"].forEach(prop => {
-          if(tab.hasOwnProperty(prop)) 
+          if(tab.hasOwnProperty(prop))
             newTab[prop] = tab[prop];
         });
         res(newTab);
@@ -80,13 +80,13 @@ export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasT
         if(syncableTabs.length) {
           const res = await documentInsertTabArray(syncableTabs, previousContextIdArray);
           if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-          console.log('background.js | Documents auto-inserted to Canvas: ', res);  
+          console.log('background.js | Documents auto-inserted to Canvas: ', res);
         }
       } catch (error) {
         console.error('background.js | Error updating documents:', error);
       }
     }
-    
+
     const closableTabs = await getFilteredTabs(index.getCanvasTabArray(), pinnedTabs, tabs);
 
     if (tabs.length === closableTabs.length) {
