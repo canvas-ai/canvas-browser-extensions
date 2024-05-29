@@ -5,7 +5,7 @@ import config from "@/general/config";
 import { documentInsertTabArray } from "./canvas";
 
 export function browserIsValidTabUrl(tabUrl: string) {
-  return !/^(about|chrome|moz-extension|file|view-source|view-unsafely):/.test(tabUrl);
+  return !/^(about|chrome|moz-extension|file|view-source|view-unsafely|newtab|edge|chrome-extension):/.test(tabUrl);
 }
 
 export function browserOpenTab(tab: ICanvasTab) {
@@ -19,7 +19,7 @@ export function browserOpenTab(tab: ICanvasTab) {
         url: tab.url,
       }).then(newTab => {
         ["mutedInfo", "discarded", "active", "pinned", "title"].forEach(prop => {
-          if(tab.hasOwnProperty(prop)) 
+          if(tab.hasOwnProperty(prop))
             newTab[prop] = tab[prop];
         });
         res(newTab);
@@ -71,20 +71,22 @@ export const getFilteredTabs = async (canvasTabs: ICanvasTab[], pinnedTabs: stri
   return tabs.filter(tab => tab.url && !canvasTabs.some(pct => pct.url === tab.url) && !pinnedTabs.some(url => tab.url === url))
 }
 
-export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasTab[], pinnedTabs: string[], previousContextUrl: string | null = null) {
+export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasTab[], pinnedTabs: string[], previousContextIdArray: string[] | null = null) {
   try {
     const tabs = await browser.tabs.query({});
-    if(previousContextUrl) {
+    if(previousContextIdArray !== null) {
       const syncableTabs = await getFilteredTabs(previousCanvasTabs, pinnedTabs, tabs);
       try {
-        const res = await documentInsertTabArray(syncableTabs, [previousContextUrl]);
-        if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
-        console.log('background.js | Documents auto-inserted to Canvas: ', res);
+        if(syncableTabs.length) {
+          const res = await documentInsertTabArray(syncableTabs, previousContextIdArray);
+          if (!res || res.status === 'error') return console.error('background.js | Error inserting tabs to Canvas')
+          console.log('background.js | Documents auto-inserted to Canvas: ', res);
+        }
       } catch (error) {
         console.error('background.js | Error updating documents:', error);
       }
     }
-    
+
     const closableTabs = await getFilteredTabs(index.getCanvasTabArray(), pinnedTabs, tabs);
 
     if (tabs.length === closableTabs.length) {
@@ -94,11 +96,15 @@ export async function handleContextChangeTabUpdates(previousCanvasTabs: ICanvasT
 
     for (const tab of closableTabs) {
       console.log(`background.js | Removing tab ${tab.id}`);
-      if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
-    }  
+      try {
+        if (tab.id) await browser.tabs.remove(tab.id);  // Using await here to ensure tab is removed
+      } catch (e) {
+        console.error('Error in closing non-context tabs:', e);
+      }
+    }
     await index.updateBrowserTabs();
   } catch (error) {
-    console.error('Error in closing non-context tabs:', error);
+    console.error('Error while handling context change:', error);
   }
 }
 

@@ -1,11 +1,10 @@
 import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContextUrl, canvasFetchTabsForContext } from './canvas';
+import { canvasFetchContext, canvasFetchTabsForContext } from './canvas';
 import index from './TabIndex';
-import { setContextUrl, updateContext } from './context';
+import { setContext, updateContext } from './context';
 import { sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
-import { browser } from '@/general/utils';
 import { createSession, updateSessionsList } from './session';
 
 const socketOptions: Partial<ManagerOptions & SocketOptions> = { 
@@ -46,9 +45,9 @@ class MySocket {
 
       createSession().then(() => {
         updateSessionsList();
-        canvasFetchContextUrl().then((url: string) => {
-          console.log('background.js | [socket.io] Received context url: ', url);
-          updateContext({ url, color: "#fff" });
+        canvasFetchContext().then((ctx: IContext) => {
+          console.log('background.js | [socket.io] Received context: ', ctx);
+          updateContext(ctx);
         });
         
         updateLocalCanvasTabsData();
@@ -70,8 +69,8 @@ class MySocket {
       this.sendSocketEvent(SOCKET_EVENTS.disconnect);
       console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
     });
-
-    this.socket.on('context:url', setContextUrl);
+    
+    this.socket.on('context:update', setContext);
   }
 
   sendSocketEvent(e: string) {

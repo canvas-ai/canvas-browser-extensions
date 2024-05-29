@@ -7,10 +7,12 @@ import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./util
 export function canvasFetchTabsForContext() {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
+    console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY REQUEST");
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY,
       genFeatureArray("READ"),
       (res) => {
+        console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY RESPONSE");
         if (res.status === "error") {
           console.error("background.js | Error fetching tabs from Canvas: ", res);
           reject("background.js | Error fetching tabs: " + res.message);
@@ -36,6 +38,21 @@ export function canvasFetchContextUrl(): Promise<string> {
         reject("Error fetching context url from Canvas");
       } else {
         console.log("background.js | Context URL fetched: ", res);
+        resolve(res.payload);
+      }
+    });
+  });
+}
+
+export function canvasFetchContext(): Promise<IContext> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error fetching context", res);
+        reject("Error fetching context from Canvas");
+      } else {
+        console.log("background.js | Context fetched: ", res);
         resolve(res.payload);
       }
     });
@@ -147,6 +164,7 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
+    console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
     socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), contextUrlArray, genFeatureArray("WRITE"), resolve);
   });
 }
