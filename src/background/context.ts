@@ -29,10 +29,6 @@ export const updateContext = (ctx: IContext | undefined) => {
 
 export const setContext = async (ctx: { payload: IContext }) => {
   console.log("RECIEVED CONTEXT UPDATE", ctx);
-  if(ctx.payload.url === context.url) {
-    console.error("SERVER IS SENDING CONTEXT CHANGE MULTIPLE TIMES...");
-    return;
-  }
   updateContext(ctx.payload);
   setContextUrl({ payload: context.url });
 }
