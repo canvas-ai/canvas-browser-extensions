@@ -1,5 +1,6 @@
-# canvas-ui-broser
-Canvas UI browser extension
+# canvas-ui-browser
+
+Canvas UI browser extension(beta)
 
 ## Installation Chrome
 
@@ -11,7 +12,7 @@ Canvas UI browser extension
 - Tick "Developer mode"
 - Click on "Load unpacked"
 - Select canvas-ui-browser/chromium
-- Ensure extension is pinned the toolbar
+- Ensure extension is pinned on your toolbar
 
 ## Installation Firefox
 
@@ -22,9 +23,10 @@ Canvas UI browser extension
 - Open Firefox > about:debugging#/runtime/this-firefox
 - Load Temporary Add-on
 - Select canvas-ui-browser/firefox
-- Ensure extension is pinned the toolbar
+- Ensure extension is pinned on your toolbar
 
 ## Screenshots
 
 ![Screenshot #1](doc/screenshot1.png "Screenshot 1")
+
 ![Screenshot #2](doc/screenshot2.png "Screenshot 2")
