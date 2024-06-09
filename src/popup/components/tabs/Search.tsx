@@ -10,6 +10,8 @@ const Search: React.FC<any> = ({ }) => {
   const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
 
   const filterTab = (tab: ICanvasTab) => {
+    // This should never happen (assuming schema validation is working properly)
+    if (!tab.title && !tab.url) return false;
     return tab.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tab.url?.split("//")[1].split("/")[0].includes(searchTerm.toLowerCase());
   }
