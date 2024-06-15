@@ -28,7 +28,7 @@ export const updateContext = (ctx: IContext | undefined) => {
 };
 
 export const setContext = async (ctx: { payload: IContext }) => {
-  console.log("RECIEVED CONTEXT UPDATE", ctx);
+  console.log("RECEIVED CONTEXT UPDATE", ctx);
   updateContext(ctx.payload);
   setContextUrl({ payload: context.url });
 }
