@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import BrowserTabsCollection from '../BrowserTabsCollection';
-import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 import { browser } from '@/general/utils';
 import { Dispatch } from 'redux';
 import { setBrowserTabs, setSyncedBrowserTabs } from '@/popup/redux/tabs/tabActions';
@@ -11,6 +10,18 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
   const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
   const [checkedBrowserTabs, setCheckedBrowserTabs] = useState<ICanvasTab[]>([]);
   const [checkedSyncedBrowserTabs, setCheckedSyncedBrowserTabs] = useState<ICanvasTab[]>([]);
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+    syncableBrowser: true,
+    syncedBrowser: false
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   const dispatch = useDispatch<Dispatch<any>>();
 
   const syncAllClicked = () => {
@@ -76,33 +87,51 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
           </a>
         ) : null}
       </div>
-      <Collapsible accordion={false}>
-        <CollapsibleItem
-          expanded={true}
-          header={`Syncable Browser Tabs (${tabs.browserTabs.length})`}
-          icon={<Icon>sync</Icon>}
-          node="div"
-        >
-          <BrowserTabsCollection
-            browserTabs={tabs.browserTabs}
-            setCheckedTabs={setCheckedBrowserTabs}
-            checkedTabs={checkedBrowserTabs}
-          />
-        </CollapsibleItem>
+      <div className="collapsible-container">
+        <div className="collapsible-item">
+          <div 
+            className="collapsible-header"
+            onClick={() => toggleSection('syncableBrowser')}
+          >
+            <span className="material-icons">
+              {expandedSections.syncableBrowser ? 'expand_more' : 'chevron_right'}
+            </span>
+            <span className="material-icons">sync</span>
+            <span>Syncable Browser Tabs ({tabs.browserTabs.length})</span>
+          </div>
+          {expandedSections.syncableBrowser && (
+            <div className="collapsible-content">
+              <BrowserTabsCollection
+                browserTabs={tabs.browserTabs}
+                setCheckedTabs={setCheckedBrowserTabs}
+                checkedTabs={checkedBrowserTabs}
+              />
+            </div>
+          )}
+        </div>
 
-        <CollapsibleItem
-          expanded={false}
-          header={`Synced Browser Tabs (${tabs.syncedBrowserTabs.length})`}
-          icon={<Icon>cloud_sync</Icon>}
-          node="div"
-        >
-          <BrowserTabsCollection
-            browserTabs={tabs.syncedBrowserTabs}
-            setCheckedTabs={setCheckedSyncedBrowserTabs}
-            checkedTabs={checkedSyncedBrowserTabs}
-          />
-        </CollapsibleItem>
-      </Collapsible>
+        <div className="collapsible-item">
+          <div 
+            className="collapsible-header"
+            onClick={() => toggleSection('syncedBrowser')}
+          >
+            <span className="material-icons">
+              {expandedSections.syncedBrowser ? 'expand_more' : 'chevron_right'}
+            </span>
+            <span className="material-icons">cloud_sync</span>
+            <span>Synced Browser Tabs ({tabs.syncedBrowserTabs.length})</span>
+          </div>
+          {expandedSections.syncedBrowser && (
+            <div className="collapsible-content">
+              <BrowserTabsCollection
+                browserTabs={tabs.syncedBrowserTabs}
+                setCheckedTabs={setCheckedSyncedBrowserTabs}
+                checkedTabs={checkedSyncedBrowserTabs}
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

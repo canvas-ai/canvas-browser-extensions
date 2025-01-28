@@ -2,12 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import CanvasTabsCollection from '../CanvasTabsCollection';
 import BrowserTabsCollection from '../BrowserTabsCollection';
-import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 
 const Search: React.FC<any> = ({ }) => {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filteredTabs, setFilteredTabs] = useState<ITabsInfo>({ browserTabs: [], canvasTabs: [], openedCanvasTabs: [], syncedBrowserTabs: [] });
   const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+    closedCanvas: true,
+    openedCanvas: true,
+    syncableBrowser: true,
+    syncedBrowser: true
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const filterTab = (tab: ICanvasTab) => {
     // This should never happen (assuming schema validation is working properly)
@@ -34,36 +46,47 @@ const Search: React.FC<any> = ({ }) => {
         {!filteredTabs.canvasTabs.length && !filteredTabs.openedCanvasTabs.length ? (
           <div className="no-tabs-found">No tabs found!</div>
         ) : (
-          <Collapsible accordion={false}>
-            {
-              filteredTabs.canvasTabs.length ?
-                (
-                  <CollapsibleItem
-                    expanded={true}
-                    header={`Closed Canvas Tabs (${filteredTabs.canvasTabs.length})`}
-                    icon={<Icon>sync</Icon>}
-                    node="div"
-                  >
+          <div className="collapsible-container">
+            {filteredTabs.canvasTabs.length ? (
+              <div className="collapsible-item">
+                <div 
+                  className="collapsible-header"
+                  onClick={() => toggleSection('closedCanvas')}
+                >
+                  <span className="material-icons">
+                    {expandedSections.closedCanvas ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span className="material-icons">sync</span>
+                  <span>Closed Canvas Tabs ({filteredTabs.canvasTabs.length})</span>
+                </div>
+                {expandedSections.closedCanvas && (
+                  <div className="collapsible-content">
                     <CanvasTabsCollection canvasTabs={filteredTabs.canvasTabs} />
-                  </CollapsibleItem>
-                ) :
-                null
-            }
-            {
-              filteredTabs.openedCanvasTabs.length ?
-                (
-                  <CollapsibleItem
-                    expanded={true}
-                    header={`Opened Canvas Tabs (${filteredTabs.openedCanvasTabs.length})`}
-                    icon={<Icon>cloud_sync</Icon>}
-                    node="div"
-                  >
+                  </div>
+                )}
+              </div>
+            ) : null}
+            
+            {filteredTabs.openedCanvasTabs.length ? (
+              <div className="collapsible-item">
+                <div 
+                  className="collapsible-header"
+                  onClick={() => toggleSection('openedCanvas')}
+                >
+                  <span className="material-icons">
+                    {expandedSections.openedCanvas ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span className="material-icons">cloud_sync</span>
+                  <span>Opened Canvas Tabs ({filteredTabs.openedCanvasTabs.length})</span>
+                </div>
+                {expandedSections.openedCanvas && (
+                  <div className="collapsible-content">
                     <CanvasTabsCollection canvasTabs={filteredTabs.openedCanvasTabs} />
-                  </CollapsibleItem>
-                ) :
-                null
-            }
-          </Collapsible>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
       <hr className="my-4" />
@@ -72,36 +95,47 @@ const Search: React.FC<any> = ({ }) => {
         {!filteredTabs.browserTabs.length && !filteredTabs.syncedBrowserTabs.length ? (
           <div className="no-tabs-found">No tabs found!</div>
         ) : (
-          <Collapsible accordion={false}>
-            {
-              filteredTabs.browserTabs.length ?
-                (
-                  <CollapsibleItem
-                    expanded={true}
-                    header={`Syncable Browser Tabs (${filteredTabs.browserTabs.length})`}
-                    icon={<Icon>sync</Icon>}
-                    node="div"
-                  >
+          <div className="collapsible-container">
+            {filteredTabs.browserTabs.length ? (
+              <div className="collapsible-item">
+                <div 
+                  className="collapsible-header"
+                  onClick={() => toggleSection('syncableBrowser')}
+                >
+                  <span className="material-icons">
+                    {expandedSections.syncableBrowser ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span className="material-icons">sync</span>
+                  <span>Syncable Browser Tabs ({filteredTabs.browserTabs.length})</span>
+                </div>
+                {expandedSections.syncableBrowser && (
+                  <div className="collapsible-content">
                     <BrowserTabsCollection browserTabs={filteredTabs.browserTabs} />
-                  </CollapsibleItem>
-                ) :
-                null
-            }
-            {
-              filteredTabs.syncedBrowserTabs.length ?
-                (
-                  <CollapsibleItem
-                    expanded={true}
-                    header={`Synced Browser Tabs (${filteredTabs.syncedBrowserTabs.length})`}
-                    icon={<Icon>cloud_sync</Icon>}
-                    node="div"
-                  >
+                  </div>
+                )}
+              </div>
+            ) : null}
+            
+            {filteredTabs.syncedBrowserTabs.length ? (
+              <div className="collapsible-item">
+                <div 
+                  className="collapsible-header"
+                  onClick={() => toggleSection('syncedBrowser')}
+                >
+                  <span className="material-icons">
+                    {expandedSections.syncedBrowser ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span className="material-icons">cloud_sync</span>
+                  <span>Synced Browser Tabs ({filteredTabs.syncedBrowserTabs.length})</span>
+                </div>
+                {expandedSections.syncedBrowser && (
+                  <div className="collapsible-content">
                     <BrowserTabsCollection browserTabs={filteredTabs.syncedBrowserTabs} />
-                  </CollapsibleItem>
-                ) :
-                null
-            }
-          </Collapsible>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
