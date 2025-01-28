@@ -3,7 +3,6 @@ import { useSelector } from 'react-redux';
 import { isOnUniverse } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import CanvasTabsCollection from '../CanvasTabsCollection';
-import { Collapsible, CollapsibleItem, Icon } from 'react-materialize';
 import { browser } from '@/general/utils';
 
 const CanvasToBrowser: React.FC<any> = ({ }) => {
@@ -11,6 +10,17 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
   const [checkedCanvasTabs, setCheckedCanvasTabs] = useState<ICanvasTab[]>([]);
   const [checkedOpenedCanvasTabs, setCheckedOpenedCanvasTabs] = useState<ICanvasTab[]>([]);
   const variables = useSelector((state: { variables: IVarState }) => state.variables);
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+    closedCanvas: true,
+    openedCanvas: false
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const openAllClicked = () => {
     console.log('UI | Opening all tabs from canvas');
@@ -68,31 +78,51 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
         ) : null}
       </div>
 
-      <Collapsible accordion={false}>
-        <CollapsibleItem
-          expanded={true}
-          header={`Closed Canvas Tabs (${tabs.canvasTabs.length})`}
-          icon={<Icon>sync</Icon>}
-          node="div"
-        >
-          <CanvasTabsCollection
-            checkedTabs={checkedCanvasTabs}
-            setCheckedTabs={setCheckedCanvasTabs}
-            canvasTabs={tabs.canvasTabs} />
-        </CollapsibleItem>
+      <div className="collapsible-container">
+        <div className="collapsible-item">
+          <div 
+            className="collapsible-header"
+            onClick={() => toggleSection('closedCanvas')}
+          >
+            <span className="material-icons">
+              {expandedSections.closedCanvas ? 'expand_more' : 'chevron_right'}
+            </span>
+            <span className="material-icons">sync</span>
+            <span>Closed Canvas Tabs ({tabs.canvasTabs.length})</span>
+          </div>
+          {expandedSections.closedCanvas && (
+            <div className="collapsible-content">
+              <CanvasTabsCollection
+                checkedTabs={checkedCanvasTabs}
+                setCheckedTabs={setCheckedCanvasTabs}
+                canvasTabs={tabs.canvasTabs}
+              />
+            </div>
+          )}
+        </div>
 
-        <CollapsibleItem
-          expanded={false}
-          header={`Opened Canvas Tabs (${tabs.openedCanvasTabs.length})`}
-          icon={<Icon>cloud_sync</Icon>}
-          node="div"
-        >
-          <CanvasTabsCollection
-            checkedTabs={checkedOpenedCanvasTabs}
-            setCheckedTabs={setCheckedOpenedCanvasTabs}
-            canvasTabs={tabs.openedCanvasTabs} />
-        </CollapsibleItem>
-      </Collapsible>
+        <div className="collapsible-item">
+          <div 
+            className="collapsible-header"
+            onClick={() => toggleSection('openedCanvas')}
+          >
+            <span className="material-icons">
+              {expandedSections.openedCanvas ? 'expand_more' : 'chevron_right'}
+            </span>
+            <span className="material-icons">cloud_sync</span>
+            <span>Opened Canvas Tabs ({tabs.openedCanvasTabs.length})</span>
+          </div>
+          {expandedSections.openedCanvas && (
+            <div className="collapsible-content">
+              <CanvasTabsCollection
+                checkedTabs={checkedOpenedCanvasTabs}
+                setCheckedTabs={setCheckedOpenedCanvasTabs}
+                canvasTabs={tabs.openedCanvasTabs}
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
