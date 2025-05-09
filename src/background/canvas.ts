@@ -4,28 +4,18 @@ import index from "./TabIndex";
 import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./utils";
 
 
-export function canvasFetchTabsForContext() {
+export function canvasFetchTabsForContext(): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY REQUEST");
-    socket.emit(
-      SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY,
-      genFeatureArray("READ"),
-      (res) => {
-        console.log("SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY RESPONSE");
-        if (res.status === "error") {
-          console.error("background.js | Error fetching tabs from Canvas: ", res);
-          reject("background.js | Error fetching tabs: " + res.message);
-        } else {
-          const parsed = res.payload
-            .filter((tab) => tab !== null)
-            .map((tab) => ({...tab.data, docId: tab.docId || tab.id }));
-          res.data = parsed;
-          console.log("background.js | Tabs fetched from Canvas: ", res.data.length);
-          resolve(res);
-        }
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_STATS, {}, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error fetching tabs for context", res);
+        reject("Error fetching tabs for context from Canvas");
+      } else {
+        console.log("background.js | Tabs for context fetched: ", res);
+        resolve(res);
       }
-    );
+    });
   });
 }
 
@@ -59,6 +49,77 @@ export function canvasFetchContext(): Promise<IContext> {
   });
 }
 
+export function canvasFetchDocuments(contextId: string, featureArray: string[]): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY, {
+      contextId,
+      featureArray
+    }, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error fetching documents", res);
+        reject("Error fetching documents from Canvas");
+      } else {
+        console.log("background.js | Documents fetched: ", res);
+        resolve(res);
+      }
+    });
+  });
+}
+
+export function canvasInsertDocument(contextId: string, document: any): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
+      contextId,
+      document
+    }, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error inserting document", res);
+        reject("Error inserting document to Canvas");
+      } else {
+        console.log("background.js | Document inserted: ", res);
+        resolve(res);
+      }
+    });
+  });
+}
+
+export function canvasUpdateDocument(contextId: string, document: any): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, {
+      contextId,
+      document
+    }, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error updating document", res);
+        reject("Error updating document in Canvas");
+      } else {
+        console.log("background.js | Document updated: ", res);
+        resolve(res);
+      }
+    });
+  });
+}
+
+export function canvasDeleteDocument(contextId: string, documentId: string): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    const socket = await getSocket();
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, {
+      contextId,
+      documentId
+    }, (res) => {
+      if (!res || res.status !== "success") {
+        console.error("background.js | Error deleting document", res);
+        reject("Error deleting document from Canvas");
+      } else {
+        console.log("background.js | Document deleted: ", res);
+        resolve(res);
+      }
+    });
+  });
+}
 
 export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
@@ -66,7 +127,7 @@ export function canvasFetchTab(docId: number) {
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET,
       genFeatureArray("READ"),
-      docId, 
+      docId,
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);
@@ -154,7 +215,7 @@ export function canvasRemoveTabs(tabs: ICanvasTab[]) {
   return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE_ARRAY, tabs, "remove");
 }
 
-export function canvasDeleteTabs(tabs: ICanvasTab[]) { 
+export function canvasDeleteTabs(tabs: ICanvasTab[]) {
   return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE_ARRAY, tabs, "delete");
 }
 

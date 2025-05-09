@@ -33,7 +33,9 @@ interface IConfigProps {
     host: string,
     port: number | "",
     token: string,
-    pinToContext: string
+    pinToContext: string,
+    isApiToken: boolean,
+    contextId: string
   },
 }
 
@@ -103,7 +105,7 @@ interface ICanvasInsertResponsePayload {
     contentEncoding: IEncodings;
     contentType: "application/json";
     created: string;
-    modified: string;  
+    modified: string;
   } & ICanvasInsertMetaRequestInputs
 }
 

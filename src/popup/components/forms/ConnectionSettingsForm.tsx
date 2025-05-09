@@ -7,7 +7,7 @@ import { browser } from '@/general/utils';
 import SearchableSelectBox from '@/popup/common-components/inputs/SearchableSelectBox';
 import { DEFAULT_SESSION, RUNTIME_MESSAGES } from '@/general/constants';
 import { setSessionList } from '@/popup/redux/variables/varActions';
-import { showErrorMessage } from '@/popup/utils';
+import { showErrorMessage, showSuccessMessage } from '@/popup/utils';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
@@ -18,177 +18,175 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
   const dispatch = useDispatch<Dispatch<any>>();
   const [transport, setTransport] = useState({ ...config.transport });
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSavingConnection, setIsSavingConnection] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [availableContexts, setAvailableContexts] = useState<string[]>(['default']);
+  const [selectedContext, setSelectedContext] = useState('default');
+
   useEffect(() => {
     setTransport({ ...config.transport });
   }, [config.transport]);
 
-  const sessions: ISession[] = variables.sessions.map(session => ({ id: session.id, baseUrl: session.baseUrl }));
-  const [selectedSession, setSelectedSession] = useState(DEFAULT_SESSION.id);
-  const [addableSession, setAddableSession] = useState({
-    id: "",
-    baseUrl: "/"
-  });
-  const [showAddSessionForm, setShowAddSessionForm] = useState(false);
+  const testConnection = async () => {
+    setIsTestingConnection(true);
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: RUNTIME_MESSAGES.socket_retry,
+        config: {
+          ...config,
+          transport: {
+            ...transport,
+            contextId: selectedContext
+          }
+        }
+      });
 
-  useEffect(() => {
-    setSelectedSession(config.session.id || DEFAULT_SESSION.id);
-  }, [config.session.id]);
+      if (response && response.status === 'success') {
+        showSuccessMessage('Connection successful!');
+        // Fetch available contexts after successful connection
+        const contextsResponse = await browser.runtime.sendMessage({
+          action: RUNTIME_MESSAGES.context_get
+        });
+        if (contextsResponse && contextsResponse.payload) {
+          const contexts = Array.isArray(contextsResponse.payload) ?
+            contextsResponse.payload : ['default'];
+          setAvailableContexts(contexts);
+        }
+      } else {
+        showErrorMessage('Connection failed. Please check your settings.');
+      }
+    } catch (error) {
+      showErrorMessage('Connection failed. Please check your settings.');
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
 
-  const sessionChanged = (option: any) => {
-    setSelectedSession(option.value);
-  }
-
-  const onAddSessionClicked = (session: string) => {
-    setShowAddSessionForm(true);
-  }
-
-  const saveConnectionSettings = (e: any, config: IConfigProps) => {
+  const saveConnectionSettings = async (e: any) => {
     if (closePopup) closePopup(e);
-    dispatch(setConfig(config));
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set, value: config }, (response) => {
+    setIsSavingConnection(true);
+    try {
+      const updatedTransport = {
+        ...transport,
+        contextId: selectedContext
+      };
+
+      dispatch(setConfig({ ...config, transport: updatedTransport }));
+      await browser.runtime.sendMessage({
+        action: RUNTIME_MESSAGES.config_set,
+        value: { ...config, transport: updatedTransport }
+      });
+
       setTimeout(() => {
         browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
       }, 100);
-    });
-  }
 
-  const getSessionByID = (id: string) => {
-    return sessions.find(s => s.id === id) || DEFAULT_SESSION;
-  }
-
-  const validateBaseUrl = (baseUrl: string) => {
-    baseUrl = baseUrl
-    .split("/")
-    .filter((part, i, arr) => !(!i && part.length) && (!i || part.length || i === arr.length - 1))
-    .map(part => part.replace(/[^a-z0-9_-]/gi, '')).join("/");
-    return baseUrl.startsWith("/") ? baseUrl : "/" + baseUrl;
-  }
-
-  const saveSession = (addableSession: ISession) => {
-    addableSession.baseUrl = '/' + addableSession.baseUrl.split("/").filter(part => part.length).map(part => part.toLowerCase()).join("/");
-    if(!addableSession.id.length)
-      return showErrorMessage("Session ID is required!");
-    if(sessions.some(session => session.id.toLowerCase() === addableSession.id.toLowerCase()))
-      return showErrorMessage("The session ID already exists!");
-
-    dispatch(setSessionList([...sessions, addableSession]));
-    setShowAddSessionForm(false);
-    setSelectedSession(addableSession.id);
-    setAddableSession({ baseUrl: "/", id: "" });
-  }
+      showSuccessMessage('Settings saved successfully!');
+    } catch (error) {
+      showErrorMessage('Failed to save settings');
+    } finally {
+      setIsSavingConnection(false);
+    }
+  };
 
   return (
-    <>
-      {showAddSessionForm ? (
-        <div className="add-session-form">
-          <div className="input-container">
-            <label className="form-label" htmlFor="session-id">ID(example: home)</label>
-            <div className="form-control">
-              <input type="text" id="session-id" value={addableSession.id} onChange={(e) => setAddableSession({ ...addableSession, id: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="input-container">
-            <label className="form-label" htmlFor="session-base-url">Base URL(example: /home)</label>
-            <div className="form-control">
-              <input
-                type="text" 
-                id="session-base-url"
-                value={addableSession.baseUrl}
-                onChange={(e) => setAddableSession({ ...addableSession, baseUrl: validateBaseUrl(e.target.value) })}
-              />
-            </div>
-          </div>
-
-          <div className="input-container popup-button-container" style={{ alignContent: "flex-start" }}>
-            <button
-              className="btn red waves-effect waves-light"
-              style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }}
-              disabled={variables.retrying}
-              onClick={(e) => setShowAddSessionForm(false)}
-            >CANCEL</button>
-          </div>
-
-          <div className="input-container popup-button-container" style={{ alignContent: "flex-end" }}>
-            <button
-              className="btn blue waves-effect waves-light"
-              style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }}
-              disabled={variables.retrying}
-              onClick={() => saveSession(addableSession)}
-            >ADD</button>
-          </div>
+    <div className="connection-settings-form">
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-protocol">Protocol</label>
+        <div className="form-control" id="connection-setting-protocol">
+          <select
+            className="browser-default"
+            value={transport.protocol}
+            onChange={(e) => setTransport({ ...transport, protocol: e.target.value as IProtocol })}
+          >
+            <option value="http">http</option>
+            <option value="https">https</option>
+          </select>
         </div>
-      ) : (
-        <div className="connection-settings-form">
-          <div className="input-container">
-            <label className="form-label" htmlFor="connection-setting-protocol">Protocol</label>
-            <div className="form-control" id="connection-setting-protocol">
-              <select
-                className="browser-default"
-                defaultValue={transport.protocol}
-                onChange={(e) => setTransport({ ...transport, protocol: e.target.value as IProtocol })}
-              >
-                <option value="http">http</option>
-                <option value="https">https</option>
-              </select>
-            </div>
-          </div>
+      </div>
 
-          <div className="input-container">
-            <label className="form-label" htmlFor="connection-setting-host">Host</label>
-            <div className="form-control">
-              <input type="text" id="connection-setting-host" value={transport.host} onChange={(e) => setTransport({ ...transport, host: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="input-container">
-            <label className="form-label" htmlFor="connection-setting-port">Port</label>
-            <div className="form-control">
-              <input
-                type="text" id="connection-setting-port" value={transport.port}
-                onChange={(e) => setTransport({
-                  ...transport,
-                  port: !e.target.value.length ? "" : (isNaN(Number(e.target.value)) ? transport.port : Number(e.target.value))
-                })} />
-            </div>
-          </div>
-
-          <div className="input-container">
-            <label className="form-label" htmlFor="connection-setting-token">Auth Token</label>
-            <div className="form-control">
-              <input type="password" id="connection-setting-token" value={transport.token} onChange={(e) => setTransport({ ...transport, token: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="input-container">
-            <label className="form-label" htmlFor="connection-setting-pinToContext">Pin Session To Context</label>
-            <div className="form-control">
-              <SearchableSelectBox
-                options={sessions.map(session => ({ label: session.id, value: session.id, note: session.baseUrl }))}
-                onChange={sessionChanged}
-                addText={`Add new session`}
-                defaultValue={selectedSession}
-                onAdd={onAddSessionClicked}
-
-                addable
-                reversed
-                alwaysShowAddOption
-              />
-            </div>
-          </div>
-
-          <div className="input-container popup-button-container" style={{ alignContent: "flex-end" }}>
-            <button
-              className="btn blue waves-effect waves-light"
-              style={{ height: '3rem', width: '100%', padding: '5px', lineHeight: 'unset' }}
-              disabled={variables.retrying}
-              onClick={(e) => saveConnectionSettings(e, { ...config, transport, session: getSessionByID(selectedSession) })}
-            >Save and Connect</button>
-          </div>
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-host">Host</label>
+        <div className="form-control">
+          <input
+            type="text"
+            id="connection-setting-host"
+            value={transport.host}
+            onChange={(e) => setTransport({ ...transport, host: e.target.value })}
+            placeholder="e.g., localhost or 127.0.0.1"
+          />
         </div>
-      )}
-    </>
+      </div>
 
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-port">Port</label>
+        <div className="form-control">
+          <input
+            type="text"
+            id="connection-setting-port"
+            value={transport.port}
+            onChange={(e) => setTransport({
+              ...transport,
+              port: !e.target.value.length ? "" : (isNaN(Number(e.target.value)) ? transport.port : Number(e.target.value))
+            })}
+            placeholder="e.g., 8000"
+          />
+        </div>
+      </div>
+
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-token">Auth Token</label>
+        <div className="form-control token-input">
+          <input
+            type={showToken ? "text" : "password"}
+            id="connection-setting-token"
+            value={transport.token}
+            onChange={(e) => setTransport({ ...transport, token: e.target.value })}
+            onFocus={() => setShowToken(true)}
+            onBlur={() => setShowToken(false)}
+            placeholder="Enter your authentication token"
+          />
+        </div>
+      </div>
+
+      <div className="input-container">
+        <label className="form-label" htmlFor="connection-setting-context">Context ID</label>
+        <div className="form-control">
+          <select
+            className="browser-default"
+            value={selectedContext}
+            onChange={(e) => setSelectedContext(e.target.value)}
+          >
+            {availableContexts.map((context) => (
+              <option key={context} value={context}>
+                {context}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="input-container popup-button-container" style={{ display: 'flex', gap: '1rem' }}>
+        <button
+          className="btn grey waves-effect waves-light"
+          style={{ height: '3rem', flex: 1, padding: '5px', lineHeight: 'unset' }}
+          disabled={isTestingConnection || isSavingConnection}
+          onClick={testConnection}
+        >
+          {isTestingConnection ? 'Testing...' : 'Test Connection'}
+        </button>
+
+        <button
+          className="btn blue waves-effect waves-light"
+          style={{ height: '3rem', flex: 1, padding: '5px', lineHeight: 'unset' }}
+          disabled={isTestingConnection || isSavingConnection}
+          onClick={saveConnectionSettings}
+        >
+          {isSavingConnection ? 'Saving...' : 'Save & Connect'}
+        </button>
+      </div>
+    </div>
   );
 };
 

@@ -23,7 +23,9 @@ export const DEFAULT_CONFIG: {
     host: '127.0.0.1',
     port: 8000,
     token: 'canvas-server-token',
-    pinToContext: '/'
+    pinToContext: '/',
+    isApiToken: false,
+    contextId: 'default'
   }
 };
 
