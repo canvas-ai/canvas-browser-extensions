@@ -39,7 +39,8 @@ let buildConfig = {
     '.png': 'dataurl',
     '.svg': 'dataurl',
     '.woff2': 'file',
-    '.woff': 'file'
+    '.woff': 'file',
+    '.css': 'css'
   },
   plugins: [
     postcssPlugin({
@@ -48,6 +49,7 @@ let buildConfig = {
       },
     }),
   ],
+  external: ['react-toastify'],
 }
 
 if (isDev) {
