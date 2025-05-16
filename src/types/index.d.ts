@@ -1,6 +1,5 @@
 interface ITabDocumentSchema {
-  type: string | string[],
-  meta: any,
+  schema: string | string[],
   data: any
 }
 
@@ -114,9 +113,12 @@ type ICanvasInsertResponse = ISocketResponse<ICanvasInsertResponsePayload[]>;
 type ICanvasInsertOneResponse = ISocketResponse<ICanvasInsertResponsePayload>;
 
 interface IFormattedTabProperties {
-  type: 'data/abstraction/tab',
-  meta: Partial<ICanvasInsertMetaRequestInputs>,
-  data: ICanvasTab,
+  schema: 'data/abstraction/tab',
+  data: {
+    browser: IBrowserType,
+    url: string,
+    tabData: ICanvasTab,
+  },
 }
 
 interface ISessionContext {

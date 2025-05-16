@@ -1,20 +1,15 @@
 import { Dispatch } from "redux";
-import { SET_CONNECTED, SET_CONTEXT, SET_PINNED_TABS, SET_RETRYING, SET_SESSION_LIST, VariableActionTypes } from "./varActionTypes";
+import { SET_CONNECTED, SET_CONTEXT, SET_PINNED_TABS, SET_RETRYING, VariableActionTypes } from "./varActionTypes";
 import { browser } from "@/general/utils";
 
-export const setSessionList = (sessions: ISession[]): VariableActionTypes => ({
-  type: SET_SESSION_LIST,
-  payload: sessions
+export const setConnected = (isConnected: boolean): VariableActionTypes => ({
+  type: SET_CONNECTED,
+  payload: isConnected
 });
 
 export const setRetrying = (retrying: boolean): VariableActionTypes => ({
   type: SET_RETRYING,
   payload: retrying
-});
-
-export const setConnected = (connected: boolean): VariableActionTypes => ({
-  type: SET_CONNECTED,
-  payload: connected,
 });
 
 export const setContext = (context: IContext): VariableActionTypes => ({

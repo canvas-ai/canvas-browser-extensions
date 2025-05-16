@@ -34,6 +34,7 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
   }
 
   const togglePinned = (url: string) => {
+    console.log('[BrowserTabsCollection] togglePinned clicked for url:', url);
     const pinnedTabs = variables.pinnedTabs.filter(pt => pt !== url);
     if (pinnedTabs.length !== variables.pinnedTabs.length) return dispatch(setPinnedTabs(pinnedTabs));
     return dispatch(setPinnedTabs([...pinnedTabs, url]));
@@ -47,6 +48,7 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
   }
 
   const setTabCheck = (tab: ICanvasTab, checked: boolean) => {
+    console.log('[BrowserTabsCollection] setTabCheck called for tab:', tab.url, 'checked:', checked);
     if (checked) setCheckedTabs(tabs => ([...tabs, tab]));
     else setCheckedTabs(tabs => tabs.filter(t => t.url !== tab.url))
   }

@@ -1,23 +1,15 @@
-import { SOCKET_MESSAGES } from "@/general/constants";
+import { SOCKET_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./utils";
+import { IContext } from "@/types/IContext";
+import { context as currentActiveContext } from "./context";
 
 
-export function canvasFetchTabsForContext(): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_STATS, {}, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching tabs for context", res);
-        reject("Error fetching tabs for context from Canvas");
-      } else {
-        console.log("background.js | Tabs for context fetched: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
+export const canvasFetchTabsForContext = async (contextId: string) => {
+  const socket = await getSocket();
+  return socket.listDocuments(contextId);
+};
 
 export function canvasFetchContextUrl(): Promise<string> {
   return new Promise(async (resolve, reject) => {
@@ -25,7 +17,7 @@ export function canvasFetchContextUrl(): Promise<string> {
     socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, {}, (res) => {
       if (!res || res.status !== "success") {
         console.error("background.js | Error fetching context URL", res);
-        reject("Error fetching context url from Canvas");
+        reject(res?.message || "Error fetching context url from Canvas");
       } else {
         console.log("background.js | Context URL fetched: ", res);
         resolve(res.payload);
@@ -34,92 +26,40 @@ export function canvasFetchContextUrl(): Promise<string> {
   });
 }
 
-export function canvasFetchContext(): Promise<IContext> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching context", res);
-        reject("Error fetching context from Canvas");
-      } else {
-        console.log("background.js | Context fetched: ", res);
-        resolve(res.payload);
-      }
-    });
-  });
+export const canvasFetchContext = async (contextId?: string) => {
+  const socket = await getSocket();
+  if (!contextId) {
+    // fallback: get current context from extension state if needed
+    throw new Error('contextId required for canvasFetchContext');
+  }
+  return socket.getContext(contextId);
+};
+
+export async function canvasFetchDocuments(contextId: string, featureArray: string[]): Promise<any[]> {
+  const socket = await getSocket();
+  // Use the new websocket-centric API helper
+  return socket.listDocuments(contextId, featureArray);
 }
 
-export function canvasFetchDocuments(contextId: string, featureArray: string[]): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY, {
-      contextId,
-      featureArray
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching documents", res);
-        reject("Error fetching documents from Canvas");
-      } else {
-        console.log("background.js | Documents fetched: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
+export const canvasInsertDocument = async (contextId: string, document: any, featureArray = [], options = {}) => {
+  const socket = await getSocket();
+  return socket.insertDocument(contextId, document, featureArray, options);
+};
 
-export function canvasInsertDocument(contextId: string, document: any): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
-      contextId,
-      document
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error inserting document", res);
-        reject("Error inserting document to Canvas");
-      } else {
-        console.log("background.js | Document inserted: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
+export const canvasUpdateDocument = async (contextId: string, document: any, featureArray = [], options = {}) => {
+  const socket = await getSocket();
+  return socket.updateDocument(contextId, document, featureArray, options);
+};
 
-export function canvasUpdateDocument(contextId: string, document: any): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, {
-      contextId,
-      document
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error updating document", res);
-        reject("Error updating document in Canvas");
-      } else {
-        console.log("background.js | Document updated: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
+export const canvasRemoveDocument = async (contextId: string, documentId: string) => {
+  const socket = await getSocket();
+  return socket.removeDocument(contextId, documentId);
+};
 
-export function canvasDeleteDocument(contextId: string, documentId: string): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, {
-      contextId,
-      documentId
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error deleting document", res);
-        reject("Error deleting document from Canvas");
-      } else {
-        console.log("background.js | Document deleted: ", res);
-        resolve(res);
-      }
-    });
-  });
-}
+export const canvasDeleteDocument = async (contextId: string, documentId: string) => {
+  const socket = await getSocket();
+  return socket.deleteDocument(contextId, documentId);
+};
 
 export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
@@ -139,20 +79,52 @@ export function canvasFetchTab(docId: number) {
 export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    if (!tab) {
-      reject("background.js | Invalid tab");
+    if (!currentActiveContext.id) {
+      console.error("background.js | canvasInsertTab: Active contextId is not available.");
+      return reject("Active contextId is not available. Cannot insert tab.");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, formatTabProperties(tab), genFeatureArray("WRITE"), resolve);
+    if (!tab) {
+      return reject("background.js | Invalid tab");
+    }
+    const payload = {
+      contextId: currentActiveContext.id,
+      document: formatTabProperties(tab),
+      featureArray: genFeatureArray("WRITE")
+    };
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, payload, (res: ICanvasInsertOneResponse) => {
+      if (res && res.status === 'success') {
+        resolve(res);
+      } else {
+        console.error('background.js | canvasInsertTab failed or unexpected response:', res);
+        reject(res?.message || "Insert tab failed or unexpected response from server");
+      }
+    });
   });
 }
 
 export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasInsertResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    if (!tabArray || !tabArray.length) {
-      reject("background.js | Invalid tab array");
+    if (!currentActiveContext.id) {
+      console.error("background.js | canvasInsertTabArray: Active contextId is not available.");
+      return reject("Active contextId is not available. Cannot insert tabs.");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray("WRITE"), resolve);
+    if (!tabArray || !tabArray.length) {
+      return reject("background.js | Invalid tab array");
+    }
+    const payload = {
+      contextId: currentActiveContext.id,
+      documents: tabArray.map((t) => formatTabProperties(t)),
+      featureArray: genFeatureArray("WRITE")
+    };
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, payload, (res: ICanvasInsertResponse) => {
+      if (res && res.status === 'success') {
+        resolve(res);
+      } else {
+        console.error('background.js | canvasInsertTabArray failed or unexpected response:', res);
+        reject(res?.message || "Insert tab array failed or unexpected response from server");
+      }
+    });
   });
 }
 
@@ -226,18 +198,53 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
       reject("background.js | Invalid tab array");
     }
     console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), contextUrlArray, genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY,
+      {
+        contextId: contextUrlArray[0],
+        documents: tabArray.map((tab) => formatTabProperties(tab)),
+        featureArray: genFeatureArray("WRITE")
+      },
+      resolve
+    );
   });
 }
 
 export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
-  if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
   return {
-    type: 'data/abstraction/tab',
-    meta: {
-      url: tab.url,
-      browser: getCurrentBrowser()
+    schema: 'data/abstraction/tab',
+    data: {
+      browser: getCurrentBrowser(),
+      url: tab.url || '',
+      tabData: { ...tab },
     },
-    data: { ...tab, id: tab.docId || tab.id },
   };
 }
+
+/**
+ * Fetch user contexts from Canvas
+ */
+export const canvasFetchUserContexts = async () => {
+  try {
+    const socket = await getSocket();
+    const contexts = await socket.listContexts();
+
+    // Filter out any null or undefined contexts and log a warning
+    const validContexts = contexts.filter(ctx => {
+      if (!ctx) {
+        console.warn('background.js | canvasFetchUserContexts received null or undefined context');
+        return false;
+      }
+      return true;
+    });
+
+    if (validContexts.length === 0 && contexts.length > 0) {
+      console.error('background.js | canvasFetchUserContexts: All contexts were invalid');
+    }
+
+    console.log(`background.js | canvasFetchUserContexts: Fetched ${validContexts.length} contexts`);
+    return validContexts;
+  } catch (error) {
+    console.error('background.js | canvasFetchUserContexts error:', error);
+    return [];
+  }
+};

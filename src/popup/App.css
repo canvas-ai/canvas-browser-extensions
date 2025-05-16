@@ -1,1 +1,40 @@
 @import "react-toastify/dist/ReactToastify.min.css";
+
+/* Increase popup size to 720px x 640px */
+body, html {
+  width: 720px;
+  height: 640px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Make the Connection settings popup wider */
+.popup-container .popup-content {
+  max-width: 600px !important;
+  min-width: 550px !important;
+}
+
+/* Make the form more spacious */
+.connection-settings-form {
+  padding: 10px;
+}
+
+/* Make popups adapt to larger container size */
+.popup-container.popup-opened .popup-content {
+  min-width: 90% !important;
+  max-width: 90% !important;
+  width: 90% !important;
+}
+
+/* Ensure proper scroll behavior */
+.connected-state-container {
+  height: 100%;
+  overflow: auto;
+}

@@ -49,7 +49,7 @@ let buildConfig = {
       },
     }),
   ],
-  external: ['react-toastify'],
+  external: [],
 }
 
 if (isDev) {

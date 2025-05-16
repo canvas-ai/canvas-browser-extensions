@@ -43,7 +43,8 @@ export const RUNTIME_MESSAGES = {
   pinned_tabs_updated: "pinned:tabs:updated",
 
   error_message: "error_message",
-  success_message: "success_message"
+  success_message: "success_message",
+  user_contexts_list_updated: "user:contexts:list:updated"
 }
 
 export const SOCKET_EVENTS = {
@@ -53,63 +54,61 @@ export const SOCKET_EVENTS = {
   connect_error: "connect_error",
   connect_timeout: "connect_timeout",
 
-  authenticated:  "authenticated",
-  invalid_token:  "invalid_token"
+  // Server WS_EVENTS
+  AUTHENTICATE: 'authenticate',
+  AUTHENTICATED:  "authenticated",
+  ERROR: 'error',
+
+  SUBSCRIBE: 'subscribe',
+  UNSUBSCRIBE: 'unsubscribe',
+  SUBSCRIBED: 'subscribed',
+  UNSUBSCRIBED: 'unsubscribed',
+
+  WORKSPACE_UPDATED: 'workspace:updated',
+  WORKSPACE_CREATED: 'workspace:created',
+  WORKSPACE_DELETED: 'workspace:deleted',
+  WORKSPACE_STATUS_CHANGED: 'workspace:status:changed',
+  WORKSPACE_TREE_UPDATED: 'workspace:tree:updated',
+
+  CONTEXT_CREATED: 'context:created',
+  CONTEXT_UPDATED: 'context:updated',
+  CONTEXT_DELETED: 'context:deleted',
+  CONTEXT_URL_CHANGED: 'context:url:changed',
+  CONTEXT_LOCKED: 'context:locked',
+  CONTEXT_UNLOCKED: 'context:unlocked',
+  CONTEXT_ACL_UPDATED: 'context:acl:updated',
+  CONTEXT_ACL_REVOKED: 'context:acl:revoked',
+
+  // Document events (broadcasted to context)
+  DOCUMENT_INSERT: 'document:insert',
+  DOCUMENT_UPDATE: 'document:update',
+  DOCUMENT_REMOVE: 'document:remove',
+  DOCUMENT_DELETE: 'document:delete',
+  DOCUMENTS_DELETE: 'documents:delete',
+
+  // Client-side only or legacy events should be removed or commented out
+  // invalid_token:  "invalid_token"
 }
 
 export const SOCKET_MESSAGES = {
   DOCUMENT_CONTEXT: {
     GET:          "context:document:get",
-    GET_ARRAY:    "context:document:getArray",
-    REMOVE:       "context:document:remove",
-    REMOVE_ARRAY: "context:document:removeArray",
-    DELETE:       "context:document:delete",
-    DELETE_ARRAY: "context:document:deleteArray",
     INSERT:       "context:document:insert",
-    INSERT_ARRAY: "context:document:insertArray"
+    UPDATE:       "context:document:update",
+    REMOVE:       "context:document:remove",
+    DELETE:       "context:document:delete",
+    INSERT_ARRAY: "context:documents:insert",
+    UPDATE_ARRAY: "context:documents:update",
+    REMOVE_ARRAY: "context:documents:remove",
+    DELETE_ARRAY: "context:documents:delete"
   },
-
-  DOCUMENT: {
-    GET:          "document:get",
-    GET_ARRAY:    "document:getArray",
-    REMOVE:       "document:remove",
-    REMOVE_ARRAY: "document:removeArray",
-    DELETE:       "document:delete",
-    DELETE_ARRAY: "document:deleteArray",
-    INSERT:       "document:insert",
-    INSERT_ARRAY: "document:insertArray"
-  },
-
   CONTEXT: {
     GET:          "context:get",
-    GET_STATS:    "context:get:stats",
-    GET_URL:      "context:get:url",
-    SET_URL:      "context:set:url"
+    GET_URL:      "context:url:get",
+    SET_URL:      "context:url:set",
+    // Removed GET_STATS as not present in server
   },
-
-  SCHEMAS: {
-    GET:          "schemas:get"
-  },
-
-  SESSION: {
-    CREATE:       "session:create",
-    LIST:         "session:list",
-    LIST_ACTIVE:  "session:list:active",
-    GET:          "session:get",
-    GET_ID:       "session:get:id",
-    REMOVE:       "session:remove",
-    OPEN:         "session:open",
-    CLOSE:        "session:close",
-    DELETE:       "session:delete",
-    
-    CONTEXT: {
-      LIST:       "session:context:list",
-      GET:        "session:context:get",
-      GET_ID:     "session:context:get:id",
-      CREATE:     "session:context:create",
-      REMOVE:     "session:context:remove"
-    }
-  }
+  // Remove unused DOCUMENT and SESSION blocks for clarity, or keep if still used elsewhere
 }
 
 export const DEFAULT_SESSION = {

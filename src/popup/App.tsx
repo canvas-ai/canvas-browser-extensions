@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import "./App.css";
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -14,6 +14,7 @@ import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { messageListener } from './listener';
 import { ToastContainer } from "react-toastify";
+import 'react-toastify/dist/ReactToastify.css';
 import { loadInitialPinnedTabsState } from './redux/variables/varActions';
 import { browser } from '@/general/utils';
 
@@ -24,30 +25,55 @@ const App: React.FC = () => {
   const dispatch = useDispatch<Dispatch<any>>();
 
   const [popupOpen, setPopupOpen] = useState<boolean>(false);
+  const [initialLoadDone, setInitialLoadDone] = useState<boolean>(false);
 
+  // Create a stable message listener reference
+  const stableMessageListener = useCallback(
+    messageListener(dispatch, variables),
+    [dispatch] // Only recreate if dispatch changes
+  );
+
+  // Initial setup - only run once
   useEffect(() => {
+    console.log("App: Initial setup - loading config and requesting updates");
     store.dispatch(loadInitialConfigState());
     store.dispatch(loadInitialPinnedTabsState());
-    requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
-  }, []);
 
-  useEffect(() => {
+    // Request initial state
+    requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
     requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
     requestVariableUpdate({ action: RUNTIME_MESSAGES.context_get });
 
-    browser.runtime.onMessage.addListener(messageListener(dispatch, variables));
+    setInitialLoadDone(true);
 
+    // Set up message listener
+    browser.runtime.onMessage.addListener(stableMessageListener);
+
+    // Cleanup on unmount
     return () => {
-      browser.runtime.onMessage.removeListener(messageListener(dispatch, variables));
-    }
-  }, [variables.context.url]);
+      browser.runtime.onMessage.removeListener(stableMessageListener);
+    };
+  }, [stableMessageListener]);
 
+  // Handle connection state changes
   useEffect(() => {
-    if (variables.connected) {
+    if (variables.connected && initialLoadDone) {
+      console.log("App: Connected - requesting tabs and sessions");
       requestUpdateTabs();
-      requestUpdateSessionsList();
+
+      // Only request sessions list once when connected
+      if (variables.connected) {
+        requestUpdateSessionsList();
+      }
     }
-  }, [variables.connected]);
+  }, [variables.connected, initialLoadDone]);
+
+  // Log context changes to help with debugging
+  useEffect(() => {
+    if (initialLoadDone && variables.context?.url) {
+      console.log("App: Context URL changed to:", variables.context.url);
+    }
+  }, [variables.context?.url, initialLoadDone]);
 
   const setConnectionDetailsClicked: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     setPopupOpen(true);

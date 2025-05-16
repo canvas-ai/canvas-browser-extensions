@@ -18,7 +18,14 @@
   "permissions": [
     "activeTab",
     "tabs",
-    "storage"
+    "storage",
+    "scripting",
+    "notifications",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {
