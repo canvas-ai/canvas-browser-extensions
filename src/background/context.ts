@@ -9,7 +9,7 @@ const DEFAULT_URL = 'universe:///';
 
 export let context: IContext = {
   url: DEFAULT_URL,
-  contextArray: [],
+  contextBitmapArray: [],
   color: '#fff',
 };
 
@@ -17,7 +17,7 @@ export const updateContext = (ctx: IContext | undefined) => {
   if (!ctx) {
     context.url = DEFAULT_URL;
     context.color = '#fff';
-    context.contextArray = [];
+    context.contextBitmapArray = [];
     delete context.path;
     delete context.pathArray;
     delete context.tree;
@@ -28,7 +28,7 @@ export const updateContext = (ctx: IContext | undefined) => {
   context.url = typeof ctx.url === "string" ? ctx.url : DEFAULT_URL;
   console.log("updating context", ctx);
   context.color = ctx.color || "#fff";
-  context.contextArray = ctx.contextArray || [];
+  context.contextBitmapArray = ctx.contextBitmapArray || [];
 
   if (ctx.path) context.path = ctx.path;
   else delete context.path;
@@ -50,7 +50,7 @@ export const setContext = async (ctx: { payload: IContext }) => {
 
 export const setContextUrl = async (url: { payload: string }) => {
   console.log('background.js | [socket.io] Received context URL update: ', url);
-  const previousContextIdArray = context.contextArray;
+  const previousContextIdArray = context.contextBitmapArray;
   context.url = url.payload;
 
   const previousContextTabsArray = index.getCanvasTabArray();

@@ -233,11 +233,11 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
 export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
   if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
   return {
-    type: 'data/abstraction/tab',
-    meta: {
+    schema: 'data/abstraction/tab',
+    data: {
       url: tab.url,
-      browser: getCurrentBrowser()
+      browser: getCurrentBrowser(),
+      ...tab, id: tab.docId || tab.id
     },
-    data: { ...tab, id: tab.docId || tab.id },
   };
 }

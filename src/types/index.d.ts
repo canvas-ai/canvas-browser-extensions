@@ -1,12 +1,11 @@
 interface ITabDocumentSchema {
   type: string | string[],
-  meta: any,
   data: any
 }
 
 interface IContext {
   url: string;
-  contextArray: string[];
+  contextBitmapArray: string[];
   color: string;
   path?: string;
   pathArray?: any;
@@ -75,6 +74,7 @@ interface ITabsInfo {
 
 interface ICanvasTab extends chrome.tabs.Tab {
   docId?: number;
+  browser?: IBrowserType;
 }
 
 type IVersionInput = 0;
@@ -114,8 +114,7 @@ type ICanvasInsertResponse = ISocketResponse<ICanvasInsertResponsePayload[]>;
 type ICanvasInsertOneResponse = ISocketResponse<ICanvasInsertResponsePayload>;
 
 interface IFormattedTabProperties {
-  type: 'data/abstraction/tab',
-  meta: Partial<ICanvasInsertMetaRequestInputs>,
+  schema: 'data/abstraction/tab',
   data: ICanvasTab,
 }
 
@@ -126,7 +125,7 @@ interface ISessionContext {
     url: string;
     path: string;
     array: any[];
-    contextArray: string[];
+    contextBitmapArray: string[];
     featureArray: any[];
     filterArray: any[];
 }

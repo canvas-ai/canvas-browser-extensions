@@ -16,11 +16,9 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
   // Runtime defaults
   let TabDocumentSchema: () => ITabDocumentSchema = () => {
     return {
-      type: 'data/abstraction/tab',
-      meta: {
-        browser: getCurrentBrowser()
-      },
-      data: {}
+      schema: 'data/abstraction/tab',
+      data: {
+      }
     }
   };
 
@@ -157,7 +155,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         await config.setMultiple(message.value);
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
         break;
-  
+
       // Context
       case RUNTIME_MESSAGES.context_get:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get, payload: context });
@@ -335,11 +333,11 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       case RUNTIME_MESSAGES.socket_retry:
         socket.initializeSocket();
         break;
-  
+
       case RUNTIME_MESSAGES.update_sessions_list:
         updateSessionsList();
         break;
-    
+
       default:
         console.error(`background.js | Unknown message action: ${message.action}`);
         break;
