@@ -133,6 +133,35 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: socket && socket.isConnected() });
         break;
 
+      case RUNTIME_MESSAGES.socket_retry:
+        try {
+          if (message.config) {
+            await config.setMultiple(message.config);
+          }
+          const newSocket = await getSocket();
+          newSocket.initializeSocket(true);
+
+          // Wait for connection to be established
+          return new Promise((resolve) => {
+            const checkConnection = setInterval(() => {
+              if (newSocket.isConnected()) {
+                clearInterval(checkConnection);
+                sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: true });
+                resolve({ status: 'success' });
+              }
+            }, 100);
+
+            // Timeout after 5 seconds
+            setTimeout(() => {
+              clearInterval(checkConnection);
+              resolve({ status: 'error', message: 'Connection timeout' });
+            }, 5000);
+          });
+        } catch (error: any) {
+          console.error('background.js | Error retrying socket connection:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to retry connection' });
+        }
+
       // Config
       case RUNTIME_MESSAGES.config_get:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
@@ -328,10 +357,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case RUNTIME_MESSAGES.index_clear:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.index_clear, payload: index.clearIndex() });
-        break;
-
-      case RUNTIME_MESSAGES.socket_retry:
-        socket.initializeSocket();
         break;
 
       case RUNTIME_MESSAGES.update_sessions_list:

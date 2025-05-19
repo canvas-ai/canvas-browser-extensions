@@ -2,27 +2,51 @@ import { SOCKET_MESSAGES } from "@/general/constants";
 import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./utils";
+import { RUNTIME_MESSAGES } from '@/general/constants';
+import { sendRuntimeMessage } from './utils';
+import config from '@/general/config';
 
+const getContextId = () => {
+  const userEmail = config.transport.token && !config.transport.isApiToken ?
+    JSON.parse(atob(config.transport.token.split('.')[1])).email : '';
+  return userEmail ? `${userEmail}/default` : 'default';
+};
 
-export function canvasFetchTabsForContext(): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_STATS, {}, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching tabs for context", res);
-        reject("Error fetching tabs for context from Canvas");
+export const canvasFetchContext = async (): Promise<IContext> => {
+  const socket = await getSocket();
+  return new Promise((resolve, reject) => {
+    socket.emit('context:get', getContextId(), (response: any) => {
+      if (response && response.status === 'success') {
+        resolve(response.payload.context);
       } else {
-        console.log("background.js | Tabs for context fetched: ", res);
-        resolve(res);
+        reject(new Error(response?.message || 'Failed to fetch context'));
       }
     });
   });
-}
+};
+
+export const canvasFetchTabsForContext = async (): Promise<any> => {
+  const socket = await getSocket();
+  return new Promise((resolve, reject) => {
+    socket.emit('context:documents:list', {
+      contextId: getContextId(),
+      featureArray: ['tab'],
+      filterArray: [],
+      options: {}
+    }, (response: any) => {
+      if (response && response.status === 'success') {
+        resolve(response);
+      } else {
+        reject(new Error(response?.message || 'Failed to fetch tabs'));
+      }
+    });
+  });
+};
 
 export function canvasFetchContextUrl(): Promise<string> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, {}, (res) => {
+    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, getContextId(), (res) => {
       if (!res || res.status !== "success") {
         console.error("background.js | Error fetching context URL", res);
         reject("Error fetching context url from Canvas");
@@ -34,26 +58,11 @@ export function canvasFetchContextUrl(): Promise<string> {
   });
 }
 
-export function canvasFetchContext(): Promise<IContext> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching context", res);
-        reject("Error fetching context from Canvas");
-      } else {
-        console.log("background.js | Context fetched: ", res);
-        resolve(res.payload);
-      }
-    });
-  });
-}
-
-export function canvasFetchDocuments(contextId: string, featureArray: string[]): Promise<any> {
+export function canvasFetchDocuments(featureArray: string[]): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY, {
-      contextId,
+      contextId: getContextId(),
       featureArray
     }, (res) => {
       if (!res || res.status !== "success") {
@@ -67,11 +76,11 @@ export function canvasFetchDocuments(contextId: string, featureArray: string[]):
   });
 }
 
-export function canvasInsertDocument(contextId: string, document: any): Promise<any> {
+export function canvasInsertDocument(document: any): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
-      contextId,
+      contextId: getContextId(),
       document
     }, (res) => {
       if (!res || res.status !== "success") {
@@ -85,11 +94,11 @@ export function canvasInsertDocument(contextId: string, document: any): Promise<
   });
 }
 
-export function canvasUpdateDocument(contextId: string, document: any): Promise<any> {
+export function canvasUpdateDocument(document: any): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, {
-      contextId,
+      contextId: getContextId(),
       document
     }, (res) => {
       if (!res || res.status !== "success") {
@@ -103,11 +112,11 @@ export function canvasUpdateDocument(contextId: string, document: any): Promise<
   });
 }
 
-export function canvasDeleteDocument(contextId: string, documentId: string): Promise<any> {
+export function canvasDeleteDocument(documentId: string): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, {
-      contextId,
+      contextId: getContextId(),
       documentId
     }, (res) => {
       if (!res || res.status !== "success") {
@@ -126,8 +135,11 @@ export function canvasFetchTab(docId: number) {
     const socket = await getSocket();
     socket.emit(
       SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET,
+      {
+        contextId: getContextId(),
+        documentId: docId
+      },
       genFeatureArray("READ"),
-      docId,
       (res) => {
         console.log("background.js | Tab fetched: ", res);
         resolve(res);
@@ -142,7 +154,10 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
     if (!tab) {
       reject("background.js | Invalid tab");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, formatTabProperties(tab), genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
+      contextId: getContextId(),
+      document: formatTabProperties(tab)
+    }, genFeatureArray("WRITE"), resolve);
   });
 }
 
@@ -152,7 +167,10 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
     if (!tabArray || !tabArray.length) {
       reject("background.js | Invalid tab array");
     }
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, {
+      contextId: getContextId(),
+      documents: tabArray.map((tab) => formatTabProperties(tab))
+    }, genFeatureArray("WRITE"), resolve);
   });
 }
 
@@ -166,7 +184,10 @@ function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "dele
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
     if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-    socket.emit(ROUTE, tab.docId, (res) => {
+    socket.emit(ROUTE, {
+      contextId: getContextId(),
+      documentId: tab.docId
+    }, (res) => {
       if (res.status === "success") {
         console.log(`background.js | Successful tab(${tab.id}) ${log} from canvas: `, res);
         index.removeCanvasTab(tab.url as string);
@@ -188,7 +209,10 @@ function deleteOrRemoveTabs(ROUTE: string, tabs: ICanvasTab[], log: "remove" | "
       if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
       return tab;
     });
-    socket.emit(ROUTE, tabs.map(tab => tab.docId), (res) => {
+    socket.emit(ROUTE, {
+      contextId: getContextId(),
+      documentIdArray: tabs.map(tab => tab.docId)
+    }, (res) => {
       if (res.status === "success") {
         console.log(`background.js | Successful ${log} tabs from canvas result: `, res);
         tabs.forEach(tab => index.removeCanvasTab(tab.url as string));
@@ -226,7 +250,11 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
       reject("background.js | Invalid tab array");
     }
     console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
-    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, tabArray.map((tab) => formatTabProperties(tab)), contextUrlArray, genFeatureArray("WRITE"), resolve);
+    socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, {
+      contextId: getContextId(),
+      documents: tabArray.map((tab) => formatTabProperties(tab)),
+      contextUrlArray
+    }, genFeatureArray("WRITE"), resolve);
   });
 }
 

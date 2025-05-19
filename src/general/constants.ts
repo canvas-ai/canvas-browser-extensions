@@ -43,7 +43,9 @@ export const RUNTIME_MESSAGES = {
   pinned_tabs_updated: "pinned:tabs:updated",
 
   error_message: "error_message",
-  success_message: "success_message"
+  success_message: "success_message",
+
+  context_list: "context:list"
 }
 
 export const SOCKET_EVENTS = {
@@ -66,8 +68,10 @@ export const SOCKET_MESSAGES = {
     DELETE:       "context:document:delete",
     DELETE_ARRAY: "context:document:deleteArray",
     INSERT:       "context:document:insert",
-    //INSERT_ARRAY: "context:document:insertArray"
-    INSERT_ARRAY: "context:documents:insert"
+    INSERT_ARRAY: "context:documents:insert",
+    UPDATE:       "context:document:update",
+    UPDATE_ARRAY: "context:documents:update",
+    LIST:         "context:documents:list"
   },
 
   DOCUMENT: {
@@ -83,9 +87,16 @@ export const SOCKET_MESSAGES = {
 
   CONTEXT: {
     GET:          "context:get",
-    GET_STATS:    "context:get:stats",
-    GET_URL:      "context:get:url",
-    SET_URL:      "context:set:url"
+    LIST:         "context:list",
+    GET_URL:      "context:url:get",
+    SET_URL:      "context:url:set",
+    CREATED:      "context:created",
+    UPDATED:      "context:updated",
+    LOCKED:       "context:locked",
+    UNLOCKED:     "context:unlocked",
+    DELETED:      "context:deleted",
+    ACL_UPDATED:  "context:acl:updated",
+    ACL_REVOKED:  "context:acl:revoked"
   },
 
   SCHEMAS: {

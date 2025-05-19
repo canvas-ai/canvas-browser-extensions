@@ -33,8 +33,7 @@ interface IConfigProps {
     port: number | "",
     token: string,
     pinToContext: string,
-    isApiToken: boolean,
-    contextId: string
+    isApiToken: boolean
   },
 }
 
