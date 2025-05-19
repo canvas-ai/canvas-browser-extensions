@@ -66,7 +66,8 @@ export const SOCKET_MESSAGES = {
     DELETE:       "context:document:delete",
     DELETE_ARRAY: "context:document:deleteArray",
     INSERT:       "context:document:insert",
-    INSERT_ARRAY: "context:document:insertArray"
+    //INSERT_ARRAY: "context:document:insertArray"
+    INSERT_ARRAY: "context:documents:insert"
   },
 
   DOCUMENT: {
@@ -101,7 +102,7 @@ export const SOCKET_MESSAGES = {
     OPEN:         "session:open",
     CLOSE:        "session:close",
     DELETE:       "session:delete",
-    
+
     CONTEXT: {
       LIST:       "session:context:list",
       GET:        "session:context:get",
