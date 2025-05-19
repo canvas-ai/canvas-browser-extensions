@@ -117,7 +117,21 @@ interface IFormattedTabProperties {
   data: {
     browser: IBrowserType,
     url: string,
-    tabData: ICanvasTab,
+    title?: string,
+    favIconUrl?: string,
+    browserTabId?: number,
+    browserTabIndex?: number,
+    pinned?: boolean,
+    active?: boolean,
+    highlighted?: boolean,
+    incognito?: boolean,
+    audible?: boolean,
+    mutedInfo?: chrome.tabs.MutedInfo,
+    discarded?: boolean,
+    windowId?: number,
+    openerTabId?: number,
+    width?: number,
+    height?: number,
   },
 }
 

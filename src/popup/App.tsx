@@ -30,7 +30,7 @@ const App: React.FC = () => {
   // Create a stable message listener reference
   const stableMessageListener = useCallback(
     messageListener(dispatch, variables),
-    [dispatch] // Only recreate if dispatch changes
+    [dispatch, variables] // Only recreate if dispatch or variables changes
   );
 
   // Initial setup - only run once

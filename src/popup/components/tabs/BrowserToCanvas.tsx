@@ -5,6 +5,8 @@ import BrowserTabsCollection from '../BrowserTabsCollection';
 import { browser } from '@/general/utils';
 import { Dispatch } from 'redux';
 import { setBrowserTabs, setSyncedBrowserTabs } from '@/popup/redux/tabs/tabActions';
+import { showSuccessMessage, showErrorMessage } from '../../utils';
+import { requestUpdateTabs } from '../../utils';
 
 const BrowserToCanvas: React.FC<any> = ({ }) => {
   const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
@@ -26,12 +28,21 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
 
   const syncAllClicked = () => {
     console.log('UI | Syncing all tabs to canvas');
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert }).then((res) => {
-      console.log('UI | Res: ' + res)
-      // updateTabs(dispatch);
-    }).catch((error) => {
-      console.error('UI | Error syncing tabs to canvas:', error);
-    });
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert })
+      .then((response) => {
+        if (response && response.status === 'success') {
+          console.log('UI | All tabs synced successfully:', response);
+          showSuccessMessage('All syncable tabs sent to Canvas!');
+          requestUpdateTabs();
+        } else {
+          console.error('UI | Failed to sync all tabs:', response?.message || 'Unknown issue');
+          showErrorMessage(response?.message || 'Failed to sync all tabs.');
+        }
+      })
+      .catch((error) => {
+        console.error('UI | Error syncing all tabs to canvas:', error);
+        showErrorMessage(`Error syncing all tabs: ${error.message || 'Unknown error'}`);
+      });
   }
 
   const closeSelectedClicked = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, closableTabs: ICanvasTab[]) => {
@@ -53,14 +64,28 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
 
   const syncSelectedClicked = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, syncableTabs: ICanvasTab[]) => {
     e.preventDefault();
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert, tabs: syncableTabs }).then((res) => {
-      setCheckedBrowserTabs([]);
-      setCheckedSyncedBrowserTabs([]);
-      console.log('UI | Res: ' + res);
-      // updateTabs(dispatch);
-    }).catch((error) => {
-      console.error('UI | Error syncing tabs to canvas:', error);
-    });
+    if (syncableTabs.length === 0) {
+      showErrorMessage('No tabs selected to sync.');
+      return;
+    }
+    console.log('UI | Syncing selected tabs to canvas:', syncableTabs.length);
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tabs_insert, tabs: syncableTabs })
+      .then((response) => {
+        if (response && response.status === 'success') {
+          console.log('UI | Selected tabs synced successfully:', response);
+          showSuccessMessage(`${syncableTabs.length} tab(s) sent to Canvas!`);
+          setCheckedBrowserTabs([]);
+          setCheckedSyncedBrowserTabs([]);
+          requestUpdateTabs();
+        } else {
+          console.error('UI | Failed to sync selected tabs:', response?.message || 'Unknown issue');
+          showErrorMessage(response?.message || 'Failed to sync selected tabs.');
+        }
+      })
+      .catch((error) => {
+        console.error('UI | Error syncing selected tabs to canvas:', error);
+        showErrorMessage(`Error syncing selected tabs: ${error.message || 'Unknown error'}`);
+      });
   }
 
   return (
@@ -89,7 +114,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
       </div>
       <div className="collapsible-container">
         <div className="collapsible-item">
-          <div 
+          <div
             className="collapsible-header"
             onClick={() => toggleSection('syncableBrowser')}
           >
@@ -111,7 +136,7 @@ const BrowserToCanvas: React.FC<any> = ({ }) => {
         </div>
 
         <div className="collapsible-item">
-          <div 
+          <div
             className="collapsible-header"
             onClick={() => toggleSection('syncedBrowser')}
           >

@@ -1,4 +1,4 @@
-import config from '@/general/config';
+import configStore from '@/general/ConfigStore';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
 import { canvasFetchUserContexts, canvasFetchContext, canvasFetchTabsForContext } from './canvas';
 import index from './TabIndex';
@@ -21,6 +21,7 @@ export const resetConnectionAttempts = () => {
 };
 
 const getSocketOptions = (): Partial<ManagerOptions & SocketOptions> => {
+  const config = configStore.getAll();
   return {
     withCredentials: true,
     secure: config.transport.protocol === 'https',
@@ -50,6 +51,7 @@ class MySocket {
   }
 
   private connectionUri(): string {
+    const config = configStore.getAll();
     return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}`;
   }
 
@@ -102,66 +104,78 @@ class MySocket {
 
     this.isReconnecting = true;
 
-    // Check if too many connection attempts
-    const now = Date.now();
-    if (now - lastConnectionTime < CONNECTION_THROTTLE_MS) {
-      console.warn(`background.js | [socket.io] Reconnection throttled. Last attempt was ${now - lastConnectionTime}ms ago.`);
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.error_message,
-        payload: 'Connection throttled. Please wait a few seconds before retrying.'
-      });
+    try {
+      // Check if too many connection attempts
+      const now = Date.now();
+      if (now - lastConnectionTime < CONNECTION_THROTTLE_MS) {
+        console.warn(`background.js | [socket.io] Reconnection throttled. Last attempt was ${now - lastConnectionTime}ms ago.`);
+        sendRuntimeMessage({
+          type: RUNTIME_MESSAGES.error_message,
+          payload: 'Connection throttled. Please wait a few seconds before retrying.'
+        });
 
-      // Reset flag after delay
-      setTimeout(() => {
-        this.isReconnecting = false;
-      }, CONNECTION_THROTTLE_MS);
+        // Reset flag after delay
+        setTimeout(() => {
+          this.isReconnecting = false;
+        }, CONNECTION_THROTTLE_MS);
 
-      return;
-    }
+        return;
+      }
 
-    if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-      console.warn(`background.js | [socket.io] Too many connection attempts (${connectionAttempts}). Please wait before trying again.`);
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.error_message,
-        payload: 'Too many connection attempts. Please wait a minute before trying again or reload the extension.'
-      });
+      if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+        console.warn(`background.js | [socket.io] Too many connection attempts (${connectionAttempts}). Please wait before trying again.`);
 
-      // Reset flag after delay
-      setTimeout(() => {
-        this.isReconnecting = false;
-      }, 5000);
+        // Reset attempt counter since this is a manual reconnect
+        console.log('background.js | [socket.io] Manual reconnection requested - resetting connection attempts');
+        resetConnectionAttempts();
+        connectionAttempts = 1; // Count this attempt
+      } else {
+        // Update attempt tracking
+        connectionAttempts++;
+      }
 
-      return;
-    }
+      lastConnectionTime = now;
 
-    // Update attempt tracking
-    connectionAttempts++;
-    lastConnectionTime = now;
-
-    if (this.socket) {
-      // Get fresh auth options with latest token
+      // Get fresh connection URI and options
+      const connectionUri = this.connectionUri();
       const freshOptions = getSocketOptions();
-      const tokenPreview = config.transport.token
-        ? `${config.transport.token.substring(0, 4)}...`
+      const tokenPreview = configStore.getAll().transport.token
+        ? `${configStore.getAll().transport.token.substring(0, 4)}...`
         : 'no token';
 
-      console.log(`background.js | [socket.io] Attempting to reconnect with token ${tokenPreview}... (attempt ${connectionAttempts})`);
+      console.log(`background.js | [socket.io] Attempting to reconnect to ${connectionUri} with token ${tokenPreview}... (attempt ${connectionAttempts})`);
 
       // Update auth before reconnecting
       this.socket.auth = freshOptions.auth || {};
 
-      this.socket.disconnect().connect();
-    } else {
-      console.log('background.js | [socket.io] Socket not initialized, creating new connection.');
-      this.socket = io(this.connectionUri(), getSocketOptions());
-      this.initializeSocketEventListeners();
-      this.connect();
-    }
+      // Force disconnect and reconnect
+      if (this.socket.connected) {
+        console.log('background.js | [socket.io] Socket is connected, disconnecting first');
+        this.socket.disconnect();
+      }
 
-    // Reset reconnecting flag after a short delay
-    setTimeout(() => {
+      // Wait a short time for disconnect to complete
+      setTimeout(() => {
+        try {
+          console.log('background.js | [socket.io] Connecting to', connectionUri);
+          this.socket.connect();
+        } catch (err) {
+          console.error('background.js | [socket.io] Error during connect process:', err);
+          sendRuntimeMessage({
+            type: RUNTIME_MESSAGES.error_message,
+            payload: `Connection error: ${err instanceof Error ? err.message : 'Unknown error'}`
+          });
+        }
+
+        // Reset reconnecting flag after a short delay
+        setTimeout(() => {
+          this.isReconnecting = false;
+        }, 2000);
+      }, 500);
+    } catch (error) {
+      console.error('background.js | [socket.io] Unhandled error in reconnect:', error);
       this.isReconnecting = false;
-    }, 2000);
+    }
   }
 
   private initializeSocketEventListeners() {
@@ -174,7 +188,7 @@ class MySocket {
 
     this.socket.on(SOCKET_EVENTS.AUTHENTICATED, async (data: { userId: string; email: string }) => {
       console.log('background.js | [socket.io] Authenticated successfully with Canvas:', data);
-      console.log(`background.js | [socket.io] Using configured contextId: ${config.transport.contextId || 'none'}`);
+      console.log(`background.js | [socket.io] Using configured contextId: ${configStore.getAll().transport.contextId || 'none'}`);
       this.sendSocketEvent(SOCKET_EVENTS.AUTHENTICATED);
 
       try {
@@ -190,7 +204,7 @@ class MySocket {
 
         if (contexts && contexts.length > 0) {
           // If we have a configured contextId, try to find it in the list
-          const configuredContextId = config.transport.contextId;
+          const configuredContextId = configStore.getAll().transport.contextId;
           let initialActiveContext = contexts[0]; // Default to first
 
           if (configuredContextId) {
@@ -284,7 +298,11 @@ class MySocket {
             updateContext(payload as IContext);
         } else {
             console.log('background.js | [socket.io] CONTEXT_UPDATED with operation, re-fetching context for safety.');
-            canvasFetchContext().then(ctx => updateContext(ctx));
+            if (payload.id && payload.id !== 'unknown') {
+              canvasFetchContext(payload.id).then(ctx => updateContext(ctx));
+            } else {
+              console.warn('[socket.io] CONTEXT_UPDATED: Cannot re-fetch context as payload.id is invalid in this branch.');
+            }
         }
 
         if (payload.operation && typeof payload.operation === 'string' && payload.operation.startsWith('document')) {
@@ -296,20 +314,30 @@ class MySocket {
     this.socket.on(SOCKET_EVENTS.WORKSPACE_UPDATED, (payload: { workspaceId: string; /* other properties */ }) => {
       console.log('background.js | [socket.io] Received WORKSPACE_UPDATED:', payload);
       if (payload && payload.workspaceId === this.currentWorkspaceId) {
-        canvasFetchContext().then(ctx => updateContext(ctx));
+        if (context && context.id && context.id !== 'unknown') {
+          canvasFetchContext(context.id).then(ctx => updateContext(ctx));
+        } else {
+          console.warn(`[socket.io] WORKSPACE_UPDATED: Cannot re-fetch context as current context ID is unknown. WorkspaceID: ${payload.workspaceId}`);
+        }
       }
     });
 
     this.socket.on(SOCKET_EVENTS.WORKSPACE_TREE_UPDATED, (payload: { workspaceId: string; /* other properties */ }) => {
       console.log('background.js | [socket.io] Received WORKSPACE_TREE_UPDATED:', payload);
       if (payload && payload.workspaceId === this.currentWorkspaceId) {
-        canvasFetchContext().then(ctx => updateContext(ctx));
+        if (context && context.id && context.id !== 'unknown') {
+          canvasFetchContext(context.id).then(ctx => updateContext(ctx));
+        } else {
+          console.warn(`[socket.io] WORKSPACE_TREE_UPDATED: Cannot re-fetch context as current context ID is unknown. WorkspaceID: ${payload.workspaceId}`);
+        }
       }
     });
 
     // Listen for context:url:changed and update context in UI
     this.socket.on(SOCKET_EVENTS.CONTEXT_URL_CHANGED, async (payload: { id: string, url: string }) => {
-      console.log('[socket.io] Received CONTEXT_URL_CHANGED:', payload);
+      console.log('=== IMPORTANT EVENT ===');
+      console.log(`[socket.io] Received CONTEXT_URL_CHANGED event from server for context ${payload?.id || 'unknown'} with URL ${payload?.url || 'unknown'}`);
+      console.log('======================');
 
       try {
         // Skip if we don't have a payload with required properties
@@ -322,11 +350,15 @@ class MySocket {
         const isCurrentContext = payload.id === this.currentContextId;
 
         // Check if this is our configured context (even if not current)
-        const isConfiguredContext = payload.id === config.transport.contextId;
+        const isConfiguredContext = payload.id === configStore.getAll().transport.contextId;
 
-        // If this context isn't relevant to us, skip processing
+        // Always send the event to the UI for processing
+        console.log(`[socket.io] Broadcasting CONTEXT_URL_CHANGED event to UI for context ${payload.id} with URL ${payload.url}`);
+        this.sendSocketEvent(SOCKET_EVENTS.CONTEXT_URL_CHANGED, payload);
+
+        // If this context isn't relevant to us, skip further processing
         if (!isCurrentContext && !isConfiguredContext) {
-          console.log(`[socket.io] Ignoring CONTEXT_URL_CHANGED for non-relevant context ${payload.id}`);
+          console.log(`[socket.io] Not updating local state for non-relevant context ${payload.id}`);
           return;
         }
 
@@ -361,6 +393,12 @@ class MySocket {
                 type: RUNTIME_MESSAGES.context_get_url,
                 payload: ctx.url
               });
+
+              // Also send the full context to ensure all UI components update
+              sendRuntimeMessage({
+                type: RUNTIME_MESSAGES.context_get,
+                payload: updatedCtx
+              });
             }, 100);
           } else {
             console.warn('[socket.io] Could not fetch context after URL change event');
@@ -368,11 +406,20 @@ class MySocket {
             // As a fallback, create a minimal context update with the new URL
             if (context && context.id === payload.id) {
               console.log('[socket.io] Using fallback: updating existing context with new URL');
-              updateContext({
+
+              const updatedContext = {
                 ...context,
                 url: payload.url,
                 updatedAt: new Date().toISOString(),
                 serverInitiated: true
+              };
+
+              updateContext(updatedContext);
+
+              // Still send the URL update message to the UI
+              sendRuntimeMessage({
+                type: RUNTIME_MESSAGES.context_get_url,
+                payload: payload.url
               });
             }
           }
@@ -381,11 +428,23 @@ class MySocket {
 
           // Still update the URL as a fallback to ensure UI gets the change
           if (context && context.id === payload.id) {
-            updateContext({
+            const updatedContext = {
               ...context,
               url: payload.url,
               updatedAt: new Date().toISOString(),
               serverInitiated: true
+            };
+
+            updateContext(updatedContext);
+
+            // Send both URL update and context update messages
+            sendRuntimeMessage({
+              type: RUNTIME_MESSAGES.context_get_url,
+              payload: payload.url
+            });
+            sendRuntimeMessage({
+              type: RUNTIME_MESSAGES.context_get,
+              payload: updatedContext
             });
           }
         }
@@ -438,6 +497,39 @@ class MySocket {
   sendSocketEvent(e: string, payload?: any) {
     // Skip non-critical socket events like 'ping', 'pong', etc.
     const nonCriticalEvents = ['ping', 'pong', 'subscribed', 'unsubscribed'];
+
+    // Important events that should never be skipped
+    const importantEvents = [
+      SOCKET_EVENTS.CONTEXT_URL_CHANGED,
+      SOCKET_EVENTS.AUTHENTICATED,
+      SOCKET_EVENTS.ERROR,
+      SOCKET_EVENTS.connect,
+      SOCKET_EVENTS.disconnect,
+      SOCKET_EVENTS.connect_error
+    ];
+
+    // Always let important events through
+    if (importantEvents.includes(e)) {
+      console.log(`[socket.io] Broadcasting important socket event to UI: ${e}`);
+
+      // Update the timestamp for this event type
+      const now = Date.now();
+      this.lastSentEvents.set(e, now);
+
+      // Send the notification
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.socket_event,
+        payload: {
+          event: e,
+          ...(payload || {}),
+          timestamp: now
+        }
+      });
+
+      return;
+    }
+
+    // Skip non-critical events
     if (nonCriticalEvents.includes(e)) {
       console.log(`[socket.io] Skipping non-critical event notification: ${e}`);
       return;
@@ -608,10 +700,11 @@ class MySocket {
 let socketInstance: MySocket | null = null;
 
 export const getSocket = async (): Promise<MySocket> => {
-  if (!config.load) {
-    console.error("Config object does not have a load method. Cannot ensure config is loaded.");
-  } else {
-    await config.load();
+  try {
+    // Initialize the config store if not already initialized
+    await configStore.init();
+  } catch (error) {
+    console.error("Error initializing config store:", error);
   }
 
   if (socketInstance) {
@@ -643,14 +736,91 @@ export const updateLocalCanvasTabsData = (contextId: string) => {
       sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error fetching tabs for context ${contextId}` });
       return console.error(`ERROR: background.js | Error fetching tabs for context ${contextId}`, tabArray);
     }
+
+    // Process tab documents from server to ensure they have the format TabIndex expects
     if (tabArray.length) {
-        index.insertCanvasTabArray(tabArray);
+      console.log('background.js | Raw tabs from server:', tabArray);
+
+      // Transform the server-returned documents into the expected ICanvasTab format
+      const processedTabs: ICanvasTab[] = [];
+
+      tabArray.forEach(tab => {
+        try {
+          const docId = tab.id || tab._id;
+
+          // Handle both formats: direct properties in data or nested in data.tabData array
+          if (tab.data?.tabData && Array.isArray(tab.data.tabData) && tab.data.tabData.length > 0) {
+            // New format: tab properties are in data.tabData array
+            const tabData = tab.data.tabData[0];
+            processedTabs.push({
+              id: tabData.id || tabData.browserTabId || 0,
+              docId: docId,
+              url: tabData.url || tab.data.url,
+              title: tabData.title || '',
+              favIconUrl: tabData.favIconUrl || '',
+              pinned: !!tabData.pinned,
+              active: !!tabData.active,
+              highlighted: !!tabData.highlighted,
+              discarded: tabData.discarded !== false,
+              incognito: !!tabData.incognito,
+              audible: !!tabData.audible,
+              mutedInfo: tabData.mutedInfo,
+              index: tabData.index || tabData.browserTabIndex || 0,
+              windowId: tabData.windowId,
+              openerTabId: tabData.openerTabId,
+              width: tabData.width,
+              height: tabData.height,
+              // Add properties required by ICanvasTab interface
+              selected: tabData.selected || false,
+              autoDiscardable: tabData.autoDiscardable !== false,
+              groupId: tabData.groupId || -1
+            } as ICanvasTab);
+          } else if (tab.data) {
+            // Original format: tab properties are directly in data
+            const tabData = tab.data;
+            processedTabs.push({
+              id: tabData.browserTabId || 0,
+              docId: docId,
+              url: tabData.url,
+              title: tabData.title || '',
+              favIconUrl: tabData.favIconUrl || '',
+              pinned: !!tabData.pinned,
+              active: !!tabData.active,
+              highlighted: !!tabData.highlighted,
+              discarded: tabData.discarded !== false,
+              incognito: !!tabData.incognito,
+              audible: !!tabData.audible,
+              mutedInfo: tabData.mutedInfo,
+              index: tabData.browserTabIndex || 0,
+              windowId: tabData.windowId,
+              openerTabId: tabData.openerTabId,
+              width: tabData.width,
+              height: tabData.height,
+              // Add properties required by ICanvasTab interface
+              selected: tabData.selected || false,
+              autoDiscardable: tabData.autoDiscardable !== false,
+              groupId: tabData.groupId || -1
+            } as ICanvasTab);
+          }
+        } catch (err) {
+          console.error('background.js | Error processing tab from server:', err, tab);
+        }
+      });
+
+      console.log(`background.js | Processed ${processedTabs.length} tabs from server response`);
+      if (processedTabs.length > 0) {
+        index.insertCanvasTabArray(processedTabs);
+      } else {
+        console.warn('background.js | Failed to process any tabs from server response');
+      }
+    } else {
+      console.log('background.js | No tabs found for context:', contextId);
     }
   }).then(() => {
     index.updateBrowserTabs();
   }).catch(error => {
-      console.error(`background.js | Error in updateLocalCanvasTabsData for context ${contextId}:`, error);
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Failed to update local tab data for context ${contextId}.` });
+    console.error(`background.js | Error in updateLocalCanvasTabsData for context ${contextId}:`, error);
+    sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Failed to update local tab data for context ${contextId}.` });
   });
 };
 

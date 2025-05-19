@@ -21,20 +21,84 @@ const Search: React.FC<any> = ({ }) => {
     }));
   };
 
-  const filterTab = (tab: ICanvasTab) => {
-    // This should never happen (assuming schema validation is working properly)
-    if (!tab.title && !tab.url) return false;
-    return tab.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tab.url?.split("//")[1].split("/")[0].includes(searchTerm.toLowerCase());
-  }
+  // Helper function to safely get tab URL considering various possible data formats
+  const getTabUrl = (tab: any): string => {
+    if (tab.url) return tab.url;
+    if (tab.data && tab.data.url) return tab.data.url;
+    // For nested tabData structure
+    if (tab.data && tab.data.tabData && tab.data.tabData[0] && tab.data.tabData[0].url) {
+      return tab.data.tabData[0].url;
+    }
+    return '';
+  };
+
+  // Helper function to safely get tab title
+  const getTabTitle = (tab: any): string => {
+    if (tab.title) return tab.title;
+    if (tab.data && tab.data.title) return tab.data.title;
+    // For nested tabData structure
+    if (tab.data && tab.data.tabData && tab.data.tabData[0] && tab.data.tabData[0].title) {
+      return tab.data.tabData[0].title;
+    }
+    return '';
+  };
+
+  const filterTab = (tab: any) => {
+    const title = getTabTitle(tab);
+    const url = getTabUrl(tab);
+
+    // If we have no searchable content, filter out the tab
+    if (!title && !url) return false;
+
+    // Empty search returns all tabs
+    if (!searchTerm.trim()) return true;
+
+    // Check if title or domain matches search term
+    const searchTermLower = searchTerm.toLowerCase();
+    const titleMatch = title?.toLowerCase().includes(searchTermLower);
+
+    let domainMatch = false;
+    try {
+      // Extract domain from URL for matching
+      if (url) {
+        const urlParts = url.split('//');
+        if (urlParts.length > 1) {
+          const domain = urlParts[1].split('/')[0];
+          domainMatch = domain.toLowerCase().includes(searchTermLower);
+        } else {
+          domainMatch = url.toLowerCase().includes(searchTermLower);
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing URL for search:', e);
+      // As fallback, just check if URL contains search term
+      domainMatch = url?.toLowerCase().includes(searchTermLower);
+    }
+
+    return titleMatch || domainMatch;
+  };
 
   useEffect(() => {
-    setFilteredTabs({
-      canvasTabs: tabs.canvasTabs.filter(filterTab),
-      browserTabs: tabs.browserTabs.filter(filterTab),
-      openedCanvasTabs: tabs.openedCanvasTabs.filter(filterTab),
-      syncedBrowserTabs: tabs.syncedBrowserTabs.filter(filterTab)
-    });
+    try {
+      console.log('Search | Filtering tabs with search term:', searchTerm);
+      console.log('Search | Tab counts before filtering:', {
+        canvasTabs: tabs.canvasTabs.length,
+        browserTabs: tabs.browserTabs.length,
+        openedCanvasTabs: tabs.openedCanvasTabs.length,
+        syncedBrowserTabs: tabs.syncedBrowserTabs.length
+      });
+
+      setFilteredTabs({
+        canvasTabs: tabs.canvasTabs.filter(filterTab),
+        browserTabs: tabs.browserTabs.filter(filterTab),
+        openedCanvasTabs: tabs.openedCanvasTabs.filter(filterTab),
+        syncedBrowserTabs: tabs.syncedBrowserTabs.filter(filterTab)
+      });
+    } catch (e) {
+      console.error('Error filtering tabs:', e);
+      // In case of error, show all tabs
+      setFilteredTabs(tabs);
+    }
   }, [tabs, searchTerm]);
 
   return (
@@ -49,7 +113,7 @@ const Search: React.FC<any> = ({ }) => {
           <div className="collapsible-container">
             {filteredTabs.canvasTabs.length ? (
               <div className="collapsible-item">
-                <div 
+                <div
                   className="collapsible-header"
                   onClick={() => toggleSection('closedCanvas')}
                 >
@@ -66,10 +130,10 @@ const Search: React.FC<any> = ({ }) => {
                 )}
               </div>
             ) : null}
-            
+
             {filteredTabs.openedCanvasTabs.length ? (
               <div className="collapsible-item">
-                <div 
+                <div
                   className="collapsible-header"
                   onClick={() => toggleSection('openedCanvas')}
                 >
@@ -98,7 +162,7 @@ const Search: React.FC<any> = ({ }) => {
           <div className="collapsible-container">
             {filteredTabs.browserTabs.length ? (
               <div className="collapsible-item">
-                <div 
+                <div
                   className="collapsible-header"
                   onClick={() => toggleSection('syncableBrowser')}
                 >
@@ -115,10 +179,10 @@ const Search: React.FC<any> = ({ }) => {
                 )}
               </div>
             ) : null}
-            
+
             {filteredTabs.syncedBrowserTabs.length ? (
               <div className="collapsible-item">
-                <div 
+                <div
                   className="collapsible-header"
                   onClick={() => toggleSection('syncedBrowser')}
                 >

@@ -6,6 +6,7 @@ import { Dispatch } from 'redux';
 import { setBrowserTabs } from '../redux/tabs/tabActions';
 import { setPinnedTabs } from '../redux/variables/varActions';
 import { browser } from '@/general/utils';
+import { showSuccessMessage, showErrorMessage } from '../utils';
 
 interface BrowserTabsCollectionTypes {
   browserTabs: ICanvasTab[];
@@ -27,10 +28,39 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
   };
 
   const syncTabClicked = (tab: ICanvasTab) => {
-    console.log('UI | Syncing a tab to canvas');
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_insert, tab }).catch((error) => {
-      console.error('UI | Error syncing tab to canvas:', error);
-    });
+    console.log('UI | Syncing a tab to canvas:', tab.url);
+    // Optimistically, you could change the icon or style of the tab here
+    // to indicate it's being synced.
+
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_insert, tab })
+      .then((response) => {
+        if (response && response.status === 'success') {
+          console.log('UI | Tab synced successfully:', response.payload);
+          showSuccessMessage('Tab synced to Canvas!');
+
+          // Remove the tab from the local 'browserTabs' list in Redux state
+          // Assuming browserTabs is the list of syncable tabs
+          // Note: The current 'browserTabs' prop might be stale here.
+          // It's better to fetch the latest from Redux store or have the reducer handle removal by ID.
+          // For simplicity, if 'browserTabs' prop is managed by a parent that refetches or
+          // if setBrowserTabs just triggers a general refresh, this might be okay.
+          // A more robust way is dispatching an action like REMOVE_BROWSER_TAB_BY_URL or similar.
+          // For now, we'll filter the current prop list and dispatch.
+          dispatch(setBrowserTabs(browserTabs.filter((t: ICanvasTab) => t.url !== tab.url)));
+
+          // TODO: Potentially add to a "synced" list or update its state in Redux
+          // e.g., dispatch(addSyncedTab(response.payload.id, tab));
+
+        } else {
+          // Handle cases where status is not 'success' but not an outright error either
+          console.error('UI | Failed to sync tab, server indicated an issue:', response?.message || 'Unknown issue');
+          showErrorMessage(response?.message || 'Failed to sync tab.');
+        }
+      })
+      .catch((error) => {
+        console.error('UI | Error syncing tab to canvas (runtime or network error):', error);
+        showErrorMessage(`Error syncing tab: ${error.message || 'Unknown error'}`);
+      });
   }
 
   const togglePinned = (url: string) => {

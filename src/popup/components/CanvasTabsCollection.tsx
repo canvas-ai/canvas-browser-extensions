@@ -12,10 +12,10 @@ interface CanvasTabsCollectionTypes {
 
 const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs, checkedTabs, setCheckedTabs = () => {} }) => {
   const variables = useSelector((state: { variables: IVarState }) => state.variables);
-  
+
   const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
-    if(!tab.id) return;
+    if(!tab.docId && !tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.context_tab_remove, tab }).catch((error) => {
         console.error('UI | Error deleting tabs from canvas:', error);
     });
@@ -23,7 +23,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
 
   const deleteCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Delete icon clicked: ', tab.url);
-    if(!tab.id) return;
+    if(!tab.docId && !tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_delete, tab }).catch((error) => {
         console.error('UI | Error deleting tabs from canvas:', error);
     });
@@ -41,51 +41,105 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
     else setCheckedTabs(tabs => tabs.filter(t => t.url !== tab.url))
   }
 
+  // Helper function to safely get tab URL considering various possible data formats
+  const getTabUrl = (tab: any): string => {
+    if (tab.url) return tab.url;
+    if (tab.data && tab.data.url) return tab.data.url;
+    // For nested tabData structure
+    if (tab.data && tab.data.tabData && tab.data.tabData[0] && tab.data.tabData[0].url) {
+      return tab.data.tabData[0].url;
+    }
+    return '';
+  };
+
+  // Helper function to safely get tab title
+  const getTabTitle = (tab: any): string => {
+    if (tab.title) return tab.title;
+    if (tab.data && tab.data.title) return tab.data.title;
+    // For nested tabData structure
+    if (tab.data && tab.data.tabData && tab.data.tabData[0] && tab.data.tabData[0].title) {
+      return tab.data.tabData[0].title;
+    }
+    return 'Unknown Title';
+  };
+
+  // Helper function to safely get favicon URL
+  const getTabFavIconUrl = (tab: any): string => {
+    if (tab.favIconUrl) return tab.favIconUrl;
+    if (tab.data && tab.data.favIconUrl) return tab.data.favIconUrl;
+    // For nested tabData structure
+    if (tab.data && tab.data.tabData && tab.data.tabData[0] && tab.data.tabData[0].favIconUrl) {
+      return tab.data.tabData[0].favIconUrl;
+    }
+    return '';
+  };
+
   return (
     <ul className="collection">
       {
-        !canvasTabs?.length ? 
-        (<li className="collection-item">No canvas tabs found</li>) : 
-        canvasTabs.map((tab: ICanvasTab, idx: number) => {
-          if(!tab.url) return null;
-          return <li key={idx + tab.url} className="collection-item">
-            {checkedTabs ? (
-              <div className="checkbox-container">
-                <input type="checkbox" onChange={(e) => setTabCheck(tab, e.target.checked)} checked={checkedTabs.some(({ url }) => url === tab.url)} />
-              </div>
-            ) : null}
+        !canvasTabs?.length ?
+        (<li className="collection-item">No canvas tabs found</li>) :
+        canvasTabs.map((tab: any, idx: number) => {
+          const tabUrl = getTabUrl(tab);
+          if(!tabUrl) return null;
 
-            <a 
-              href={tab.url}
-              className="truncate"
-              onClick={(e) => {
-                e.preventDefault();
-                openTabClicked(tab);
-                console.log('UI | Tab clicked: ', tab.url);
-              }}
-            >
-              <img src={tab.favIconUrl || ""} />
-              <span className="tab-title truncate black-text">{tab.title || ""}</span>
-            </a>
-            {
-              isOnUniverse(variables.context.url) ? 
-              null : 
-              (
-                <i 
-                  className="material-icons"
-                  style={{ cursor: "pointer" }}
-                  title="Remove tab from current context"
-                  onClick={(e) => { e.preventDefault(); removeCanvasToBrowserTabClicked(tab); }}
-                >close</i>  
-              )
-            }
-            <i 
-              className="material-icons"
-              style={{ cursor: "pointer", color: "#d90000" }}
-              title="Delete tab from all contexts"
-              onClick={(e) => { e.preventDefault(); deleteCanvasToBrowserTabClicked(tab); }}
-            >delete</i>
-          </li>
+          const tabTitle = getTabTitle(tab);
+          const tabFavIconUrl = getTabFavIconUrl(tab);
+
+          // Ensure tab object has required properties for other operations
+          const normalizedTab = {
+            ...tab,
+            url: tabUrl,
+            title: tabTitle,
+            favIconUrl: tabFavIconUrl,
+            // Ensure we have a document ID (needed for server operations)
+            docId: tab.docId || tab.id || tab._id
+          };
+
+          return (
+            <li key={idx + tabUrl} className="collection-item">
+              {checkedTabs ? (
+                <div className="checkbox-container">
+                  <input
+                    type="checkbox"
+                    onChange={(e) => setTabCheck(normalizedTab, e.target.checked)}
+                    checked={checkedTabs.some(({ url }) => url === tabUrl)}
+                  />
+                </div>
+              ) : null}
+
+              <a
+                href={tabUrl}
+                className="truncate"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openTabClicked(normalizedTab);
+                  console.log('UI | Tab clicked: ', tabUrl);
+                }}
+              >
+                <img src={tabFavIconUrl || ""} />
+                <span className="tab-title truncate black-text">{tabTitle || ""}</span>
+              </a>
+              {
+                isOnUniverse(variables.context.url) ?
+                null :
+                (
+                  <i
+                    className="material-icons"
+                    style={{ cursor: "pointer" }}
+                    title="Remove tab from current context"
+                    onClick={(e) => { e.preventDefault(); removeCanvasToBrowserTabClicked(normalizedTab); }}
+                  >close</i>
+                )
+              }
+              <i
+                className="material-icons"
+                style={{ cursor: "pointer", color: "#d90000" }}
+                title="Delete tab from all contexts"
+                onClick={(e) => { e.preventDefault(); deleteCanvasToBrowserTabClicked(normalizedTab); }}
+              >delete</i>
+            </li>
+          );
         })
       }
     </ul>

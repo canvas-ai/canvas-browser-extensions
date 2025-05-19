@@ -43,11 +43,6 @@ export const messageListener =
 
             // Dispatch the full context update to ensure all components rerender
             dispatch(setContext(updatedContext));
-
-            // Force Header to refresh by dispatching a dummy context update after a short delay
-            setTimeout(() => {
-              dispatch(setContext({ ...updatedContext }));
-            }, 50);
           } else {
             console.log(`UI | Skipping redundant context URL update: ${url}`);
           }
@@ -57,23 +52,16 @@ export const messageListener =
       case RUNTIME_MESSAGES.context_get: {
         const context = message.payload;
         if (context && context.id) {
-          // Compare with current context to avoid redundant updates
+          // Compare with current context to avoid redundant updates for logging purposes,
+          // but dispatch to ensure all properties are updated.
           const currentUrl = variables.context?.url;
           if (currentUrl !== context.url) {
-            console.log(`UI | Updating context: ${context.id} with URL ${context.url}`);
-
-            // Dispatch immediately
-            dispatch(setContext({ ...context }));
-
-            // Force a second update after a short delay to ensure UI components rerender
-            setTimeout(() => {
-              dispatch(setContext({ ...context }));
-            }, 50);
+            console.log(`UI | Updating context: ${context.id} with URL ${context.url} (previously ${currentUrl})`);
           } else {
-            // Even if the URL didn't change, update other properties
-            console.log(`UI | Context URL unchanged, updating other properties`);
-            dispatch(setContext({ ...context }));
+            console.log(`UI | Context URL unchanged (${context.url}), but updating other context properties for ID: ${context.id}`);
           }
+          // Dispatch immediately, ensuring a new object reference for Redux.
+          dispatch(setContext({ ...context }));
         }
         break;
       }
@@ -88,7 +76,7 @@ export const messageListener =
         break;
       }
       case RUNTIME_MESSAGES.socket_event: {
-        socketEventHandler(dispatch, message.payload);
+        socketEventHandler(dispatch, message.payload, variables);
         break;
       }
       case RUNTIME_MESSAGES.socket_status: {
@@ -133,7 +121,11 @@ export const messageListener =
   }
 }
 
-const socketEventHandler = (dispatch: Dispatch<any>, payload: any) => {
+const socketEventHandler = (
+  dispatch: Dispatch<any>,
+  payload: any,
+  variables?: IVarState
+) => {
   // Skip invalid payloads
   if (!payload || !payload.event) {
     console.error('UI | Invalid socket event payload:', payload);
@@ -151,7 +143,7 @@ const socketEventHandler = (dispatch: Dispatch<any>, payload: any) => {
   }
 
   const sockevent = payload.event;
-  console.log(`UI | Processing socket event: ${sockevent}`);
+  console.log(`UI | Processing socket event: ${sockevent}`, payload);
 
   try {
     switch (sockevent) {
@@ -174,6 +166,60 @@ const socketEventHandler = (dispatch: Dispatch<any>, payload: any) => {
       case SOCKET_EVENTS.connect_timeout:
         dispatch(setConnected(false)); // maybe could show timeout error
         dispatch(setRetrying(false));
+        break;
+      case SOCKET_EVENTS.CONTEXT_URL_CHANGED:
+        // Special handling for context URL changes from the server
+        console.log('=== UI PROCESSING CONTEXT_URL_CHANGED ===');
+        console.log('Raw payload:', payload);
+
+        // Extract the URL and contextId from the payload
+        // The payload structure can be either {url, id} or have these properties nested
+        let contextId = payload.id;
+        let newUrl = payload.url;
+
+        // Check for nested structure in case the server sends it differently
+        if (!newUrl && payload.payload) {
+          newUrl = payload.payload.url;
+          contextId = payload.payload.id || contextId;
+        }
+
+        console.log(`Extracted: contextId=${contextId}, newUrl=${newUrl}`);
+
+        if (contextId && newUrl && variables?.context) {
+          console.log(`UI | Received CONTEXT_URL_CHANGED from server for context ${contextId}: ${newUrl}`);
+
+          // Only process if it's for our current context
+          if (variables.context.id === contextId) {
+            // Check if the URL is actually different to avoid unnecessary updates
+            if (variables.context.url !== newUrl) {
+              console.log(`UI | Updating context URL from ${variables.context.url} to ${newUrl} based on server event`);
+
+              // Create a complete context object with the new URL
+              const updatedContext = {
+                ...variables.context,
+                url: newUrl,
+                _lastUpdated: Date.now() // Add timestamp to ensure Redux registers the change
+              };
+
+              // Dispatch the full context update to ensure all components rerender
+              dispatch(setContext(updatedContext));
+
+              // Also emit a context URL update event to ensure all components get notified
+              // This helps components that might only be listening for URL changes
+              dispatch({
+                type: 'CONTEXT_URL_UPDATED',
+                payload: newUrl
+              });
+            } else {
+              console.log(`UI | Skipping redundant context URL update: ${newUrl}`);
+            }
+          } else {
+            console.log(`UI | Ignoring URL change for non-current context: ${contextId} (current: ${variables.context.id})`);
+          }
+        } else {
+          console.warn('UI | Invalid CONTEXT_URL_CHANGED payload - missing required properties:', payload);
+        }
+        console.log('======================================');
         break;
       default:
         console.log(`UI | Unhandled socket event: "${sockevent}"`);

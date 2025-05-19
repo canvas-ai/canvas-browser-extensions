@@ -6,13 +6,23 @@ body, html {
   height: 640px;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  overflow: hidden; /* Prevent html/body from scrolling */
 }
 
 #root {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevent #root itself from scrolling, children will manage */
+}
+
+main { /* Style the main tag from App.tsx */
+  flex-grow: 1; /* Allows main to take available space */
+  overflow-y: auto; /* Main content area scrolls vertically if needed */
+  overflow-x: hidden; /* Prevent horizontal scroll on main */
+  /* Add some padding if necessary, e.g. padding: 10px; */
 }
 
 /* Make the Connection settings popup wider */
@@ -34,7 +44,10 @@ body, html {
 }
 
 /* Ensure proper scroll behavior */
+/* Re-evaluate .connected-state-container styles based on its parent (<main>) now handling scroll */
 .connected-state-container {
-  height: 100%;
-  overflow: auto;
+  /* height: 100%; */ /* This might no longer be needed or could be problematic */
+  /* overflow: auto; */ /* Main now handles overflow */
+  /* If .connected-state-container needs to fill height within main, other flex properties might be needed */
+  /* For now, let's remove its specific height and overflow, assuming its content will naturally flow or be managed internally */
 }

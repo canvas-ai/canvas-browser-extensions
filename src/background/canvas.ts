@@ -4,6 +4,7 @@ import index from "./TabIndex";
 import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated } from "./utils";
 import { IContext } from "@/types/IContext";
 import { context as currentActiveContext } from "./context";
+import { browser } from "@/general/utils";
 
 
 export const canvasFetchTabsForContext = async (contextId: string) => {
@@ -79,18 +80,20 @@ export function canvasFetchTab(docId: number) {
 export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    if (!currentActiveContext.id) {
-      console.error("background.js | canvasInsertTab: Active contextId is not available.");
-      return reject("Active contextId is not available. Cannot insert tab.");
+    if (!currentActiveContext.id || currentActiveContext.id === 'unknown') {
+      console.error("background.js | canvasInsertTab: Active contextId is not available or unknown.", currentActiveContext);
+      return reject("Active contextId is not available/unknown. Cannot insert tab.");
     }
-    if (!tab) {
-      return reject("background.js | Invalid tab");
+    if (!tab || !tab.url) {
+      console.error("background.js | canvasInsertTab: Invalid tab object or missing URL", tab);
+      return reject("Invalid tab object or missing URL for insert.");
     }
     const payload = {
       contextId: currentActiveContext.id,
       document: formatTabProperties(tab),
       featureArray: genFeatureArray("WRITE")
     };
+    console.log("canvasInsertTab: Emitting DOCUMENT_CONTEXT.INSERT with payload:", payload, "currentActiveContext:", currentActiveContext);
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, payload, (res: ICanvasInsertOneResponse) => {
       if (res && res.status === 'success') {
         resolve(res);
@@ -210,14 +213,49 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
 }
 
 export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
-  return {
+  const getFavIconUrl = (favIconUrl?: string) => {
+    // browser.runtime might not be available in all contexts this function could be imported into.
+    // It's safer to ensure browser is available or handle its absence.
+    try {
+      return favIconUrl || browser.runtime.getURL('icons/logo_64x64.png');
+    } catch (e) {
+      // Fallback if browser.runtime is not available (e.g., testing environment)
+      return favIconUrl || 'icons/logo_64x64.png';
+    }
+  };
+
+  // Make sure we have valid values for required fields
+  const formattedTab: IFormattedTabProperties = {
     schema: 'data/abstraction/tab',
     data: {
       browser: getCurrentBrowser(),
       url: tab.url || '',
-      tabData: { ...tab },
+      title: tab.title || '',
+      favIconUrl: getFavIconUrl(tab.favIconUrl),
+
+      // Browser-specific metadata
+      browserTabId: tab.id || 0,
+      browserTabIndex: tab.index || 0,
+      pinned: !!tab.pinned,
+      active: !!tab.active,
+      highlighted: !!tab.highlighted,
+      incognito: !!tab.incognito,
+      audible: !!tab.audible,
+      mutedInfo: tab.mutedInfo || undefined,
+      // Use tab.discarded if available, otherwise default to true, mirroring TabIndex behavior
+      discarded: typeof tab.discarded === 'boolean' ? tab.discarded : true,
+      // Only include optional properties if they actually exist
+      ...(tab.windowId !== undefined && { windowId: tab.windowId }),
+      ...(tab.openerTabId !== undefined && { openerTabId: tab.openerTabId }),
+      ...(tab.width !== undefined && { width: tab.width }),
+      ...(tab.height !== undefined && { height: tab.height }),
     },
   };
+
+  // Log the formatted tab for debugging
+  console.log('formatTabProperties: Formatted tab for server:', formattedTab);
+
+  return formattedTab;
 }
 
 /**

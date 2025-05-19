@@ -1,13 +1,23 @@
 import { canvasDeleteTab, canvasDeleteTabs, canvasFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
 import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
-import config from "@/general/config";
+import configStore from "@/general/ConfigStore";
 import { getSocket, resetConnectionAttempts } from "./socket";
 import index from "./TabIndex";
-import { context } from "./context";
+import { context, setContextUrl } from "./context";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
+
+// Initialize configuration system
+(async function() {
+  try {
+    await configStore.init();
+    console.log('background.js | Configuration initialized successfully');
+  } catch (error) {
+    console.error('background.js | Failed to initialize configuration:', error);
+  }
+})();
 
 // Request throttling
 const lastRequestTimes = new Map<string, number>();
@@ -183,7 +193,7 @@ const THROTTLE_MS = 2000; // 2 seconds
           }
 
           console.log('background.js | Socket connected, fetching contexts with token:',
-            config.transport.token ? `${config.transport.token.substring(0, 4)}...` : 'No token set');
+            configStore.getAll().transport.token ? `${configStore.getAll().transport.token.substring(0, 4)}...` : 'No token set');
 
           const contexts = await socket.listContexts();
           console.log('background.js | context:list result:', contexts);
@@ -216,24 +226,24 @@ const THROTTLE_MS = 2000; // 2 seconds
 
       // Config
       case RUNTIME_MESSAGES.config_get:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: configStore.getAll() });
         return true;
 
       case RUNTIME_MESSAGES.config_get_item:
         if (!message.key) return console.error('background.js | No config key specified');
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: configStore.getAll() });
         return true;
 
       case RUNTIME_MESSAGES.config_set_item:
         if (!message.key || !message.value) return console.error('background.js | No config key or value specified');
-        await config.set(message.key, message.value);
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        await configStore.set(message.key, message.value);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: configStore.getAll() });
         return true;
 
       case RUNTIME_MESSAGES.config_set:
         if (typeof message.value !== "object") return console.error('background.js | Invalid config', message.value);
-        await config.setMultiple(message.value);
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        await configStore.update(message.value);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: configStore.getAll() });
         return true;
 
       // Context
@@ -261,6 +271,26 @@ const THROTTLE_MS = 2000; // 2 seconds
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: context.tree });
         return true;
 
+      case RUNTIME_MESSAGES.context_set_url:
+        if (message.payload && typeof message.payload.url === 'string' && context && context.id !== 'unknown') {
+          const newUrl = message.payload.url;
+          console.log(`background.js | UI requested context URL update to: ${newUrl} for context ${context.id}`);
+          // The setContextUrl function from './context' handles server updates and local context changes.
+          setContextUrl({ payload: newUrl })
+            .then(() => {
+              console.log(`background.js | Successfully initiated context URL update to: ${newUrl}`);
+              sendResponse({ status: 'success', message: 'Context URL update initiated' });
+            })
+            .catch(err => {
+              console.error(`background.js | Error setting context URL to ${newUrl}:`, err);
+              sendResponse({ status: 'error', message: 'Failed to set context URL', error: err.message });
+            });
+        } else {
+          console.error('background.js | Invalid payload for context_set_url:', message.payload, '. Expected { url: string } and valid context.');
+          sendResponse({ status: 'error', message: 'Invalid payload for context_set_url. Expected { url: string } and active context.' });
+        }
+        return true; // Indicate async response
+
       // Additional handlers for popup messages
       case 'update:sessions:list':
         console.log('background.js | Acknowledging sessions list update request');
@@ -276,27 +306,74 @@ const THROTTLE_MS = 2000; // 2 seconds
 
       case 'socket:retry':
         console.log('background.js | Socket retry request received');
-        if (socket) {
-          // If a config object is provided, update the global config first
-          if (message.config) {
-            console.log('background.js | Updating config before socket retry:', message.config);
+        try {
+          if (socket) {
+            // Reset connection attempts before retrying
+            resetConnectionAttempts();
 
-            // Update the token in config
-            if (message.config.transport && message.config.transport.token) {
-              console.log(`background.js | Using provided token for reconnection: ${message.config.transport.token.substring(0, 4)}...`);
-              config.transport.token = message.config.transport.token;
-              config.transport.isApiToken = !!message.config.transport.isApiToken;
+            // Create a promise that will resolve with socket connection status
+            const connectionPromise = new Promise((resolve) => {
+              // Set up a success handler
+              const connectHandler = () => {
+                socket.socket.off('connect', connectHandler);
+                socket.socket.off('connect_error', errorHandler);
+                resolve({
+                  status: 'success',
+                  message: 'Socket connection successful'
+                });
+              };
 
-              // Save the updated config
-              await config.set('transport', config.transport);
-            }
+              // Set up an error handler
+              const errorHandler = (error: any) => {
+                console.error('background.js | Socket reconnection error:', error);
+                socket.socket.off('connect', connectHandler);
+                socket.socket.off('connect_error', errorHandler);
+                resolve({
+                  status: 'error',
+                  message: `Socket connection error: ${error?.message || 'Unknown error'}`
+                });
+              };
+
+              // Listen for connection events
+              socket.socket.once('connect', connectHandler);
+              socket.socket.once('connect_error', errorHandler);
+
+              // Set timeout to resolve the promise after 10 seconds
+              setTimeout(() => {
+                socket.socket.off('connect', connectHandler);
+                socket.socket.off('connect_error', errorHandler);
+                resolve({
+                  status: 'pending',
+                  message: 'Socket connection in progress (timeout reached)'
+                });
+              }, 10000);
+            });
+
+            // Initiate reconnection
+            socket.reconnect();
+
+            // Wait for the connection attempt to complete or timeout
+            const result = await Promise.race([
+              connectionPromise,
+              new Promise(resolve => setTimeout(() => resolve({
+                status: 'pending',
+                message: 'Connection attempt in progress'
+              }), 3000))
+            ]);
+
+            sendResponse(result);
+          } else {
+            sendResponse({
+              status: 'error',
+              message: 'Socket not initialized'
+            });
           }
-
-          resetConnectionAttempts(); // Reset connection attempts before retrying
-          socket.reconnect();
-          sendResponse({ status: 'success', message: 'Socket reconnection attempt initiated' });
-        } else {
-          sendResponse({ status: 'error', message: 'Socket not initialized' });
+        } catch (error) {
+          console.error('background.js | Error during socket retry:', error);
+          sendResponse({
+            status: 'error',
+            message: `Socket retry error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
         }
         return true;
 
@@ -353,16 +430,55 @@ const THROTTLE_MS = 2000; // 2 seconds
           sendResponse({status: 'error', error: 'Cannot fetch tabs: Context ID is unknown'});
           return true;
         }
-        canvasFetchTabsForContext(context.id).then((res: any) => {
-            if (!res || res.status === 'error') {
+        canvasFetchTabsForContext(context.id).then((tabArray: any[]) => {
+            if (!tabArray || !Array.isArray(tabArray)) {
                 sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas' });
                 sendResponse({status: 'error', error: 'Error fetching tabs'});
-            } else {
-                console.log('background.js | Tabs fetched from Canvas: ', res.data);
-                index.insertCanvasTabArray(res.data);
-                sendResponse({status: 'success', payload: res});
+                return;
             }
+            console.log('background.js | Tabs fetched from Canvas: ', tabArray.length);
+
+            // Process tab documents from server to ensure they have the format TabIndex expects
+            if (tabArray.length) {
+              // Transform the server-returned documents into the expected ICanvasTab format
+              const processedTabs = tabArray.map(tab => {
+                // The server returns tabs in a schema where tab properties are under 'data'
+                const tabData = tab.data || {};
+
+                return {
+                  id: tabData.browserTabId || 0,
+                  docId: tab.id || tab._id,
+                  url: tabData.url,
+                  title: tabData.title,
+                  favIconUrl: tabData.favIconUrl,
+                  pinned: tabData.pinned || false,
+                  active: tabData.active || false,
+                  highlighted: tabData.highlighted || false,
+                  discarded: tabData.discarded !== false,
+                  incognito: tabData.incognito || false,
+                  audible: tabData.audible || false,
+                  mutedInfo: tabData.mutedInfo,
+                  index: tabData.browserTabIndex || 0,
+                  windowId: tabData.windowId,
+                  openerTabId: tabData.openerTabId,
+                  width: tabData.width,
+                  height: tabData.height,
+                  // Add properties to satisfy ICanvasTab interface
+                  selected: tabData.selected || false,
+                  autoDiscardable: tabData.autoDiscardable !== false,
+                  groupId: tabData.groupId || -1
+                } as ICanvasTab;
+              });
+
+              console.log(`background.js | Processing ${processedTabs.length} tabs from server response`);
+              index.insertCanvasTabArray(processedTabs);
+            } else {
+              console.log('background.js | No tabs found for context:', context.id);
+            }
+
+            sendResponse({status: 'success', payload: { data: tabArray }});
         }).catch(err => {
+            console.error('background.js | Error fetching tabs:', err);
             sendResponse({status: 'error', error: err.message});
         });
         return true;
@@ -397,9 +513,26 @@ const THROTTLE_MS = 2000; // 2 seconds
             sendResponse({status: 'error', error: 'Error inserting tabs to Canvas'});
             return;
           }
-          index.insertCanvasTabArray(tabsToInsert.map((tab: ICanvasTab) => ({ ...tab, docId: res.payload.find(p => p.meta.url === tab.url)?.id })), false);
-          console.log('background.js | Tabs inserted to Canvas: ', res);
-          onContextTabsUpdated({ browserTabs: { removedTabs: tabsToInsert } });
+
+          // Match returned documents with sent tabs by URL
+          const tabsWithDocIds = tabsToInsert.map(tab => {
+            const matchingDoc = res.payload.find(p => p.meta?.url === tab.url);
+            return {
+              ...tab,
+              docId: matchingDoc?.id
+            };
+          }).filter(tab => tab.docId); // Only keep tabs that got a valid docId
+
+          console.log(`background.js | Mapped ${tabsWithDocIds.length} tabs with server-assigned docIds`);
+
+          if (tabsWithDocIds.length) {
+            index.insertCanvasTabArray(tabsWithDocIds, false);
+            console.log('background.js | Tabs inserted to Canvas: ', res);
+            onContextTabsUpdated({ browserTabs: { removedTabs: tabsToInsert } });
+          } else {
+            console.error('background.js | Failed to map any tabs with server docIds');
+          }
+
           sendResponse({status: 'success', payload: res});
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
