@@ -45,7 +45,7 @@ export const requestFetchTabsForContext = async (): Promise<chrome.tabs.Tab[]> =
       console.log(`background.js | [${SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT}] Tabs fetched: `, res.payload);
       socket.removeAllListeners(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT);
       if (res && res.status === 'success' && res.payload) {
-        resolve(res.payload.map((document: any) => document.data));
+        resolve(res.payload.map((document: any) => ({...document.data, docId: document.id})));
       } else {
         reject(new Error(res?.message || 'Failed to fetch tabs'));
         console.error('background.js | Invalid payload received for context:documents:list:result:', res);
