@@ -1,89 +1,127 @@
 import config from "@/general/config";
 import index from "./TabIndex";
-import { canvasFetchTabsForContext } from "./canvas";
+import { requestFetchTabsForContext } from "./canvas";
 import { handleContextChangeTabUpdates, browserOpenTabArray, sendRuntimeMessage } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
-import { getPinnedTabs } from "@/general/utils";
+import { getPinnedTabs, browser } from "@/general/utils";
 
 const DEFAULT_URL = 'universe:///';
 
-export let context: IContext = {
-  url: DEFAULT_URL,
-  contextBitmapArray: [],
-  color: '#fff',
+// Helper function to get the current context from storage
+const getCurrentContext = async (): Promise<IContext | null> => {
+  const selectedContext = await browser.storage.local.get(["CNVS_SELECTED_CONTEXT"]);
+  if (selectedContext.CNVS_SELECTED_CONTEXT) {
+    return selectedContext.CNVS_SELECTED_CONTEXT;
+  }
+  
+  const contexts = await browser.storage.local.get(["contexts"]);
+  return contexts.contexts?.[0] || null;
 };
 
-export const updateContext = (ctx: IContext | undefined) => {
+// Helper function to save the current context to storage
+const saveCurrentContext = async (ctx: IContext) => {
+  await browser.storage.local.set({ 
+    CNVS_CONTEXT: ctx,
+    CNVS_SELECTED_CONTEXT: ctx 
+  });
+};
+
+export const updateContext = async (ctx: IContext | undefined) => {
   if (!ctx) {
-    context.url = DEFAULT_URL;
-    context.color = '#fff';
-    context.contextBitmapArray = [];
-    delete context.path;
-    delete context.pathArray;
-    delete context.tree;
+    const defaultContext: IContext = {
+      id: 'default',
+      userId: 'default',
+      url: DEFAULT_URL,
+      color: '#fff',
+      contextBitmapArray: []
+    };
+    await saveCurrentContext(defaultContext);
     contextUrlChanged();
     return;
   }
 
-  context.url = typeof ctx.url === "string" ? ctx.url : DEFAULT_URL;
-  console.log("updating context", ctx);
-  context.color = ctx.color || "#fff";
-  context.contextBitmapArray = ctx.contextBitmapArray || [];
+  const updatedContext: IContext = {
+    ...ctx,
+    url: typeof ctx.url === "string" ? ctx.url : DEFAULT_URL,
+    color: ctx.color || "#fff",
+    contextBitmapArray: ctx.contextBitmapArray || []
+  };
 
-  if (ctx.path) context.path = ctx.path;
-  else delete context.path;
-
-  if (ctx.pathArray) context.pathArray = ctx.pathArray;
-  else delete context.pathArray;
-
-  if (ctx.tree) context.tree = ctx.tree;
-  else delete context.tree;
-
+  console.log("updating context", updatedContext);
+  await saveCurrentContext(updatedContext);
   contextUrlChanged();
 };
 
 export const setContext = async (ctx: { payload: IContext }) => {
   console.log("RECEIVED CONTEXT UPDATE", ctx);
-  updateContext(ctx.payload);
-  setContextUrl({ payload: context.url });
+  await updateContext(ctx.payload);
+  const currentContext = await getCurrentContext();
+  if (currentContext) {
+    setContextUrl({ payload: currentContext.url });
+  }
 }
 
 export const setContextUrl = async (url: { payload: string }) => {
   console.log('background.js | [socket.io] Received context URL update: ', url);
-  const previousContextIdArray = context.contextBitmapArray;
-  context.url = url.payload;
+  
+  const currentContext = await getCurrentContext();
+  const previousContextIdArray = currentContext?.contextBitmapArray || [];
+  
+  // Update the context with new URL
+  if (currentContext) {
+    const updatedContext = { ...currentContext, url: url.payload };
+    await saveCurrentContext(updatedContext);
+  }
 
   const previousContextTabsArray = index.getCanvasTabArray();
 
   await index.updateBrowserTabs();
 
   try {
-    let res: any = await canvasFetchTabsForContext();
-    if (res && res.data) {
-      index.insertCanvasTabArray(res.data);
-    }
-
-    const pinnedTabs = await getPinnedTabs();
-
-    switch(config.sync.tabBehaviorOnContextChange) {
-      case "Close": {
-        // Automatically close existing tabs that are outside of context
-        await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs);
-        break;
+    console.log('background.js | Fetching tabs for new context...');
+    requestFetchTabsForContext().then(async (tabs) => {
+      if (tabs) {
+        console.log(`background.js | Received ${tabs.length} tabs for new context`);
+        // Use silent method first to update storage, then trigger UI update
+        index.insertCanvasTabArraySilent(tabs, true);
+        // Now update browser tabs to recalculate sync status and notify UI
+        await index.updateBrowserTabs();
+      } else {
+        console.log('background.js | No tabs found for new context');
+        // Clear canvas tabs if no data received
+        index.clearCanvasTabs();
       }
-      case "Save and Close": {
-        await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs, previousContextIdArray);
-        break;
+  
+      const pinnedTabs = await getPinnedTabs();
+  
+      switch(config.sync.tabBehaviorOnContextChange) {
+        case "Close": {
+          // Automatically close existing tabs that are outside of context
+          await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs);
+          break;
+        }
+        case "Save and Close": {
+          await handleContextChangeTabUpdates(previousContextTabsArray, pinnedTabs, previousContextIdArray);
+          break;
+        }
+        case "Keep": {
+          // do nothing
+        }
       }
-      case "Keep": {
-        // do nothing
+  
+      if (config.sync.autoOpenCanvasTabs) {
+        // Automatically open new canvas tabs
+        await browserOpenTabArray(index.getCanvasTabArray().filter(({ url }) => !pinnedTabs.some(u => u === url)));
       }
-    }
-
-    if (config.sync.autoOpenCanvasTabs) {
-      // Automatically open new canvas tabs
-      await browserOpenTabArray(index.getCanvasTabArray().filter(({ url }) => !pinnedTabs.some(u => u === url)));
-    }
+  
+      // Send success message to popup
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: 'Context switched successfully'
+      });
+      
+      console.log('background.js | Context switch completed successfully');
+    });
   } catch (error) {
     console.error('Error updating context:', error);
     sendRuntimeMessage({
@@ -96,6 +134,7 @@ export const setContextUrl = async (url: { payload: string }) => {
   contextUrlChanged();
 }
 
-export const contextUrlChanged = () => {
-  sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url });
+export const contextUrlChanged = async () => {
+  const currentContext = await getCurrentContext();
+  sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: currentContext?.url || DEFAULT_URL });
 }

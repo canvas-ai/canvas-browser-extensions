@@ -1,9 +1,8 @@
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { showErrorMessage, showSuccessMessage, tabsUpdated } from "./utils";
-import { setConnected, setContext, setPinnedTabs, setRetrying, setSessionList } from "./redux/variables/varActions";
+import { setConnected, setRetrying, saveUserInfo, saveContext, savePinnedTabs, saveSessionList } from "./redux/variables/varActions";
 import { addBrowserTabs, addCanvasTabs, addOpenedCanvasTabs, addSyncedBrowserTabs, removeBrowserTabs, removeCanvasTabs, removeOpenedCanvasTabs, removeSyncedBrowserTabs, setBrowserTabs, setCanvasTabs, setOpenedCanvasTabs, setSyncedBrowserTabs } from "./redux/tabs/tabActions";
 import { Dispatch } from "redux";
-import { setConfig } from "./redux/config/configActions";
 import { getPinnedTabs } from "@/general/utils";
 
 export const messageListener = 
@@ -11,17 +10,18 @@ export const messageListener =
   console.log('UI | Message received: ', message);
   switch(message.type) {
     case RUNTIME_MESSAGES.config_get: {
-      dispatch(setConfig(message.payload));
+      // Config is now handled by storage hooks, no action needed
       break;
     }
     case RUNTIME_MESSAGES.context_get_url: {
       const url = message.payload;
-      dispatch(setContext({ ...variables.context, url }));
+      // Update context in storage, fetch current context first
+      saveContext({ id: 'default', url, contextBitmapArray: [], color: '#fff' });
       break;
     }
     case RUNTIME_MESSAGES.context_get: {
       const context = message.payload;
-      dispatch(setContext({ ...context }));
+      saveContext(context);
       break;
     }
     case RUNTIME_MESSAGES.tabs_updated: {
@@ -30,12 +30,12 @@ export const messageListener =
     }
     case RUNTIME_MESSAGES.pinned_tabs_updated: {
       getPinnedTabs().then(pinnedTabs => {
-        dispatch(setPinnedTabs(pinnedTabs));        
+        savePinnedTabs(pinnedTabs);        
       })
       break;
     }
     case RUNTIME_MESSAGES.update_sessions_list: {
-      dispatch(setSessionList(message.payload as ISession[]));
+      saveSessionList(message.payload as ISession[]);
       break;
     }
     case RUNTIME_MESSAGES.socket_event: {
@@ -86,6 +86,11 @@ const socketEventHandler = (dispatch: Dispatch<any>, payload: any) => {
       break;
     case SOCKET_EVENTS.disconnect:
       dispatch(setConnected(false));
+      dispatch(setRetrying(false));
+      break;
+    case SOCKET_EVENTS.authenticated:
+      saveUserInfo(payload.data);
+      dispatch(setConnected(true));
       dispatch(setRetrying(false));
       break;
     case SOCKET_EVENTS.connect_error:

@@ -49,7 +49,7 @@ let buildConfig = {
       },
     }),
   ],
-  external: ['webextension-polyfill'],
+  external: [''],
 }
 
 if (isDev) {

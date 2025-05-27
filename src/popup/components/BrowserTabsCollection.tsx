@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { cx } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { Dispatch } from 'redux';
 import { setBrowserTabs } from '../redux/tabs/tabActions';
-import { setPinnedTabs } from '../redux/variables/varActions';
 import { browser } from '@/general/utils';
+import { usePinnedTabs } from '../hooks/useStorage';
 
 interface BrowserTabsCollectionTypes {
   browserTabs: ICanvasTab[];
@@ -15,14 +15,14 @@ interface BrowserTabsCollectionTypes {
 
 const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTabs, checkedTabs, setCheckedTabs = () => {} }) => {
   const dispatch = useDispatch<Dispatch<any>>();
-  const variables = useSelector((state: { variables: IVarState }) => state.variables);
+  
+  const [pinnedTabs, setPinnedTabs] = usePinnedTabs();
 
   const removeBrowserToCanvasTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if (!tab.id) return;
     browser.tabs.remove(tab.id);
 
-    // Remove the tab from the list
     dispatch(setBrowserTabs(browserTabs.filter((t: ICanvasTab) => t.id !== tab.id)));
   };
 
@@ -34,9 +34,9 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
   }
 
   const togglePinned = (url: string) => {
-    const pinnedTabs = variables.pinnedTabs.filter(pt => pt !== url);
-    if (pinnedTabs.length !== variables.pinnedTabs.length) return dispatch(setPinnedTabs(pinnedTabs));
-    return dispatch(setPinnedTabs([...pinnedTabs, url]));
+    const newPinnedTabs = pinnedTabs.filter(pt => pt !== url);
+    if (newPinnedTabs.length !== pinnedTabs.length) return setPinnedTabs(newPinnedTabs);
+    return setPinnedTabs([...newPinnedTabs, url]);
   }
 
   const sortByPinnedTabs: (browserTabs: ICanvasTab[], pinnedTabs: string[]) => ICanvasTab[] = (browserTabs, pinnedTabs) => {
@@ -56,7 +56,7 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
       {
         !browserTabs?.length ?
           (<li className="collection-item">No browser tabs found</li>) :
-          sortByPinnedTabs(browserTabs, variables.pinnedTabs).map((tab: ICanvasTab, idx: number) => {
+          sortByPinnedTabs(browserTabs, pinnedTabs).map((tab: ICanvasTab, idx: number) => {
             if (!tab.url) return null;
             return <li key={idx + tab.url} className="collection-item">
               {checkedTabs ? (
@@ -78,9 +78,9 @@ const BrowserTabsCollection: React.FC<BrowserTabsCollectionTypes> = ({ browserTa
               </a>
               <span className="icons">
                 <i
-                  className={cx("material-icons", variables.pinnedTabs.some(pt => pt === tab.url) ? "pinned-tab" : "")}
+                  className={cx("material-icons", pinnedTabs.some(pt => pt === tab.url) ? "pinned-tab" : "")}
                   style={{ cursor: "pointer" }}
-                  title={variables.pinnedTabs.some(pt => pt === tab.url) ? "Remove pin" : "Pin tab"}
+                  title={pinnedTabs.some(pt => pt === tab.url) ? "Remove pin" : "Pin tab"}
                   onClick={(e) => { e.preventDefault(); togglePinned(tab.url as string); }}
                 >push_pin</i>
                 <i

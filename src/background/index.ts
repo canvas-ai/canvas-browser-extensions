@@ -1,14 +1,96 @@
-import { canvasDeleteTab, canvasDeleteTabs, canvasFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
+import { canvasDeleteTab, canvasDeleteTabs, requestFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
 import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
-import { getSocket } from "./socket";
+import { fetchContextList, getSocket, enableAutoReconnect, disableAutoReconnect, forceReconnect, isAutoReconnectEnabled } from "./socket";
 import index from "./TabIndex";
-import { context } from "./context";
-import { RUNTIME_MESSAGES } from "@/general/constants";
+import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
 import { updateSessionsList } from "./session";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
+
+// Helper function to get the current context from storage
+const getCurrentContext = async (): Promise<IContext | null> => {
+  const selectedContext = await browser.storage.local.get(["CNVS_SELECTED_CONTEXT"]);
+  if (selectedContext.CNVS_SELECTED_CONTEXT) {
+    return selectedContext.CNVS_SELECTED_CONTEXT;
+  }
+  
+  const contexts = await browser.storage.local.get(["contexts"]);
+  return contexts.contexts?.[0] || null;
+};
+
+
+
+// Track the current context to detect changes
+let currentContextId: string | null = null;
+
+// Function to handle context changes
+const handleContextChange = async (newContext: IContext | null) => {
+  const newContextId = newContext ? `${newContext.userId}/${newContext.id}` : null;
+  
+  if (currentContextId === newContextId) {
+    return; // No change
+  }
+  
+  console.log(`background.js | Context changed from ${currentContextId} to ${newContextId}`);
+  currentContextId = newContextId;
+  
+  if (!newContext) {
+    console.log('background.js | No context selected, clearing canvas tabs');
+    index.clearCanvasTabs();
+    return;
+  }
+  
+  try {
+    console.log('background.js | Fetching tabs for new context...');
+    const tabs = await requestFetchTabsForContext();
+    
+    if (tabs) {
+      console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
+      // Use silent method first to update storage, then trigger UI update
+      index.insertCanvasTabArraySilent(tabs, true);
+      // Now update browser tabs to recalculate sync status and notify UI
+      await index.updateBrowserTabs();
+    } else {
+      console.log('background.js | No tabs found for new context');
+      // Clear canvas tabs if no data received
+      index.clearCanvasTabs();
+    }
+    
+
+    
+    // Send success message to popup
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: 'Context switched successfully'
+    });
+    
+    console.log('background.js | Context switch completed successfully');
+  } catch (error) {
+    console.error('background.js | Error updating context:', error);
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.error_message,
+      payload: 'Error updating context'
+    });
+  }
+};
+
+// Initialize current context tracking
+const initializeContextTracking = async () => {
+  const context = await getCurrentContext();
+  currentContextId = context ? `${context.userId}/${context.id}` : null;
+  console.log(`background.js | Initial context: ${currentContextId}`);
+};
+
+// Storage listener to monitor context changes
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.CNVS_SELECTED_CONTEXT) {
+    const newContext = changes.CNVS_SELECTED_CONTEXT.newValue;
+    console.log('background.js | Detected context change in storage:', newContext);
+    handleContextChange(newContext);
+  }
+});
 
 (async function () {
   const socket = await getSocket();
@@ -30,7 +112,11 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
   ];
 
   // Custom index module for easier delta comparison
+  await index.initialize();
   console.log('background.js | Index initialized: ', index.counts());
+
+  // Initialize context tracking
+  await initializeContextTracking();
 
 
   /**
@@ -125,13 +211,99 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
   browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     console.log('background.js | UI Message received: ', message);
+    const socket = await getSocket();
 
     switch (message.action) {
-
       // socket.io
       case RUNTIME_MESSAGES.socket_status:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: socket && socket.isConnected() });
         break;
+
+      case RUNTIME_MESSAGES.socket_test: {
+        let isResolved = false;
+        try {
+          const testConfig = message.config || config;
+          
+          const { io } = await import('socket.io-client');
+          
+          const testSocketOptions = {
+            withCredentials: true,
+            upgrade: false,
+            secure: false,
+            transports: ['websocket'],
+            reconnection: false,
+            timeout: 5000,
+            auth: {
+              token: testConfig.transport.token,
+              isApiToken: testConfig.transport.isApiToken || false
+            }
+          };
+          
+          const testConnectionUri = `${testConfig.transport.protocol}://${testConfig.transport.host}:${testConfig.transport.port}`;
+          
+          const testSocket = io(testConnectionUri, testSocketOptions);
+          
+          const connectionResult: { success: boolean, message?: string } = await new Promise((resolve) => {
+            
+            const cleanup = () => {
+              try {
+                testSocket.removeAllListeners();
+                testSocket.disconnect();
+              } catch (error) {
+                console.error('Error during test socket cleanup:', error);
+              }
+            };
+            
+            const resolveOnce = (result: { success: boolean, message?: string }) => {
+              if (isResolved) {
+                console.log('Already resolved, ignoring:', result);
+                return;
+              }
+              
+              console.log('Resolving with:', result);
+              isResolved = true;
+              cleanup();
+              resolve(result);
+            };
+            
+            testSocket.once('connect', () => {
+              console.log('Test socket connected');
+              resolveOnce({ success: true });
+            });
+            
+            testSocket.once('connect_error', (error) => {
+              console.log('Test socket connect_error:', error.message);
+              resolveOnce({ success: false, message: error.message || 'Connection failed' });
+            });
+            
+            testSocket.once('connect_timeout', () => {
+              console.log('Test socket connect_timeout');
+              resolveOnce({ success: false, message: 'Connection timeout' });
+            });
+            
+            testSocket.once('disconnect', (reason) => {
+              console.log('Test socket disconnected:', reason);
+              if (!isResolved) {
+                resolveOnce({ success: false, message: 'Connection disconnected: ' + reason });
+              }
+            });
+                        
+            console.log('Test socket connecting to:', testConnectionUri);
+          });
+                    
+          if (connectionResult.success) {
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_success, payload: 'Connection successful!' });
+          } else {
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_error, payload: connectionResult.message || 'Connection failed. Please check your settings.' });
+          }
+        } catch (error: any) {
+          console.error('background.js | Error testing connection:', error);
+          if(!isResolved) {
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_error, payload: error?.message || 'Connection failed. Please check your settings.' });
+          }
+        }
+        break;
+      }
 
       case RUNTIME_MESSAGES.socket_retry:
         try {
@@ -147,19 +319,55 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
               if (newSocket.isConnected()) {
                 clearInterval(checkConnection);
                 sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: true });
-                resolve({ status: 'success' });
+                resolve();
               }
             }, 100);
 
             // Timeout after 5 seconds
             setTimeout(() => {
               clearInterval(checkConnection);
-              resolve({ status: 'error', message: 'Connection timeout' });
+              resolve();
             }, 5000);
           });
         } catch (error: any) {
           console.error('background.js | Error retrying socket connection:', error);
           return Promise.resolve({ status: 'error', message: error?.message || 'Failed to retry connection' });
+        }
+
+      case RUNTIME_MESSAGES.socket_enable_auto_reconnect:
+        try {
+          await enableAutoReconnect();
+          return Promise.resolve({ status: 'success', message: 'Auto reconnect enabled' });
+        } catch (error: any) {
+          console.error('background.js | Error enabling auto reconnect:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to enable auto reconnect' });
+        }
+
+      case RUNTIME_MESSAGES.socket_disable_auto_reconnect:
+        try {
+          await disableAutoReconnect();
+          return Promise.resolve({ status: 'success', message: 'Auto reconnect disabled' });
+        } catch (error: any) {
+          console.error('background.js | Error disabling auto reconnect:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to disable auto reconnect' });
+        }
+
+      case RUNTIME_MESSAGES.socket_force_reconnect:
+        try {
+          await forceReconnect();
+          return Promise.resolve({ status: 'success', message: 'Reconnection initiated' });
+        } catch (error: any) {
+          console.error('background.js | Error forcing reconnect:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to force reconnect' });
+        }
+
+      case RUNTIME_MESSAGES.socket_is_auto_reconnect_enabled:
+        try {
+          const enabled = await isAutoReconnectEnabled();
+          return Promise.resolve({ status: 'success', payload: enabled });
+        } catch (error: any) {
+          console.error('background.js | Error checking auto reconnect status:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to check auto reconnect status' });
         }
 
       // Config
@@ -169,7 +377,7 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
 
       case RUNTIME_MESSAGES.config_get_item:
         if (!message.key) return console.error('background.js | No config key specified');
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get_item, payload: config[message.key] });
         break;
 
       case RUNTIME_MESSAGES.config_set_item:
@@ -180,34 +388,78 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         break;
 
       case RUNTIME_MESSAGES.config_set:
-        if (typeof message.value !== "object") return console.error('background.js | Invalid config', message.value);
-        await config.setMultiple(message.value);
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+        if (typeof message.value !== "object") {
+          console.error('background.js | Invalid config', message.value);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Invalid configuration data' });
+          break;
+        }
+        
+        try {
+          await config.setMultiple(message.value);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Settings saved successfully!' });
+        } catch (error) {
+          console.error('background.js | Error saving config:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Failed to save settings' });
+        }
         break;
 
       // Context
+      case RUNTIME_MESSAGES.context_list:
+        fetchContextList().then(contexts => {
+          if (!contexts || contexts.length === 0) return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'No contexts found' });
+          browser.storage.local.set({ contexts });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_list, payload: contexts });
+          console.log('background.js | Context list fetched: ', contexts);
+        }).catch(error => {
+          console.error('background.js | Error fetching context list:', error);
+        });
+        break;
+
       case RUNTIME_MESSAGES.context_get:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get, payload: context });
+        const currentContext = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get, payload: currentContext });
         break;
 
       case RUNTIME_MESSAGES.context_get_url:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: context.url });
+        const contextForUrl = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_url, payload: contextForUrl?.url });
         break;
 
       case RUNTIME_MESSAGES.context_get_path:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_path, payload: context.path });
+        const contextForPath = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_path, payload: contextForPath?.path });
         break;
 
       case RUNTIME_MESSAGES.context_get_pathArray:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_pathArray, payload: context.pathArray });
+        const contextForPathArray = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_pathArray, payload: contextForPathArray?.pathArray });
         break;
 
       case RUNTIME_MESSAGES.context_get_color:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_color, payload: context.color });
+        const contextForColor = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_color, payload: contextForColor?.color });
         break;
 
       case RUNTIME_MESSAGES.context_get_tree:
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: context.tree });
+        const contextForTree = await getCurrentContext();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: contextForTree?.tree });
+        break;
+
+
+
+      case RUNTIME_MESSAGES.context_refresh_tabs:
+        console.log('background.js | Refreshing tabs for current context...');
+        try {
+          const tabs = await requestFetchTabsForContext();
+          console.log(`background.js | Refreshed ${tabs.length} tabs for current context`);
+          index.insertCanvasTabArraySilent(tabs, true);
+          await index.updateBrowserTabs();
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Context tabs refreshed successfully' });
+        } catch (error) {
+          console.error('background.js | Error refreshing context tabs:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error refreshing context tabs' });
+        }
         break;
 
       case RUNTIME_MESSAGES.context_tab_remove:
@@ -247,13 +499,31 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         break;
 
       // Canvas
-      case RUNTIME_MESSAGES.canvas_tabs_fetch:
-        const res: any = await canvasFetchTabsForContext();
-        if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas' });
-        console.log('background.js | Tabs fetched from Canvas: ', res.data);
-        index.insertCanvasTabArray(res.data);
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_fetch, payload: res });
+      case RUNTIME_MESSAGES.canvas_tabs_fetch: {
+        const tabs = await requestFetchTabsForContext();
+        // if (!tabs) return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas' });
+        console.log('background.js | Tabs fetched from Canvas: ', tabs);
+        index.insertCanvasTabArraySilent(tabs, true);
+        await index.updateBrowserTabs();
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_fetch, payload: tabs });
         break;
+      }
+
+      case RUNTIME_MESSAGES.canvas_tabs_refresh:
+        {
+          console.log('background.js | Refreshing canvas tabs from server...');
+          try {
+            const tabs = await requestFetchTabsForContext();
+            console.log(`background.js | Refreshed ${tabs.length} canvas tabs from server`);
+            index.insertCanvasTabArraySilent(tabs, true);
+            await index.updateBrowserTabs();
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Canvas tabs refreshed successfully' });
+          } catch (error) {
+            console.error('background.js | Error refreshing canvas tabs:', error);
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error refreshing canvas tabs' });
+          }
+          break;  
+        }
 
       case RUNTIME_MESSAGES.canvas_tabs_openInBrowser:
         if (message.tabs) {
@@ -278,24 +548,18 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
           console.log('background.js | Tabs to sync: ' + message.tabs.length);
           tabs = message.tabs;
         } else {
-          console.log('background.js | No tabs specified, using current browser tabs');
-          tabs = index.getBrowserTabArray();
+          console.log('background.js | No tabs specified, using syncable browser tabs');
+          tabs = index.deltaBrowserToCanvas();
         }
 
+        console.log('background.js | Inserting tabs to Canvas: ', tabs);
         canvasInsertTabArray(tabs).then((res: ICanvasInsertResponse) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tabs to Canvas' });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas' });
-          index.insertCanvasTabArray(tabs.map((tab: ICanvasTab) => ({ ...tab, docId: res.payload.find(p => p.meta.url === tab.url)?.id })), false);
           console.log('background.js | Tabs inserted to Canvas: ', res);
-          onContextTabsUpdated({ browserTabs: { removedTabs: tabs } });
-          // updateLocalCanvasTabsData();
-
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: res });
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tabs_insert, payload: false });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error updating browser tabs' });
-          console.error('background.js | Error updating browser tabs:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tabs to Canvas' });
+          console.error('background.js | Error inserting tabs to Canvas:', error);
         })
 
         break;
@@ -303,17 +567,10 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
       case RUNTIME_MESSAGES.canvas_tab_insert:
         canvasInsertTab(message.tab).then((res: ICanvasInsertOneResponse) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting the tab to Canvas' });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'The tab inserted to Canvas' });
-          index.insertCanvasTab({ ...message.tab, docId: res.payload.id });
-          console.log('background.js | Tab inserted to Canvas: ', res);
-          onContextTabsUpdated({ browserTabs: { removedTabs: [message.tab] } });
-
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_insert, payload: res });
           console.log('background.js | Index updated: ', index.counts());
         }).catch((error) => {
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.canvas_tab_insert, payload: false });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error updating browser tabs' });
-          console.error('background.js | Error updating browser tabs:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error inserting tab to Canvas' });
+          console.error('background.js | Error inserting tab to Canvas:', error);
         })
 
         break;
@@ -322,7 +579,6 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         if (!message.tab) return console.error('background.js | No tab specified');
         canvasDeleteTab(message.tab).then((res: any) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab deleted from Canvas' });
         });
         break;
 
@@ -330,9 +586,10 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         if (!message.tabs) return console.error('background.js | No tab specified');
         canvasDeleteTabs(message.tabs).then((res: any) => {
           if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab deleted from Canvas' });
         });
         break;
+
+
 
       // Index
       case RUNTIME_MESSAGES.index_get_counts:
@@ -360,7 +617,11 @@ console.log('background.js | Initializing Canvas Browser Extension background wo
         break;
 
       case RUNTIME_MESSAGES.update_sessions_list:
-        updateSessionsList();
+        // updateSessionsList();
+        break;
+
+      case RUNTIME_MESSAGES.user_info:
+        socket.emit('user:info');
         break;
 
       default:

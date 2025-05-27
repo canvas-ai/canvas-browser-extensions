@@ -1,11 +1,5 @@
-import { Dispatch } from "redux";
-import { SET_CONNECTED, SET_CONTEXT, SET_PINNED_TABS, SET_RETRYING, SET_SESSION_LIST, VariableActionTypes } from "./varActionTypes";
+import { SET_CONNECTED, SET_RETRYING, VariableActionTypes } from "./varActionTypes";
 import { browser } from "@/general/utils";
-
-export const setSessionList = (sessions: ISession[]): VariableActionTypes => ({
-  type: SET_SESSION_LIST,
-  payload: sessions
-});
 
 export const setRetrying = (retrying: boolean): VariableActionTypes => ({
   type: SET_RETRYING,
@@ -17,30 +11,39 @@ export const setConnected = (connected: boolean): VariableActionTypes => ({
   payload: connected,
 });
 
-export const setContext = (context: IContext): VariableActionTypes => ({
-  type: SET_CONTEXT,
-  payload: context,
-});
+// Storage-based functions (no Redux actions needed)
+export const saveSessionList = async (sessions: ISession[]) => {
+  await browser.storage.local.set({ CNVS_SESSION_LIST: sessions });
+};
 
-export const setPinnedTabs = (pinnedTabs: string[]): VariableActionTypes => ({
-  type: SET_PINNED_TABS,
-  payload: pinnedTabs,
-});
+export const getSessionList = async (): Promise<ISession[]> => {
+  const result = await browser.storage.local.get(["CNVS_SESSION_LIST"]);
+  return result.CNVS_SESSION_LIST || [{ id: "Default", baseUrl: "/" }];
+};
 
+export const saveUserInfo = async (userInfo: { userId: string; email: string; }) => {
+  await browser.storage.local.set({ CNVS_USER_INFO: userInfo });
+};
 
-export const loadInitialPinnedTabsState = () => async (dispatch: Dispatch<VariableActionTypes>) => {
-  try {
-    // Retrieve sync state from Chrome storage
-    const pinnedTabs = await new Promise<string[]>((resolve, reject) => {
-      browser.storage.local.get(["pinnedTabs"]).then(storage => {
-        console.log("get pinnedTabs result: ", storage);
-        resolve(storage.pinnedTabs || []);
-      });
-    });
+export const getUserInfo = async (): Promise<IUserInfo | null> => {
+  const result = await browser.storage.local.get(["CNVS_USER_INFO"]);
+  return result.CNVS_USER_INFO || null;
+};
 
-    // Dispatch action to set sync state
-    dispatch(setPinnedTabs(pinnedTabs));
-  } catch (error) {
-    console.error('Error loading initial state from Chrome storage:', error);
-  }
+export const saveContext = async (context: IContext) => {
+  await browser.storage.local.set({ CNVS_CONTEXT: context });
+};
+
+export const getContext = async (): Promise<IContext | null> => {
+  const result = await browser.storage.local.get(["CNVS_CONTEXT"]);
+  return result.CNVS_CONTEXT || null;
+};
+
+export const savePinnedTabs = async (pinnedTabs: string[]) => {
+  await browser.storage.local.set({ CNVS_PINNED_TABS: pinnedTabs });
+};
+
+export const getPinnedTabs = async (): Promise<string[]> => {
+  const result = await browser.storage.local.get(["CNVS_PINNED_TABS"]);
+  return result.CNVS_PINNED_TABS || [];
 };

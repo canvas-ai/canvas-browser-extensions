@@ -4,12 +4,14 @@ import { isOnUniverse } from '@/popup/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import CanvasTabsCollection from '../CanvasTabsCollection';
 import { browser } from '@/general/utils';
+import { useContext } from '../../hooks/useStorage';
 
 const CanvasToBrowser: React.FC<any> = ({ }) => {
   const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
   const [checkedCanvasTabs, setCheckedCanvasTabs] = useState<ICanvasTab[]>([]);
   const [checkedOpenedCanvasTabs, setCheckedOpenedCanvasTabs] = useState<ICanvasTab[]>([]);
-  const variables = useSelector((state: { variables: IVarState }) => state.variables);
+  
+  const [context] = useContext();
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
     closedCanvas: true,
     openedCanvas: false
@@ -67,7 +69,7 @@ const CanvasToBrowser: React.FC<any> = ({ }) => {
             onClick={(e) => openSelectedClicked(e, checkedCanvasTabs)}>Open selected<i className="material-icons right">sync</i></a>
         ) : null}
 
-        {!isOnUniverse(variables.context.url) && (checkedCanvasTabs.length || checkedOpenedCanvasTabs.length) ? (
+        {!isOnUniverse(context) && (checkedCanvasTabs.length || checkedOpenedCanvasTabs.length) ? (
           <a className="black white-text waves-effect waves-light btn-small right"
             onClick={(e) => removeSelectedClicked(e, [...checkedCanvasTabs, ...checkedOpenedCanvasTabs])}>Remove Selected<i className="material-icons right">delete</i></a>
         ) : null}
