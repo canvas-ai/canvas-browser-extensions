@@ -1,15 +1,28 @@
 interface ITabDocumentSchema {
-  type: string | string[],
+  schema: string | string[],
   data: any
 }
 
 interface IContext {
+  id: string;
   url: string;
   contextBitmapArray: string[];
   color: string;
   path?: string;
   pathArray?: any;
   tree?: any;
+  acl?: object;
+  baseUrl?: string;
+  clientContextArray?: any[];
+  featureBitmapArray?: any[];
+  filterArray?: any[];
+  locked?: boolean;
+  pendingUrl?: any;
+  serverContextArray?: any[];
+  userId?: string;
+  workspaceId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 type IProtocol = "http" | "https";
@@ -56,12 +69,14 @@ interface IUpdatedTabsData {
   syncedBrowserTabs?: IUpdateTypes;
 }
 
+interface IUserInfo {
+  userId: string;
+  email: string;
+}
+
 interface IVarState {
   connected: boolean;
-  context: IContext;
-  sessions: ISession[];
   retrying: boolean;
-  pinnedTabs: string[];
 }
 
 interface ITabsInfo {

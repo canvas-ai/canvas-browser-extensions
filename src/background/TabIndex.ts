@@ -4,6 +4,7 @@ import { browser } from "@/general/utils";
 
 
 let timeout: any;
+let browserUpdateTimeout: any;
 
 export class TabIndex {
 	browserTabIdToUrl: Map<any, any>;
@@ -14,6 +15,11 @@ export class TabIndex {
 		this.browserTabIdToUrl = new Map();
 		this.browserTabs = new Map();
 		this.canvasTabs = new Map();
+	}
+
+	async initialize() {
+		await this.loadCanvasTabsFromStorage();
+		console.log('background.js | TabIndex initialized with persisted canvas tabs');
 	}
 
 	// Common methods
@@ -120,14 +126,29 @@ export class TabIndex {
 		}, 100);
 	}
 
+	updateBrowserTabsWithDelay() {
+		clearTimeout(browserUpdateTimeout);
+		browserUpdateTimeout = setTimeout(() => {
+			this.updateBrowserTabs();
+		}, 150);
+	}
+
 	insertCanvasTab(tab: ICanvasTab) {
 		this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
 		this.updatePopupTabsWithDelay();
+		this.saveCanvasTabsToStorage();
+	}
+
+	insertCanvasTabSilent(tab: ICanvasTab) {
+		this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
+		// No UI update triggered
+		this.saveCanvasTabsToStorage();
 	}
 
 	removeCanvasTab(url: string) {
 		this.canvasTabs.delete(url);
 		this.updatePopupTabsWithDelay();
+		this.saveCanvasTabsToStorage();
 	}
 
 	insertCanvasTabArray(tabArray: ICanvasTab[], clear = true) {
@@ -136,7 +157,24 @@ export class TabIndex {
 			"background.js | Inserting canvas tab array in index: ",
 			tabArray.length
 		);
-		tabArray.forEach((tab) => this.insertCanvasTab(tab));
+		tabArray.forEach((tab) => {
+			this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
+		});
+		this.updatePopupTabsWithDelay();
+		this.saveCanvasTabsToStorage();
+	}
+
+	insertCanvasTabArraySilent(tabArray: ICanvasTab[], clear = true) {
+		if (clear) this.canvasTabs.clear();
+		console.log(
+			"background.js | Inserting canvas tab array in index (silent): ",
+			tabArray.length
+		);
+		tabArray.forEach((tab) => {
+			this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
+		});
+		// No UI update triggered
+		this.saveCanvasTabsToStorage();
 	}
 
 	hasCanvasTab(url: string) {
@@ -149,6 +187,7 @@ export class TabIndex {
 
 	clearCanvasTabs() {
 		this.canvasTabs.clear();
+		this.saveCanvasTabsToStorage();
 	}
 
 	deltaBrowserToCanvas() {
@@ -181,6 +220,36 @@ export class TabIndex {
 		console.log("background.js | Clearing tab index");
 		this.clearBrowserTabs();
 		this.clearCanvasTabs();
+	}
+
+	// Persistence methods for canvas tabs
+	async saveCanvasTabsToStorage() {
+		try {
+			const canvasTabsArray = this.getCanvasTabArray();
+			await browser.storage.local.set({ 'CNVS_CANVAS_TABS': canvasTabsArray });
+			console.log(`background.js | Saved ${canvasTabsArray.length} canvas tabs to storage`);
+		} catch (error) {
+			console.error('background.js | Error saving canvas tabs to storage:', error);
+		}
+	}
+
+	async loadCanvasTabsFromStorage() {
+		try {
+			const result = await browser.storage.local.get(['CNVS_CANVAS_TABS']);
+			const canvasTabsArray = result.CNVS_CANVAS_TABS || [];
+			
+			if (canvasTabsArray.length > 0) {
+				console.log(`background.js | Loading ${canvasTabsArray.length} canvas tabs from storage`);
+				// Don't save to storage again during loading to avoid recursion
+				canvasTabsArray.forEach((tab) => {
+					this.canvasTabs.set(tab.url, this.#stripTabProperties(tab));
+				});
+			} else {
+				console.log('background.js | No canvas tabs found in storage');
+			}
+		} catch (error) {
+			console.error('background.js | Error loading canvas tabs from storage:', error);
+		}
 	}
 
 	#stripTabProperties(tab: ICanvasTab) {

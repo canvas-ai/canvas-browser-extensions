@@ -1,11 +1,16 @@
-import React from 'react';
-import { getContextBreadcrumbs } from '../utils';
+import React, { useMemo } from 'react';
+import { getContextBreadcrumbsFromContext } from '../utils';
+import { useSelectedContext, useContextList } from '../hooks/useStorage';
 
-interface HeaderTypes {
-  url: string | undefined;
-}
+const Header: React.FC = () => {
+  const [selectedContext] = useSelectedContext();
+  const [contextList] = useContextList();
+  
+  const breadcrumbs = useMemo(() => {
+    const contextToUse = selectedContext || (contextList && contextList.length > 0 ? contextList[0] : null);
+    return getContextBreadcrumbsFromContext(contextToUse);
+  }, [selectedContext, contextList]);
 
-const Header: React.FC<HeaderTypes> = ({ url }) => {
   return (
     <header className="navbar-fixed">
       <nav className="nav-extended white">
@@ -13,10 +18,15 @@ const Header: React.FC<HeaderTypes> = ({ url }) => {
           <a href="#" className="brand-logo right black-text">
             <img src="icons/logo_256x256.png" className="brand-logo right" width="40px" style={{ marginTop: "8px" }} />
           </a>
-          <div id="breadcrumb-container" className="col s12 black-text">{getContextBreadcrumbs(url).map(bread => (<a {...bread}>{bread.textContent}</a>))}</div>
+          <div id="breadcrumb-container" className="col s12 black-text">
+            {breadcrumbs.map((bread, index) => (
+              <span key={index}>
+                <a {...bread}>{bread.textContent}</a>
+                {index < breadcrumbs.length - 1 && <span className="breadcrumb-separator"> &gt; </span>}
+              </span>
+            ))}
+          </div>
         </div>
-        {/* <div className="nav-content">
-        </div> */}
       </nav>
     </header>
   );

@@ -24,7 +24,7 @@ export const DEFAULT_CONFIG: {
     port: 8001,
     token: 'canvas-a3ec3d9347f0a99298e519ea8310d0c75367acd2b46f752b',
     pinToContext: '/',
-    isApiToken: false
+    isApiToken: true
   }
 };
 

@@ -4,46 +4,51 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import ConnectedState from './components/ConnectedState';
 import DisconnectedState from './components/DisconnectedState';
-import { requestUpdateSessionsList, requestUpdateTabs, requestVariableUpdate } from './utils';
+import { requestUpdateSessionsList, requestUpdateTabs, requestUpdateUserInfo, requestVariableUpdate } from './utils';
 import ConnectionPopup from './components/ConnectionPopup';
-import store from './redux/store';
 import { useSelector } from 'react-redux';
-import { loadInitialConfigState } from './redux/config/configActions';
 import { useDispatch } from 'react-redux';
 import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { messageListener } from './listener';
 import { ToastContainer } from "react-toastify";
-import { loadInitialPinnedTabsState } from './redux/variables/varActions';
 import { browser } from '@/general/utils';
+import { useContext, useConfig } from './hooks/useStorage';
+import { initializeConfigInStorage } from './redux/config/configStorage';
 
 const App: React.FC = () => {
-  const config = useSelector((state: { config: IConfigProps }) => state.config);
-  const tabs = useSelector((state: { tabs: ITabsInfo }) => state.tabs);
   const variables = useSelector((state: { variables: IVarState }) => state.variables);
   const dispatch = useDispatch<Dispatch<any>>();
+  
+  // Use storage hooks
+  const [context] = useContext();
+  const [config] = useConfig();
 
   const [popupOpen, setPopupOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    store.dispatch(loadInitialConfigState());
-    store.dispatch(loadInitialPinnedTabsState());
+    // Initialize config in storage
+    initializeConfigInStorage();
     requestVariableUpdate({ action: RUNTIME_MESSAGES.config_get });
   }, []);
 
   useEffect(() => {
     requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
     requestVariableUpdate({ action: RUNTIME_MESSAGES.context_get });
+  }, [context?.url]);
 
-    browser.runtime.onMessage.addListener(messageListener(dispatch, variables));
+  useEffect(() => {
+    const listener = messageListener(dispatch, variables);
+    browser.runtime.onMessage.addListener(listener);
 
     return () => {
-      browser.runtime.onMessage.removeListener(messageListener(dispatch, variables));
+      browser.runtime.onMessage.removeListener(listener);
     }
-  }, [variables.context.url]);
+  }, [dispatch, variables]);
 
   useEffect(() => {
     if (variables.connected) {
+      requestUpdateUserInfo();
       requestUpdateTabs();
       requestUpdateSessionsList();
     }
@@ -59,7 +64,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      {variables.connected && config ? <Header url={variables.context?.url} /> : null}
+      {variables.connected && config ? <Header /> : null}
       <main>
         {
           variables.connected && config ?

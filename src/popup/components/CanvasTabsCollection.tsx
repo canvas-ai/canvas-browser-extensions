@@ -1,8 +1,8 @@
 import React from 'react';
 import { isOnUniverse } from '../utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
-import { useSelector } from 'react-redux';
 import { browser } from '@/general/utils';
+import { useContext } from '../hooks/useStorage';
 
 interface CanvasTabsCollectionTypes {
   canvasTabs: ICanvasTab[];
@@ -11,7 +11,7 @@ interface CanvasTabsCollectionTypes {
 }
 
 const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs, checkedTabs, setCheckedTabs = () => {} }) => {
-  const variables = useSelector((state: { variables: IVarState }) => state.variables);
+  const [context] = useContext();
   
   const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
@@ -68,7 +68,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
               <span className="tab-title truncate black-text">{tab.title || ""}</span>
             </a>
             {
-              isOnUniverse(variables.context.url) ? 
+              isOnUniverse(context) ? 
               null : 
               (
                 <i 

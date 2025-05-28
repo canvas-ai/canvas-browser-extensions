@@ -1,10 +1,7 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
-import { setConfig } from '../../redux/config/configActions';
-import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import { browser } from '@/general/utils';
+import { useConfig } from '@/popup/hooks/useStorage';
 
 interface SettingCheckboxTypes {
   title: string;
@@ -12,18 +9,22 @@ interface SettingCheckboxTypes {
 }
 
 const SettingCheckbox: React.FC<SettingCheckboxTypes> = ({ title, prop }) => {
-  const config = useSelector((state: { config: IConfigProps }) => state.config);
-  const dispatch = useDispatch<Dispatch<any>>();
+  const [config, setConfig] = useConfig();
 
-  const updateSettings = (config: IConfigProps, changes: { [key: string]: any }, key: string) => {
+  const updateSettings = async (changes: { [key: string]: any }, key: string) => {
+    if (!config) return;
     const updated = { ...config[key], ...changes };
-    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key, value: updated }, (response) => {
-      dispatch(setConfig({ ...config, [key]: updated }));
-    });
+    const updatedConfig = { ...config, [key]: updated };
+    await setConfig(updatedConfig);
+    browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key, value: updated }, (response) => {});
   }
 
   const key = prop.split(".")[0];
-  prop = prop.split(".")[1];
+  const propName = prop.split(".")[1];
+
+  if (!config) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="input-container" style={{ margin: "0", display: "flex", alignItems: "center" }}>
@@ -33,8 +34,8 @@ const SettingCheckbox: React.FC<SettingCheckboxTypes> = ({ title, prop }) => {
           <label>
             <input
               type="checkbox"
-              checked={config[key][prop]}
-              onChange={(e) => updateSettings(config, { [prop]: e.target.checked }, key)}
+              checked={config[key][propName]}
+              onChange={(e) => updateSettings({ [propName]: e.target.checked }, key)}
             />
             <span className="lever"></span>
           </label>

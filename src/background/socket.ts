@@ -1,8 +1,7 @@
 import config from '@/general/config';
 import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContext, canvasFetchTabsForContext } from './canvas';
+import { canvasFetchContext, requestFetchTabsForContext } from './canvas';
 import index from './TabIndex';
-import { setContext, setContextUrl, updateContext } from './context';
 import { sendRuntimeMessage } from './utils';
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
 import browser from 'webextension-polyfill';
@@ -47,6 +46,8 @@ const getSocketOptions = (): Partial<ManagerOptions & SocketOptions> => {
 class MySocket {
   socket: Socket | null;
   private isInitializing: boolean = false;
+  private reconnectionTimer: NodeJS.Timeout | null = null;
+  private shouldAutoReconnect: boolean = true;
 
   constructor() {
     this.socket = null;
@@ -72,11 +73,66 @@ class MySocket {
     this.connect();
   }
 
+  private startReconnectionTimer() {
+    this.clearReconnectionTimer();
+    
+    if (!this.shouldAutoReconnect) {
+      return;
+    }
+
+    console.log('background.js | [socket.io] Starting reconnection timer (5 seconds)');
+    this.reconnectionTimer = setTimeout(() => {
+      console.log('background.js | [socket.io] Attempting automatic reconnection...');
+      this.initializeSocket(true);
+    }, 5000);
+  }
+
+  private clearReconnectionTimer() {
+    if (this.reconnectionTimer) {
+      clearTimeout(this.reconnectionTimer);
+      this.reconnectionTimer = null;
+    }
+  }
+
+  public enableAutoReconnect() {
+    this.shouldAutoReconnect = true;
+  }
+
+  public disableAutoReconnect() {
+    this.shouldAutoReconnect = false;
+    this.clearReconnectionTimer();
+  }
+
+  public destroy() {
+    this.disableAutoReconnect();
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    this.isInitializing = false;
+  }
+
+  public forceReconnect() {
+    console.log('background.js | [socket.io] Force reconnection requested');
+    this.clearReconnectionTimer();
+    this.initializeSocket(true);
+  }
+
+  public isAutoReconnectEnabled() {
+    return this.shouldAutoReconnect;
+  }
+
+  public isReconnectionTimerActive() {
+    return this.reconnectionTimer !== null;
+  }
+
   initializeSocket(reconn = true) {
     if (this.isInitializing) {
       console.log('background.js | [socket.io] Socket initialization already in progress');
       return;
     }
+
+    this.clearReconnectionTimer();
 
     this.isInitializing = true;
     console.log('background.js | [socket.io] Initializing socket connection');
@@ -90,6 +146,7 @@ class MySocket {
     if (!this.socket) {
       console.error('background.js | [socket.io] Failed to initialize socket');
       this.isInitializing = false;
+      this.startReconnectionTimer();
       return;
     }
 
@@ -97,13 +154,19 @@ class MySocket {
       console.log('background.js | [socket.io] Browser Client connected to Canvas');
       console.log('background.js | [socket.io] Using token:', config.transport.token);
 
+      this.clearReconnectionTimer();
+
       this.sendSocketEvent(SOCKET_EVENTS.connect);
       this.isInitializing = false;
 
       // After successful connection, fetch the current context
       canvasFetchContext().then((ctx: IContext) => {
         console.log('background.js | [socket.io] Received context: ', ctx);
-        updateContext(ctx);
+        // Update storage - this will trigger the storage listener in index.ts
+        browser.storage.local.set({ 
+          CNVS_CONTEXT: ctx,
+          CNVS_SELECTED_CONTEXT: ctx 
+        });
       }).catch(error => {
         console.error('background.js | [socket.io] Error fetching context:', error);
         sendRuntimeMessage({
@@ -120,37 +183,65 @@ class MySocket {
       console.log(`background.js | [socket.io] Browser Connection to "${this.connectionUri()}" failed`);
       console.log("ERROR: " + error.message);
       this.isInitializing = false;
+      
+      this.startReconnectionTimer();
     });
 
     this.socket.on('connect_timeout', () => {
       this.sendSocketEvent(SOCKET_EVENTS.connect_timeout);
       console.log('background.js | [socket.io] Canvas Connection Timeout');
       this.isInitializing = false;
+      
+      this.startReconnectionTimer();
     });
 
     this.socket.on('disconnect', () => {
       this.sendSocketEvent(SOCKET_EVENTS.disconnect);
       console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
       this.isInitializing = false;
+      
+      this.startReconnectionTimer();
     });
 
-    // Context-related events
-    this.socket.on('context:update', setContext);
-    this.socket.on('context:url:set', (payload) => {
-      console.log('background.js | [socket.io] Received context:url:set event:', payload);
-      setContextUrl({ payload: payload.url });
+    this.socket.on("authenticated", (data: { userId: string, email: string }) => {
+      this.sendSocketEvent(SOCKET_EVENTS.authenticated, data);
     });
-    this.socket.on('context:list', (payload) => {
-      console.log('background.js | [socket.io] Received context list:', payload);
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.context_list,
-        payload
+
+    // Context-related events - now update storage directly
+    this.socket.on('context:update', (ctx: { payload: IContext }) => {
+      console.log('background.js | [socket.io] Received context update:', ctx);
+      // Update storage - this will trigger the storage listener in index.ts
+      browser.storage.local.set({ 
+        CNVS_CONTEXT: ctx.payload,
+        CNVS_SELECTED_CONTEXT: ctx.payload 
       });
     });
+    this.socket.on('context:url:set', (payload) => {
+      console.log('background.js | [socket.io] Received context:url:set event:', payload);
+      // Fetch current context and update its URL
+      browser.storage.local.get(['CNVS_SELECTED_CONTEXT']).then((result) => {
+        const currentContext = result.CNVS_SELECTED_CONTEXT;
+        if (currentContext) {
+          const updatedContext = { ...currentContext, url: payload.url };
+          browser.storage.local.set({ 
+            CNVS_CONTEXT: updatedContext,
+            CNVS_SELECTED_CONTEXT: updatedContext 
+          });
+        }
+      });
+    });
+
+    const contextListResult = (payload: IContext[]) => {
+      console.log('background.js | [socket.io] Received context list:', payload);
+      browser.storage.local.set({ contexts: payload });
+    };
+
+    this.socket.on('context:list', contextListResult);
+    this.socket.on('context:list:result', contextListResult);
   }
 
-  sendSocketEvent(e: string) {
-    sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_event, payload: { event: e } });
+  sendSocketEvent(e: string, data?: any) {
+    sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_event, payload: { event: e, data } });
   }
 
   emit(endpoint: string, ...args: any[]) {
@@ -169,8 +260,35 @@ class MySocket {
     });
   }
 
+  on(event: string, callback: (res: any) => void) {
+    this.socket!.on(event, callback);
+  }
+
+  removeAllListeners(event: string) {
+    this.socket!.removeAllListeners(event);
+  }
+
   isConnected() {
     return this.socket !== null && this.socket.connected;
+  }
+
+  requestContextList(): Promise<IContext[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.socket.connected) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('context:list', (response: any) => {
+        console.log('background.js | [socket.io] Received context:list response:', response);
+        
+        if (response && response.status === 'success') {
+          resolve(response.payload);
+        } else {
+          reject(new Error(response?.message || 'Failed to fetch contexts'));
+        }
+      });
+    });
   }
 }
 
@@ -193,46 +311,103 @@ export const getSocket = async () => {
 }
 
 export const updateLocalCanvasTabsData = () => {
-  canvasFetchTabsForContext().then((res: any) => {
-    if (!res || res.status !== 'success') {
+  console.log('background.js | Fetching latest canvas tabs from server...');
+  requestFetchTabsForContext().then((tabs: chrome.tabs.Tab[]) => {
+    if (!tabs) {
       sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'});
       return console.log('ERROR: background.js | Error fetching tabs from Canvas');
     }
-    index.insertCanvasTabArray(res.data);
+    console.log(`background.js | Received ${tabs.length} canvas tabs from server`);
+    // Use silent method to avoid UI updates during initial sync
+    index.insertCanvasTabArraySilent(tabs, true);
   }).then(() => {
     index.updateBrowserTabs();
+  }).catch((error) => {
+    console.error('background.js | Error updating local canvas tabs data:', error);
   });
 }
 
-// Handle context switching
+export const fetchContextList = async (): Promise<IContext[]> => {
+  const socket = await getSocket();
+  return socket.requestContextList();
+}
+
+export const enableAutoReconnect = async () => {
+  const socket = await getSocket();
+  socket.enableAutoReconnect();
+}
+
+export const disableAutoReconnect = async () => {
+  const socket = await getSocket();
+  socket.disableAutoReconnect();
+}
+
+export const forceReconnect = async () => {
+  const socket = await getSocket();
+  socket.forceReconnect();
+}
+
+export const isAutoReconnectEnabled = async (): Promise<boolean> => {
+  const socket = await getSocket();
+  return socket.isAutoReconnectEnabled();
+}
+
+export const isReconnectionTimerActive = async (): Promise<boolean> => {
+  const socket = await getSocket();
+  return socket.isReconnectionTimerActive();
+}
+
+// Handle context switching - now simplified to just update server and storage
 browser.runtime.onMessage.addListener((message: { action: string; value: string }, sender, sendResponse) => {
   if (message.action === RUNTIME_MESSAGES.context_set_url) {
     const contextId = getContextId(message.value);
+    console.log(`background.js | [socket.io] Switching to context: ${contextId}`);
+    
     if (socket && socket.isConnected()) {
       return new Promise((resolve) => {
         socket.emit('context:set', contextId, (response: any) => {
           if (response && response.status === 'success') {
+            console.log('background.js | [socket.io] Context set successfully on server');
+            
             // Update the context in the config
             config.set('transport', {
               ...config.transport,
               pinToContext: message.value
             });
 
-            // Fetch the new context
+            // Fetch the new context and update storage - storage listener will handle the rest
             canvasFetchContext().then((ctx: IContext) => {
-              console.log('background.js | [socket.io] Switched to context: ', ctx);
-              updateContext(ctx);
+              console.log('background.js | [socket.io] Fetched new context: ', ctx);
+              // Update storage - this will trigger the storage listener in index.ts
+              browser.storage.local.set({ 
+                CNVS_CONTEXT: ctx,
+                CNVS_SELECTED_CONTEXT: ctx 
+              });
               resolve({ status: 'success' });
             }).catch(error => {
-              console.error('background.js | [socket.io] Error switching context:', error);
+              console.error('background.js | [socket.io] Error fetching new context:', error);
+              sendRuntimeMessage({
+                type: RUNTIME_MESSAGES.error_message,
+                payload: 'Error fetching new context data'
+              });
               resolve({ status: 'error', message: error.message });
             });
           } else {
+            console.error('background.js | [socket.io] Failed to set context on server:', response);
+            sendRuntimeMessage({
+              type: RUNTIME_MESSAGES.error_message,
+              payload: response?.message || 'Failed to switch context on server'
+            });
             resolve({ status: 'error', message: response?.message || 'Failed to switch context' });
           }
         });
       });
     } else {
+      console.error('background.js | [socket.io] Cannot switch context: socket not connected');
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.error_message,
+        payload: 'Cannot switch context: not connected to server'
+      });
       return Promise.resolve({ status: 'error', message: 'Socket not connected' });
     }
   }

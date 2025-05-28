@@ -1,9 +1,19 @@
 export const RUNTIME_MESSAGES = {
   socket_status: "socket:status",
+  socket_retry: "socket:retry",
+  socket_test: "socket:test",
+  socket_test_success: "socket:test:success",
+  socket_test_error: "socket:test:error",
+  socket_enable_auto_reconnect: "socket:enable_auto_reconnect",
+  socket_disable_auto_reconnect: "socket:disable_auto_reconnect",
+  socket_force_reconnect: "socket:force_reconnect",
+  socket_is_auto_reconnect_enabled: "socket:is_auto_reconnect_enabled",
   config_get: "config:get",
   config_get_item: "config:get:item",
   config_set_item: "config:set:item",
   config_set: "config:set",
+  config_set_success: "config:set:success",
+  context_list: "context:list",
   context_get: "context:get",
   context_get_url: "context:get:url",
   context_get_path: "context:get:path",
@@ -11,12 +21,14 @@ export const RUNTIME_MESSAGES = {
   context_get_color: "context:get:color",
   context_get_tree: "context:get:tree",
   context_set_url: "context:set:url",
+  context_refresh_tabs: "context:refresh:tabs",
   context_tab_remove: "context:tab:remove",
   context_tabs_remove: "context:tabs:remove",
   browser_tabs_update: "browser:tabs:update",
   browser_tabs_open: "browser:tabs:open",
   browser_tabs_close: "browser:tabs:close",
   canvas_tabs_fetch: "canvas:tabs:fetch",
+  canvas_tabs_refresh: "canvas:tabs:refresh",
   canvas_tabs_openInBrowser: "canvas:tabs:openInBrowser",
   canvas_tabs_insert: "canvas:tabs:insert",
   canvas_tab_insert: "canvas:tab:insert",
@@ -29,7 +41,6 @@ export const RUNTIME_MESSAGES = {
   index_get_deltaCanvasToBrowser: "index:get:deltaCanvasToBrowser",
   index_updateBrowserTabs: "index:updateBrowserTabs",
   index_clear: "index:clear",
-  socket_retry: "socket:retry",
   opened_canvas_tabs: "opened:canvas:tabs",
   synced_browser_tabs: "synced:browser:tabs",
 
@@ -42,10 +53,10 @@ export const RUNTIME_MESSAGES = {
 
   pinned_tabs_updated: "pinned:tabs:updated",
 
-  error_message: "error_message",
-  success_message: "success_message",
+  user_info: "user:info",
 
-  context_list: "context:list"
+  error_message: "error_message",
+  success_message: "success_message"
 }
 
 export const SOCKET_EVENTS = {
@@ -69,9 +80,11 @@ export const SOCKET_MESSAGES = {
     DELETE_ARRAY: "context:document:deleteArray",
     INSERT:       "context:document:insert",
     INSERT_ARRAY: "context:documents:insert",
+    INSERT_ARRAY_RESULT: "context:documents:insert:result",
     UPDATE:       "context:document:update",
     UPDATE_ARRAY: "context:documents:update",
-    LIST:         "context:documents:list"
+    LIST:         "context:documents:list",
+    LIST_RESULT:  "context:documents:list:result"
   },
 
   DOCUMENT: {

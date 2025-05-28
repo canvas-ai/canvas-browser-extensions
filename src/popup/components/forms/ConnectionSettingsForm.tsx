@@ -1,78 +1,111 @@
 import React, { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
-import { setConfig } from '../../redux/config/configActions';
-import { Dispatch } from 'redux';
 import { browser } from '@/general/utils';
-import SearchableSelectBox from '@/popup/common-components/inputs/SearchableSelectBox';
-import { RUNTIME_MESSAGES, SOCKET_MESSAGES } from '@/general/constants';
+import { RUNTIME_MESSAGES } from '@/general/constants';
 import { showErrorMessage, showSuccessMessage } from '@/popup/utils';
+import { useUserInfo, useContextList, useConfig, useSelectedContext } from '@/popup/hooks/useStorage';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
 }
 
-interface IContextOption {
-  id: string;
-  url: string;
-  isShared?: boolean;
-  sharedVia?: string;
-}
-
 const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePopup }) => {
-  const variables: IVarState = useSelector((state: { variables: IVarState }) => state.variables);
-  const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
-  const dispatch = useDispatch<Dispatch<any>>();
-  const [transport, setTransport] = useState({ ...config.transport });
+  
+  const [userInfo] = useUserInfo();
+  const [contexts] = useContextList();
+  const [config, setConfig] = useConfig();
+  const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext();
+  
+  const [selectedContext, setSelectedContext] = useState<IContext | null>(null);
+  const [transport, setTransport] = useState(config?.transport || { protocol: 'http' as IProtocol, host: '127.0.0.1', port: 8001, token: '', pinToContext: '/', isApiToken: true });
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSavingConnection, setIsSavingConnection] = useState(false);
   const [showToken, setShowToken] = useState(false);
-  const [contexts, setContexts] = useState<IContextOption[]>([]);
   const [isLoadingContexts, setIsLoadingContexts] = useState(false);
 
   useEffect(() => {
-    setTransport({ ...config.transport });
-  }, [config.transport]);
+    if (config?.transport) {
+      setTransport({ ...config.transport });
+    }
+  }, [config?.transport]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
-      // Clean up any pending operations
       setIsTestingConnection(false);
       setIsSavingConnection(false);
     };
   }, []);
 
-  // Fetch contexts when connection is successful
+  useEffect(() => {
+    if (savedSelectedContext) {
+      setSelectedContext(savedSelectedContext);
+    }
+  }, [savedSelectedContext]);
+
   useEffect(() => {
     const fetchContexts = async () => {
-      if (!transport.token) return;
-
-      setIsLoadingContexts(true);
       try {
-        const response = await browser.runtime.sendMessage({
+        await browser.runtime.sendMessage({
           action: RUNTIME_MESSAGES.context_list
         });
-
-        if (response && response.status === 'success') {
-          setContexts(response.payload || []);
-        }
       } catch (error) {
         console.error('Failed to fetch contexts:', error);
-      } finally {
-        setIsLoadingContexts(false);
       }
     };
-
     fetchContexts();
   }, [transport.token]);
+
+  useEffect(() => {
+    if (contexts.length > 0 && selectedContext) {
+      const contextExists = contexts.find(ctx => 
+        ctx.id === selectedContext.id && ctx.userId === selectedContext.userId
+      );
+      
+      if (!contextExists) {
+        setSelectedContext(null);
+      }
+    }
+  }, [contexts, selectedContext]);
 
   const testConnection = async () => {
     if (isTestingConnection) return; // Prevent multiple simultaneous tests
     setIsTestingConnection(true);
+    
     try {
-      const response = await browser.runtime.sendMessage({
-        action: RUNTIME_MESSAGES.socket_retry,
+      // Set up a timeout to clean up the listener if no response comes
+      let timeoutId: NodeJS.Timeout;
+      
+      // Set up listeners for test-specific success/error messages
+      const messageListener = (message: any) => {
+        if (message.type === RUNTIME_MESSAGES.socket_test_success) {
+          showSuccessMessage(message.payload);
+          
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
+          browser.runtime.onMessage.removeListener(messageListener);
+          setIsTestingConnection(false);
+        } else if (message.type === RUNTIME_MESSAGES.socket_test_error) {
+          showErrorMessage(message.payload);
+          
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
+          browser.runtime.onMessage.removeListener(messageListener);
+          setIsTestingConnection(false);
+        }
+      };
+
+      // Add the listener
+      browser.runtime.onMessage.addListener(messageListener);
+
+      // Set up timeout after listener is defined
+      timeoutId = setTimeout(() => {
+        browser.runtime.onMessage.removeListener(messageListener);
+        showErrorMessage('Connection test timeout - please try again');
+        setIsTestingConnection(false);
+      }, 10000); // 10 second timeout for connection test
+
+      // Send test connection message (without saving config)
+      browser.runtime.sendMessage({
+        action: RUNTIME_MESSAGES.socket_test,
         config: {
           ...config,
           transport: {
@@ -81,22 +114,14 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         }
       });
 
-      if (response && response.status === 'success') {
-        showSuccessMessage('Connection successful!');
-        // Fetch contexts after successful connection
-        const contextResponse = await browser.runtime.sendMessage({
-          action: RUNTIME_MESSAGES.context_list
-        });
-        if (contextResponse && contextResponse.status === 'success') {
-          setContexts(contextResponse.payload || []);
-        }
-      } else {
-        showErrorMessage(response?.message || 'Connection failed. Please check your settings.');
-      }
+      // Clean up timeout if component unmounts
+      return () => {
+        clearTimeout(timeoutId);
+        browser.runtime.onMessage.removeListener(messageListener);
+      };
     } catch (error) {
       console.error('Connection test failed:', error);
       showErrorMessage('Connection failed. Please check your settings.');
-    } finally {
       setIsTestingConnection(false);
     }
   };
@@ -106,40 +131,76 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
     if (closePopup) closePopup(e);
     setIsSavingConnection(true);
     try {
-      dispatch(setConfig({ ...config, transport }));
-      const response = await browser.runtime.sendMessage({
+      if (!config) return;
+      
+      const updatedConfig = { ...config, transport };
+      await setConfig(updatedConfig);
+      
+      if (selectedContext) {
+        await setSavedSelectedContext(selectedContext);
+      }
+      
+      // Set up a timeout to clean up the listener if no response comes
+      let timeoutId: NodeJS.Timeout;
+      
+      // Set up listeners for success/error messages
+      const messageListener = (message: any) => {
+        if (message.type === RUNTIME_MESSAGES.config_set_success) {
+          showSuccessMessage(message.payload);
+          
+          const retryTimeout = setTimeout(() => {
+            browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
+          }, 100);
+          
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
+          browser.runtime.onMessage.removeListener(messageListener);
+          setIsSavingConnection(false);
+          
+          return () => clearTimeout(retryTimeout);
+        } else if (message.type === RUNTIME_MESSAGES.error_message && message.payload.includes('Failed to save settings')) {
+          showErrorMessage(message.payload);
+          
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
+          browser.runtime.onMessage.removeListener(messageListener);
+          setIsSavingConnection(false);
+        }
+      };
+
+      // Add the listener
+      browser.runtime.onMessage.addListener(messageListener);
+
+      // Set up timeout after listener is defined
+      timeoutId = setTimeout(() => {
+        browser.runtime.onMessage.removeListener(messageListener);
+        showErrorMessage('Request timeout - please try again');
+        setIsSavingConnection(false);
+      }, 5000); // 5 second timeout
+
+      // Send save config message
+      browser.runtime.sendMessage({
         action: RUNTIME_MESSAGES.config_set,
-        value: { ...config, transport }
+        value: updatedConfig
       });
 
-      if (response && response.status === 'success') {
-        // Use a single timeout for socket retry
-        const retryTimeout = setTimeout(() => {
-          browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
-        }, 100);
+      handleContextChange(selectedContext);
 
-        showSuccessMessage('Settings saved successfully!');
-
-        // Clean up timeout on unmount
-        return () => clearTimeout(retryTimeout);
-      } else {
-        showErrorMessage(response?.message || 'Failed to save settings');
-      }
+      // Clean up timeout if component unmounts
+      return () => {
+        clearTimeout(timeoutId);
+        browser.runtime.onMessage.removeListener(messageListener);
+      };
     } catch (error) {
       console.error('Failed to save settings:', error);
       showErrorMessage('Failed to save settings');
-    } finally {
       setIsSavingConnection(false);
     }
   };
 
-  const handleContextChange = async (contextId: string) => {
+  const handleContextChange = async (context: IContext | null) => {
     try {
-      await browser.runtime.sendMessage({
-        action: RUNTIME_MESSAGES.context_set,
-        value: contextId
-      });
-      setTransport({ ...transport, contextId });
+      setTransport({ ...transport, pinToContext: context?.url || 'universe:///' });
     } catch (error) {
       console.error('Failed to switch context:', error);
       showErrorMessage('Failed to switch context');
@@ -213,14 +274,13 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
             <select
               className="browser-default"
               id="connection-setting-context"
-              value={transport.contextId || 'default'}
-              onChange={(e) => handleContextChange(e.target.value)}
+              value={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : `${userInfo?.userId}/default`}
+              onChange={(e) => setSelectedContext(contexts.find(context => `${context.userId}/${context.id}` === e.target.value) || null)}
               disabled={isLoadingContexts}
             >
-              <option value="default">Default</option>
               {contexts.map((context) => (
-                <option key={context.id} value={context.id}>
-                  {context.url} {context.isShared ? '(Shared)' : ''}
+                <option key={context.id} value={`${context.userId}/${context.id}`} selected={`${context.userId}/${context.id}` === `${selectedContext?.userId}/${selectedContext?.id}`}>
+                  {context.url} {context.userId !== userInfo?.userId ? '(Shared)' : ''}
                 </option>
               ))}
             </select>

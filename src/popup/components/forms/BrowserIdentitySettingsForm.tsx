@@ -1,19 +1,21 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
-import { useDispatch } from 'react-redux';
-import { setConfig } from '../../redux/config/configActions';
-import { Dispatch } from 'redux';
 import { RUNTIME_MESSAGES } from '@/general/constants';
 import SettingCheckbox from '@/popup/common-components/inputs/SettingCheckbox';
 import { browser } from '@/general/utils';
+import { useConfig } from '@/popup/hooks/useStorage';
 
 const BrowserIdentitySettingsForm: React.FC<any> = ({ }) => {
-  const config: IConfigProps = useSelector((state: { config: IConfigProps }) => state.config);
-  const dispatch = useDispatch<Dispatch<any>>();
+  const [config, setConfig] = useConfig();
 
-  const saveBrowserIdentitySettings = (config: IConfigProps, browserIdentity: IConfigProps["browserIdentity"]) => {
-    dispatch(setConfig({ ...config, browserIdentity }));
+  const saveBrowserIdentitySettings = async (browserIdentity: IConfigProps["browserIdentity"]) => {
+    if (!config) return;
+    const updatedConfig = { ...config, browserIdentity };
+    await setConfig(updatedConfig);
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.config_set_item, key: "browserIdentity", value: browserIdentity }, (response) => {});
+  }
+
+  if (!config) {
+    return <div>Loading...</div>;
   }
 
   return (
@@ -25,7 +27,7 @@ const BrowserIdentitySettingsForm: React.FC<any> = ({ }) => {
             type="text" 
             id="browser-tag" 
             value={config.browserIdentity.browserTag} 
-            onChange={(e) => saveBrowserIdentitySettings(config, { ...config.browserIdentity, browserTag: e.target.value })} 
+            onChange={(e) => saveBrowserIdentitySettings({ ...config.browserIdentity, browserTag: e.target.value })} 
           />
         </div>
       </div>
