@@ -397,7 +397,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         try {
           await config.setMultiple(message.value);
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
-          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Settings saved successfully!' });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_set_success, payload: 'Settings saved successfully!' });
         } catch (error) {
           console.error('background.js | Error saving config:', error);
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Failed to save settings' });

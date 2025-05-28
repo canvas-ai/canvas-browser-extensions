@@ -140,16 +140,20 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         await setSavedSelectedContext(selectedContext);
       }
       
+      // Set up a timeout to clean up the listener if no response comes
+      let timeoutId: NodeJS.Timeout;
+      
       // Set up listeners for success/error messages
       const messageListener = (message: any) => {
-        if (message.type === RUNTIME_MESSAGES.success_message && message.payload === 'Settings saved successfully!') {
-          showSuccessMessage('Settings saved successfully!');
+        if (message.type === RUNTIME_MESSAGES.config_set_success) {
+          showSuccessMessage(message.payload);
           
           const retryTimeout = setTimeout(() => {
             browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
           }, 100);
           
-          // Clean up listener
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
           setIsSavingConnection(false);
           
@@ -157,7 +161,8 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         } else if (message.type === RUNTIME_MESSAGES.error_message && message.payload.includes('Failed to save settings')) {
           showErrorMessage(message.payload);
           
-          // Clean up listener
+          // Clear timeout and clean up listener
+          clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
           setIsSavingConnection(false);
         }
@@ -166,8 +171,8 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       // Add the listener
       browser.runtime.onMessage.addListener(messageListener);
 
-      // Set up a timeout to clean up the listener if no response comes
-      const timeoutId = setTimeout(() => {
+      // Set up timeout after listener is defined
+      timeoutId = setTimeout(() => {
         browser.runtime.onMessage.removeListener(messageListener);
         showErrorMessage('Request timeout - please try again');
         setIsSavingConnection(false);

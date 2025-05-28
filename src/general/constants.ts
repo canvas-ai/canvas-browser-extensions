@@ -12,6 +12,7 @@ export const RUNTIME_MESSAGES = {
   config_get_item: "config:get:item",
   config_set_item: "config:set:item",
   config_set: "config:set",
+  config_set_success: "config:set:success",
   context_list: "context:list",
   context_get: "context:get",
   context_get_url: "context:get:url",
