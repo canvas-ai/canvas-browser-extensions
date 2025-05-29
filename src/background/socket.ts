@@ -251,6 +251,148 @@ class MySocket {
 
     this.socket.on('context:list', contextListResult);
     this.socket.on('context:list:result', contextListResult);
+
+    // Document event listeners
+    this.socket.on('document:insert', this.handleDocumentInsert.bind(this));
+    this.socket.on('document:update', this.handleDocumentUpdate.bind(this));
+    this.socket.on('document:remove', this.handleDocumentRemove.bind(this));
+    this.socket.on('document:delete', this.handleDocumentDelete.bind(this));
+    this.socket.on('documents:delete', this.handleDocumentsDelete.bind(this));
+  }
+
+  private async handleDocumentInsert(payload: any) {
+    console.log('background.js | [socket.io] Document inserted:', payload);
+
+    // Check if this is for our current context
+    const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const context = currentContext.CNVS_SELECTED_CONTEXT;
+
+    if (!context || payload.contextId !== context.id) {
+      console.log('background.js | Document insert event not for current context, ignoring');
+      return;
+    }
+
+    // For document inserts, we might want to open new tabs if they are URLs
+    if (payload.documents || payload.document) {
+      const documents = payload.documents || [payload.document];
+      const tabUrls = documents
+        .filter((doc: any) => {
+          if (!doc || !doc.url) return false;
+          try {
+            new URL(doc.url);
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .map((doc: any) => doc.url);
+
+      if (tabUrls.length > 0) {
+        await config.load(); // Ensure config is loaded
+        if (config.sync.autoOpenCanvasTabs) {
+          console.log(`background.js | Opening ${tabUrls.length} new tabs for inserted documents`);
+          // Import and use existing utilities
+          const { getPinnedTabs } = await import('@/general/utils');
+          const { browserOpenTabArray } = await import('./utils');
+
+          const pinnedTabs = await getPinnedTabs();
+          const urlsToOpen = tabUrls.filter((url: string) => !pinnedTabs.some(u => u === url));
+
+          if (urlsToOpen.length > 0) {
+            await browserOpenTabArray(urlsToOpen.map((url: string) => ({ url })));
+          }
+        }
+      }
+    }
+
+    // Update local tabs data to stay in sync
+    updateLocalCanvasTabsData();
+
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) added to context`
+    });
+  }
+
+  private async handleDocumentUpdate(payload: any) {
+    console.log('background.js | [socket.io] Document updated:', payload);
+
+    // Check if this is for our current context
+    const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const context = currentContext.CNVS_SELECTED_CONTEXT;
+
+    if (!context || payload.contextId !== context.id) {
+      console.log('background.js | Document update event not for current context, ignoring');
+      return;
+    }
+
+    // Update local tabs data to stay in sync
+    updateLocalCanvasTabsData();
+
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) updated in context`
+    });
+  }
+
+  private async handleDocumentRemove(payload: any) {
+    console.log('background.js | [socket.io] Document removed:', payload);
+
+    // Check if this is for our current context
+    const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const context = currentContext.CNVS_SELECTED_CONTEXT;
+
+    if (!context || payload.contextId !== context.id) {
+      console.log('background.js | Document remove event not for current context, ignoring');
+      return;
+    }
+
+    // For document removal, we might want to close corresponding tabs based on config
+    await config.load(); // Ensure config is loaded
+    if (config.sync.tabBehaviorOnContextChange === "Close" || config.sync.tabBehaviorOnContextChange === "Save and Close") {
+      // For now, we'll just update the tabs data and let the existing sync logic handle it
+      // TODO: Implement sophisticated document-to-tab matching if needed
+      console.log('background.js | Document removed, updating local tabs data');
+    }
+
+    // Update local tabs data to stay in sync
+    updateLocalCanvasTabsData();
+
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) removed from context`
+    });
+  }
+
+  private async handleDocumentDelete(payload: any) {
+    console.log('background.js | [socket.io] Document deleted:', payload);
+
+    // For deletions, we always update regardless of context since documents are permanently gone
+    // Update local tabs data to stay in sync
+    updateLocalCanvasTabsData();
+
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: `${payload.documentIds?.length || payload.documentId ? 1 : payload.count || 0} document(s) permanently deleted`
+    });
+  }
+
+  private async handleDocumentsDelete(payload: any) {
+    // This is the same as handleDocumentDelete but for the plural event
+    console.log('background.js | [socket.io] Documents deleted:', payload);
+
+    // Update local tabs data to stay in sync
+    updateLocalCanvasTabsData();
+
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: `${payload.count || payload.documentIds?.length || 0} documents permanently deleted`
+    });
   }
 
   sendSocketEvent(e: string, data?: any) {
