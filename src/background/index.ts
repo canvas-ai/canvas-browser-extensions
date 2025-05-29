@@ -396,40 +396,55 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           const newSocket = await getSocket();
           newSocket.initializeSocket(true);
 
-          // Wait for connection to be established with a more efficient approach
+          // Wait for connection to be established with a single check
           return new Promise((resolve) => {
-            let attempts = 0;
-            const maxAttempts = 25; // 5 seconds total (25 * 200ms)
+            let resolved = false;
+            const maxWaitTime = 5000; // 5 seconds total
             let lastStatus = false;
 
-            const checkConnection = () => {
-              attempts++;
+            const resolveOnce = () => {
+              if (!resolved) {
+                resolved = true;
+                resolve();
+              }
+            };
+
+            // Set up a single timeout for final resolution
+            const timeoutId = setTimeout(() => {
+              console.log('background.js | Socket connection timeout after 5 seconds');
+              resolveOnce();
+            }, maxWaitTime);
+
+            // Check connection status just once every second
+            const checkInterval = setInterval(() => {
               const isConnected = newSocket.isConnected();
 
-              // Only send status update if status changed
+              // Only send status update if status actually changed
               if (isConnected !== lastStatus) {
                 lastStatus = isConnected;
                 sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: isConnected });
               }
 
               if (isConnected) {
-                console.log(`background.js | Socket connected after ${attempts} attempts`);
-                resolve();
-                return;
+                console.log('background.js | Socket connected successfully');
+                clearInterval(checkInterval);
+                clearTimeout(timeoutId);
+                resolveOnce();
               }
+            }, 1000); // Check once per second, not every 200ms
 
-              if (attempts >= maxAttempts) {
-                console.log('background.js | Socket connection timeout after maximum attempts');
-                resolve();
-                return;
-              }
-
-              // Check again in 200ms (much more reasonable than 100ms)
-              setTimeout(checkConnection, 200);
-            };
-
-            // Start checking
-            checkConnection();
+            // Also listen for immediate connection success
+            const originalSocket = newSocket.socket;
+            if (originalSocket) {
+              const onConnect = () => {
+                console.log('background.js | Socket connected via event listener');
+                clearInterval(checkInterval);
+                clearTimeout(timeoutId);
+                originalSocket.off('connect', onConnect);
+                resolveOnce();
+              };
+              originalSocket.once('connect', onConnect);
+            }
           });
         } catch (error: any) {
           console.error('background.js | Error retrying socket connection:', error);

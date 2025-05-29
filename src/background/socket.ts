@@ -309,6 +309,9 @@ class MySocket {
     console.log('background.js | [socket.io] Updating local canvas tabs data due to document insert');
     updateLocalCanvasTabsData();
 
+    // Force immediate UI update
+    await index.updateBrowserTabs();
+
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
@@ -331,6 +334,9 @@ class MySocket {
     // Update local tabs data to stay in sync
     console.log('background.js | [socket.io] Updating local canvas tabs data due to document update');
     updateLocalCanvasTabsData();
+
+    // Force immediate UI update
+    await index.updateBrowserTabs();
 
     // Notify UI of the change
     sendRuntimeMessage({
@@ -363,6 +369,9 @@ class MySocket {
     console.log('background.js | [socket.io] Updating local canvas tabs data due to document remove');
     updateLocalCanvasTabsData();
 
+    // Force immediate UI update
+    await index.updateBrowserTabs();
+
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
@@ -373,15 +382,26 @@ class MySocket {
   private async handleDocumentDelete(payload: any) {
     console.log('background.js | [socket.io] Document deleted:', payload);
 
-    // For deletions, we always update regardless of context since documents are permanently gone
+    // Check if this is for our current context
+    const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const context = currentContext.CNVS_SELECTED_CONTEXT;
+
+    if (!context || payload.contextId !== context.id) {
+      console.log('background.js | Document delete event not for current context, ignoring');
+      return;
+    }
+
     // Update local tabs data to stay in sync
     console.log('background.js | [socket.io] Updating local canvas tabs data due to document delete');
     updateLocalCanvasTabsData();
 
+    // Force immediate UI update
+    await index.updateBrowserTabs();
+
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.documentIds?.length || payload.documentId ? 1 : payload.count || 0} document(s) permanently deleted`
+      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) permanently deleted`
     });
   }
 
@@ -389,9 +409,21 @@ class MySocket {
     // This is the same as handleDocumentDelete but for the plural event
     console.log('background.js | [socket.io] Documents deleted:', payload);
 
+    // Check if this is for our current context
+    const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const context = currentContext.CNVS_SELECTED_CONTEXT;
+
+    if (!context || payload.contextId !== context.id) {
+      console.log('background.js | Documents delete event not for current context, ignoring');
+      return;
+    }
+
     // Update local tabs data to stay in sync
     console.log('background.js | [socket.io] Updating local canvas tabs data due to documents delete');
     updateLocalCanvasTabsData();
+
+    // Force immediate UI update
+    await index.updateBrowserTabs();
 
     // Notify UI of the change
     sendRuntimeMessage({

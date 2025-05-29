@@ -67,15 +67,19 @@ const App: React.FC = () => {
       setShowSetup(false);
       setSetupCheckComplete(true);
 
-      // Still check connection status for normal flow
-      requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
+      // Only check connection status once when setup check completes with valid config
+      // Don't repeatedly check on every config change
+      if (!variables.connected) {
+        requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
+      }
     };
 
     checkSetupNeeded();
-  }, [config, justCompletedSetup]);
+  }, [config, justCompletedSetup]); // Removed variables.connected from dependencies to prevent loops
 
   useEffect(() => {
-    requestVariableUpdate({ action: RUNTIME_MESSAGES.socket_status });
+    // Only request context info when URL changes, not socket status
+    // Socket status should be managed by connection events, not URL changes
     requestVariableUpdate({ action: RUNTIME_MESSAGES.context_get });
   }, [context?.url]);
 

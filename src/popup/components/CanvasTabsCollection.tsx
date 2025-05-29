@@ -12,7 +12,7 @@ interface CanvasTabsCollectionTypes {
 
 const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs, checkedTabs, setCheckedTabs = () => {} }) => {
   const [context] = useContext();
-  
+
   const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
     if(!tab.id) return;
@@ -25,7 +25,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
     console.log('UI | Delete icon clicked: ', tab.url);
     if(!tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_delete, tab }).catch((error) => {
-        console.error('UI | Error deleting tabs from canvas:', error);
+        console.error('UI | Error deleting tab from canvas:', error);
     });
   };
 
@@ -44,8 +44,8 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
   return (
     <ul className="collection">
       {
-        !canvasTabs?.length ? 
-        (<li className="collection-item">No canvas tabs found</li>) : 
+        !canvasTabs?.length ?
+        (<li className="collection-item">No canvas tabs found</li>) :
         canvasTabs.map((tab: ICanvasTab, idx: number) => {
           if(!tab.url) return null;
           return <li key={idx + tab.url} className="collection-item">
@@ -55,7 +55,7 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
               </div>
             ) : null}
 
-            <a 
+            <a
               href={tab.url}
               className="truncate"
               onClick={(e) => {
@@ -68,21 +68,21 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
               <span className="tab-title truncate black-text">{tab.title || ""}</span>
             </a>
             {
-              isOnUniverse(context) ? 
-              null : 
+              isOnUniverse(context) ?
+              null :
               (
-                <i 
+                <i
                   className="material-icons"
                   style={{ cursor: "pointer" }}
                   title="Remove tab from current context"
                   onClick={(e) => { e.preventDefault(); removeCanvasToBrowserTabClicked(tab); }}
-                >close</i>  
+                >close</i>
               )
             }
-            <i 
+            <i
               className="material-icons"
               style={{ cursor: "pointer", color: "#d90000" }}
-              title="Delete tab from all contexts"
+              title="Delete tab from database permanently"
               onClick={(e) => { e.preventDefault(); deleteCanvasToBrowserTabClicked(tab); }}
             >delete</i>
           </li>

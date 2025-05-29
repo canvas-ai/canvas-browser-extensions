@@ -9,7 +9,7 @@ const getContext = async () => {
   if (selectedContext.CNVS_SELECTED_CONTEXT) {
     return selectedContext.CNVS_SELECTED_CONTEXT;
   }
-  
+
   const contexts = await browser.storage.local.get(["contexts"]);
   return contexts.contexts[0] || null;
 }
@@ -106,7 +106,7 @@ export function canvasFetchDocuments(featureArray: string[]): Promise<any> {
 export function canvasInsertDocument(document: any, featureArray: string[] = [], options: any = {}): Promise<any> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    
+
     if (!document) {
       reject(new Error("Document is required"));
       return;
@@ -114,7 +114,7 @@ export function canvasInsertDocument(document: any, featureArray: string[] = [],
 
     try {
       const contextId = await getContextId();
-      
+
       // Use the socket's emit method which returns a Promise
       const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
         contextId,
@@ -131,29 +131,29 @@ export function canvasInsertDocument(document: any, featureArray: string[] = [],
 
       if (response.status === "success") {
         console.log("background.js | Document inserted successfully: ", response);
-        
+
         // Update tab index and sync status if this is a tab document
         if (document.schema === 'data/abstraction/tab' && document.data && response.payload) {
           const insertedTab = {
             ...document.data,
             docId: response.payload.id
           };
-          
+
                   // Add to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabSilent(insertedTab);
-        
+
         // Notify UI about the tab changes
         onContextTabsUpdated({
           canvasTabs: { insertedTabs: [insertedTab] }
         });
-        
+
         // Send success message
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Document inserted to Canvas' });
-        
+
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
         }
-        
+
         resolve(response);
       } else if (response.status === "error") {
         console.error("background.js | Error inserting document: ", response);
@@ -232,7 +232,7 @@ export function canvasFetchTab(docId: number) {
 export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    
+
     if (!tab) {
       reject(new Error("background.js | Invalid tab"));
       return;
@@ -241,7 +241,7 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
     try {
       const contextId = await getContextId();
       const featureArray = genFeatureArray("WRITE");
-      
+
       // Use the socket's emit method which returns a Promise
       const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
         contextId,
@@ -258,27 +258,27 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
 
       if (response.status === "success") {
         console.log(`background.js | Tab ${tab.id} inserted successfully: `, response);
-        
+
         // Update the tab with the document ID from the response
         const insertedTab = {
           ...tab,
           docId: response.payload.id
         };
-        
+
         // Add to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabSilent(insertedTab);
-        
+
         // Notify UI about the tab changes
         onContextTabsUpdated({
           canvasTabs: { insertedTabs: [insertedTab] }
         });
-        
+
         // Send success message
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab inserted to Canvas' });
-        
+
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
-        
+
         resolve(response);
       } else if (response.status === "error") {
         console.error(`background.js | Error inserting tab ${tab.id}: `, response);
@@ -307,27 +307,27 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
       console.log('background.js | Tab array inserted to Canvas: ', response);
       if (response && response.status === 'success' && response.payload) {
         console.log(`background.js | Tab array inserted successfully: `, response);
-          
+
         // Map the inserted tabs with their document IDs
         const insertedTabs = tabArray.map((tab, index) => ({
           ...tab,
           docId: response.payload[index]?.id
         }));
-        
+
         index.insertCanvasTabArraySilent(insertedTabs, false);
-        
+
         // Notify UI about the tab changes
         onContextTabsUpdated({
           canvasTabs: { insertedTabs }
         });
-        
+
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas' });
-        
+
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
-        
+
         resolve(response);
-  
+
       } else if (response.status === "error") {
         console.error("background.js | Error inserting tab array: ", response);
         reject(new Error(response.message || "Error inserting tab array to Canvas"));
@@ -340,7 +340,7 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
     try {
       const contextId = await getContextId();
       const featureArray = genFeatureArray("WRITE");
-      
+
       socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, {
         contextId,
         documents: tabArray.map((tab) => formatTabProperties(tab))
@@ -361,7 +361,7 @@ export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
 function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "delete") {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    
+
     // Extract the duplicated success handling logic into a reusable function
     const handleSuccessResponse = (res: any) => {
       socket.removeAllListeners(`${ROUTE}:result`);
@@ -378,9 +378,9 @@ function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "dele
         resolve(false);
       }
     };
-    
+
     socket.on(`${ROUTE}:result`, handleSuccessResponse);
-    
+
     if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
     socket.emit(ROUTE, {
       contextId: await getContextId(),
@@ -421,7 +421,7 @@ export function canvasRemoveTab(tab: ICanvasTab) {
 }
 
 export function canvasDeleteTab(tab: ICanvasTab) {
-  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, tab, "remove");
+  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, tab, "delete");
 }
 
 export function canvasRemoveTabs(tabs: ICanvasTab[]) {
@@ -443,9 +443,9 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
     try {
       const contextId = await getContextId();
       const featureArray = genFeatureArray("WRITE");
-      
+
       console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
-      
+
       const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, {
         contextId,
         documents: tabArray.map((tab) => formatTabProperties(tab)),
@@ -460,27 +460,27 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
 
       if (response.status === "success") {
         console.log(`background.js | Document tab array inserted successfully: `, response);
-        
+
         // Map the inserted tabs with their document IDs
         const insertedTabs = tabArray.map((tab, index) => ({
           ...tab,
           docId: response.payload[index]?.id
         }));
-        
+
         // Add all tabs to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabArraySilent(insertedTabs, false);
-        
+
         // Notify UI about the tab changes
         onContextTabsUpdated({
           canvasTabs: { insertedTabs }
         });
-        
+
         // Send success message
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Document tabs inserted to Canvas' });
-        
+
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
-        
+
         resolve(response);
       } else if (response.status === "error") {
         console.error("background.js | Error inserting document tab array: ", response);
