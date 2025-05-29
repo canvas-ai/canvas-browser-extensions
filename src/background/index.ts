@@ -46,16 +46,18 @@ const handleContextChange = async (newContext: IContext | null) => {
     console.log('background.js | Fetching tabs for new context...');
     const tabs = await requestFetchTabsForContext();
 
-    if (tabs) {
+    if (tabs && tabs.length > 0) {
       console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
       // Use silent method first to update storage, then trigger UI update
       index.insertCanvasTabArraySilent(tabs, true);
       // Now update browser tabs to recalculate sync status and notify UI
       await index.updateBrowserTabs();
     } else {
-      console.log('background.js | No tabs found for new context');
-      // Clear canvas tabs if no data received
+      console.log('background.js | No tabs found for new context - clearing canvas tabs');
+      // Clear canvas tabs if no data received or empty array
       index.clearCanvasTabs();
+      // Also update browser tabs to recalculate sync status
+      await index.updateBrowserTabs();
     }
 
 

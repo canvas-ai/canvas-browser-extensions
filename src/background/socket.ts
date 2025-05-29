@@ -306,6 +306,7 @@ class MySocket {
     }
 
     // Update local tabs data to stay in sync
+    console.log('background.js | [socket.io] Updating local canvas tabs data due to document insert');
     updateLocalCanvasTabsData();
 
     // Notify UI of the change
@@ -328,6 +329,7 @@ class MySocket {
     }
 
     // Update local tabs data to stay in sync
+    console.log('background.js | [socket.io] Updating local canvas tabs data due to document update');
     updateLocalCanvasTabsData();
 
     // Notify UI of the change
@@ -358,6 +360,7 @@ class MySocket {
     }
 
     // Update local tabs data to stay in sync
+    console.log('background.js | [socket.io] Updating local canvas tabs data due to document remove');
     updateLocalCanvasTabsData();
 
     // Notify UI of the change
@@ -372,6 +375,7 @@ class MySocket {
 
     // For deletions, we always update regardless of context since documents are permanently gone
     // Update local tabs data to stay in sync
+    console.log('background.js | [socket.io] Updating local canvas tabs data due to document delete');
     updateLocalCanvasTabsData();
 
     // Notify UI of the change
@@ -386,6 +390,7 @@ class MySocket {
     console.log('background.js | [socket.io] Documents deleted:', payload);
 
     // Update local tabs data to stay in sync
+    console.log('background.js | [socket.io] Updating local canvas tabs data due to documents delete');
     updateLocalCanvasTabsData();
 
     // Notify UI of the change
