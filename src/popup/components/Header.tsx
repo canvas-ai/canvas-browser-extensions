@@ -1,14 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { getContextBreadcrumbsFromContext } from '../utils';
 import { useSelectedContext, useContextList } from '../hooks/useStorage';
 
 const Header: React.FC = () => {
   const [selectedContext] = useSelectedContext();
   const [contextList] = useContextList();
-  
-  const breadcrumbs = useMemo(() => {
-    const contextToUse = selectedContext || (contextList && contextList.length > 0 ? contextList[0] : null);
-    return getContextBreadcrumbsFromContext(contextToUse);
+  const [breadcrumbs, setBreadcrumbs] = useState<Array<{href: string, className: string, textContent: string}>>([]);
+
+  useEffect(() => {
+    const updateBreadcrumbs = async () => {
+      const contextToUse = selectedContext || (contextList && contextList.length > 0 ? contextList[0] : null);
+      const newBreadcrumbs = await getContextBreadcrumbsFromContext(contextToUse);
+      setBreadcrumbs(newBreadcrumbs);
+    };
+
+    updateBreadcrumbs();
   }, [selectedContext, contextList]);
 
   return (

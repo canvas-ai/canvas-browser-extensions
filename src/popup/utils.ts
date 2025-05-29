@@ -29,7 +29,7 @@ export const getContextBreadcrumbs = async (): Promise<Array<{href: string, clas
       return [];
     }
 
-    return createBreadcrumbsFromUrl(contextToUse.url);
+    return await getContextBreadcrumbsFromContext(contextToUse);
   } catch (error) {
     console.error("Error getting context breadcrumbs:", error);
     return [];
@@ -51,9 +51,36 @@ const createBreadcrumbsFromUrl = (url: string): Array<{href: string, className: 
   });
 }
 
-export const getContextBreadcrumbsFromContext = (context: IContext | null): Array<{href: string, className: string, textContent: string}> => {
+export const getContextBreadcrumbsFromContext = async (context: IContext | null): Promise<Array<{href: string, className: string, textContent: string}>> => {
   if (!context || !context.url) return [];
-  return createBreadcrumbsFromUrl(context.url);
+
+  try {
+    // Get current user info to determine if context is shared
+    const result = await browser.storage.local.get(["userInfo", "CNVS_USER_INFO", "user"]);
+    const userInfo = result.userInfo || result.CNVS_USER_INFO || result.user;
+
+    // Determine if context is shared
+    const isShared = context.userId && userInfo?.userId && context.userId !== userInfo.userId;
+
+    // Format: "context.id | context.url" or "context.id (shared) | context.url"
+    const contextLabel = isShared
+      ? `${context.id} (shared) | ${context.url}`
+      : `${context.id} | ${context.url}`;
+
+    return [{
+      href: "#!",
+      className: "breadcrumb black-text",
+      textContent: contextLabel
+    }];
+  } catch (error) {
+    // Fallback to just context.id | context.url if userInfo not available
+    const contextLabel = `${context.id} | ${context.url}`;
+    return [{
+      href: "#!",
+      className: "breadcrumb black-text",
+      textContent: contextLabel
+    }];
+  }
 }
 
 export const requestUpdateTabs = () => {
@@ -107,6 +134,5 @@ export const cx = (...classNames: (string | undefined)[]) => {
 }
 
 export const isOnUniverse = (context: IContext | null): boolean => {
-  const breadcrumbs = getContextBreadcrumbsFromContext(context);
-  return breadcrumbs.length === 1 && breadcrumbs[0].textContent.trim().toLowerCase() === "universe";
+  return !context || !context.url || context.url === '/' || context.url === 'universe:///';
 }
