@@ -38,43 +38,71 @@ const handleContextChange = async (newContext: IContext | null) => {
 
   if (!newContext) {
     console.log('background.js | No context selected, clearing canvas tabs');
+    // Get current tabs before clearing
+    const currentTabs = index.getCanvasTabArray();
+    // Clear canvas tabs if no data received or empty array
     index.clearCanvasTabs();
-    return;
-  }
-
-  try {
-    console.log('background.js | Fetching tabs for new context...');
-    const tabs = await requestFetchTabsForContext();
-
-    if (tabs && tabs.length > 0) {
-      console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
-      // Use silent method first to update storage, then trigger UI update
-      index.insertCanvasTabArraySilent(tabs, true);
-      // Now update browser tabs to recalculate sync status and notify UI
-      await index.updateBrowserTabs();
-    } else {
-      console.log('background.js | No tabs found for new context - clearing canvas tabs');
-      // Clear canvas tabs if no data received or empty array
-      index.clearCanvasTabs();
-      // Also update browser tabs to recalculate sync status
-      await index.updateBrowserTabs();
+    // Notify UI about the tab clearing
+    if (currentTabs.length > 0) {
+      onContextTabsUpdated({
+        canvasTabs: { removedTabs: currentTabs }
+      });
     }
-
-
-
-    // Send success message to popup
+    // Also send a direct update to ensure UI is cleared
     sendRuntimeMessage({
-      type: RUNTIME_MESSAGES.success_message,
-      payload: 'Context switched successfully'
+      type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser,
+      payload: []
     });
+    // Also update browser tabs to recalculate sync status
+    await index.updateBrowserTabs();
+  } else {
+    try {
+      console.log('background.js | Fetching tabs for new context...');
+      const tabs = await requestFetchTabsForContext();
 
-    console.log('background.js | Context switch completed successfully');
-  } catch (error) {
-    console.error('background.js | Error updating context:', error);
-    sendRuntimeMessage({
-      type: RUNTIME_MESSAGES.error_message,
-      payload: 'Error updating context'
-    });
+      if (tabs && tabs.length > 0) {
+        console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
+        // Use silent method first to update storage, then trigger UI update
+        index.insertCanvasTabArraySilent(tabs, true);
+        // Now update browser tabs to recalculate sync status and notify UI
+        await index.updateBrowserTabs();
+      } else {
+        console.log('background.js | No tabs found for new context - clearing canvas tabs');
+        // Get current tabs before clearing
+        const currentTabs = index.getCanvasTabArray();
+        // Clear canvas tabs if no data received or empty array
+        index.clearCanvasTabs();
+        // Notify UI about the tab clearing
+        if (currentTabs.length > 0) {
+          onContextTabsUpdated({
+            canvasTabs: { removedTabs: currentTabs }
+          });
+        }
+        // Also send a direct update to ensure UI is cleared
+        sendRuntimeMessage({
+          type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser,
+          payload: []
+        });
+        // Also update browser tabs to recalculate sync status
+        await index.updateBrowserTabs();
+      }
+
+
+
+      // Send success message to popup
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: 'Context switched successfully'
+      });
+
+      console.log('background.js | Context switch completed successfully');
+    } catch (error) {
+      console.error('background.js | Error updating context:', error);
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.error_message,
+        payload: 'Error updating context'
+      });
+    }
   }
 };
 
@@ -368,21 +396,40 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           const newSocket = await getSocket();
           newSocket.initializeSocket(true);
 
-          // Wait for connection to be established
+          // Wait for connection to be established with a more efficient approach
           return new Promise((resolve) => {
-            const checkConnection = setInterval(() => {
-              if (newSocket.isConnected()) {
-                clearInterval(checkConnection);
-                sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: true });
-                resolve();
-              }
-            }, 100);
+            let attempts = 0;
+            const maxAttempts = 25; // 5 seconds total (25 * 200ms)
+            let lastStatus = false;
 
-            // Timeout after 5 seconds
-            setTimeout(() => {
-              clearInterval(checkConnection);
-              resolve();
-            }, 5000);
+            const checkConnection = () => {
+              attempts++;
+              const isConnected = newSocket.isConnected();
+
+              // Only send status update if status changed
+              if (isConnected !== lastStatus) {
+                lastStatus = isConnected;
+                sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: isConnected });
+              }
+
+              if (isConnected) {
+                console.log(`background.js | Socket connected after ${attempts} attempts`);
+                resolve();
+                return;
+              }
+
+              if (attempts >= maxAttempts) {
+                console.log('background.js | Socket connection timeout after maximum attempts');
+                resolve();
+                return;
+              }
+
+              // Check again in 200ms (much more reasonable than 100ms)
+              setTimeout(checkConnection, 200);
+            };
+
+            // Start checking
+            checkConnection();
           });
         } catch (error: any) {
           console.error('background.js | Error retrying socket connection:', error);

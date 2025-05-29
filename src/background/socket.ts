@@ -521,8 +521,25 @@ export const updateLocalCanvasTabsData = () => {
       return console.log('ERROR: background.js | Error fetching tabs from Canvas');
     }
     console.log(`background.js | Received ${tabs.length} canvas tabs from server`);
-    // Use silent method to avoid UI updates during initial sync
+    // Get current tabs before updating to calculate the difference
+    const currentTabs = index.getCanvasTabArray();
+    // Use silent method to avoid duplicate UI updates
     index.insertCanvasTabArraySilent(tabs, true);
+
+    // Notify UI about the changes
+    const { onContextTabsUpdated } = require('./utils');
+    if (tabs.length === 0 && currentTabs.length > 0) {
+      // All tabs were removed
+      onContextTabsUpdated({
+        canvasTabs: { removedTabs: currentTabs }
+      });
+    } else if (tabs.length > 0) {
+      // Tabs were added/updated - for simplicity, we'll just set all tabs
+      // A more sophisticated approach would calculate insertedTabs and removedTabs
+      onContextTabsUpdated({
+        canvasTabs: { insertedTabs: tabs }
+      });
+    }
   }).then(() => {
     index.updateBrowserTabs();
   }).catch((error) => {

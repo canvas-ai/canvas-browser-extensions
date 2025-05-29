@@ -1,7 +1,7 @@
 import config from "@/general/config";
 import index from "./TabIndex";
 import { requestFetchTabsForContext } from "./canvas";
-import { handleContextChangeTabUpdates, browserOpenTabArray, sendRuntimeMessage } from "./utils";
+import { handleContextChangeTabUpdates, browserOpenTabArray, sendRuntimeMessage, onContextTabsUpdated } from "./utils";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { getPinnedTabs, browser } from "@/general/utils";
 
@@ -88,8 +88,21 @@ export const setContextUrl = async (url: { payload: string }) => {
         await index.updateBrowserTabs();
       } else {
         console.log('background.js | No tabs found for new context - clearing canvas tabs');
+        // Get current tabs before clearing
+        const currentTabs = index.getCanvasTabArray();
         // Clear canvas tabs if no data received or empty array
         index.clearCanvasTabs();
+        // Notify UI about the tab clearing
+        if (currentTabs.length > 0) {
+          onContextTabsUpdated({
+            canvasTabs: { removedTabs: currentTabs }
+          });
+        }
+        // Also send a direct update to ensure UI is cleared
+        sendRuntimeMessage({
+          type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser,
+          payload: []
+        });
         // Also update browser tabs to recalculate sync status
         await index.updateBrowserTabs();
       }
