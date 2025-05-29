@@ -1,26 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { browser } from '@/general/utils';
 import { RUNTIME_MESSAGES } from '@/general/constants';
-import { showErrorMessage, showSuccessMessage } from '@/popup/utils';
+import { useToast } from '../../../hooks/use-toast';
 import { useUserInfo, useContextList, useConfig, useSelectedContext } from '@/popup/hooks/useStorage';
+import styles from './ConnectionSettingsForm.module.scss';
 
 interface ConnectionSettingsFormTypes {
   closePopup?: React.MouseEventHandler<HTMLDivElement>;
 }
 
 const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePopup }) => {
-  
+
   const [userInfo] = useUserInfo();
   const [contexts] = useContextList();
   const [config, setConfig] = useConfig();
   const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext();
-  
+  const { toast } = useToast();
+
   const [selectedContext, setSelectedContext] = useState<IContext | null>(null);
   const [transport, setTransport] = useState(config?.transport || { protocol: 'http' as IProtocol, host: '127.0.0.1', port: 8001, token: '', pinToContext: '/', isApiToken: true });
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSavingConnection, setIsSavingConnection] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [isLoadingContexts, setIsLoadingContexts] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
+
+  // Derived state for URL display
+  const serverUrl = `${transport.protocol}://${transport.host}:${transport.port}`;
 
   useEffect(() => {
     if (config?.transport) {
@@ -51,15 +57,19 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         console.error('Failed to fetch contexts:', error);
       }
     };
-    fetchContexts();
+
+    // Fetch contexts when component mounts or when token changes
+    if (transport.token) {
+      fetchContexts();
+    }
   }, [transport.token]);
 
   useEffect(() => {
     if (contexts.length > 0 && selectedContext) {
-      const contextExists = contexts.find(ctx => 
+      const contextExists = contexts.find(ctx =>
         ctx.id === selectedContext.id && ctx.userId === selectedContext.userId
       );
-      
+
       if (!contextExists) {
         setSelectedContext(null);
       }
@@ -69,23 +79,33 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const testConnection = async () => {
     if (isTestingConnection) return; // Prevent multiple simultaneous tests
     setIsTestingConnection(true);
-    
+    setConnectionStatus('unknown');
+
     try {
       // Set up a timeout to clean up the listener if no response comes
       let timeoutId: NodeJS.Timeout;
-      
+
       // Set up listeners for test-specific success/error messages
       const messageListener = (message: any) => {
         if (message.type === RUNTIME_MESSAGES.socket_test_success) {
-          showSuccessMessage(message.payload);
-          
+          setConnectionStatus('connected');
+          toast({
+            title: "Connection Test",
+            description: message.payload
+          });
+
           // Clear timeout and clean up listener
           clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
           setIsTestingConnection(false);
         } else if (message.type === RUNTIME_MESSAGES.socket_test_error) {
-          showErrorMessage(message.payload);
-          
+          setConnectionStatus('disconnected');
+          toast({
+            title: "Connection Failed",
+            description: message.payload,
+            variant: "destructive"
+          });
+
           // Clear timeout and clean up listener
           clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
@@ -99,7 +119,11 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       // Set up timeout after listener is defined
       timeoutId = setTimeout(() => {
         browser.runtime.onMessage.removeListener(messageListener);
-        showErrorMessage('Connection test timeout - please try again');
+        toast({
+          title: "Connection Timeout",
+          description: "Connection test timeout - please try again",
+          variant: "destructive"
+        });
         setIsTestingConnection(false);
       }, 10000); // 10 second timeout for connection test
 
@@ -121,7 +145,11 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       };
     } catch (error) {
       console.error('Connection test failed:', error);
-      showErrorMessage('Connection failed. Please check your settings.');
+      toast({
+        title: "Connection Failed",
+        description: "Connection failed. Please check your settings.",
+        variant: "destructive"
+      });
       setIsTestingConnection(false);
     }
   };
@@ -132,35 +160,42 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
     setIsSavingConnection(true);
     try {
       if (!config) return;
-      
+
       const updatedConfig = { ...config, transport };
       await setConfig(updatedConfig);
-      
+
       if (selectedContext) {
         await setSavedSelectedContext(selectedContext);
       }
-      
+
       // Set up a timeout to clean up the listener if no response comes
       let timeoutId: NodeJS.Timeout;
-      
+
       // Set up listeners for success/error messages
       const messageListener = (message: any) => {
         if (message.type === RUNTIME_MESSAGES.config_set_success) {
-          showSuccessMessage(message.payload);
-          
+          toast({
+            title: "Settings Saved",
+            description: message.payload
+          });
+
           const retryTimeout = setTimeout(() => {
             browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.socket_retry });
           }, 100);
-          
+
           // Clear timeout and clean up listener
           clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
           setIsSavingConnection(false);
-          
+
           return () => clearTimeout(retryTimeout);
         } else if (message.type === RUNTIME_MESSAGES.error_message && message.payload.includes('Failed to save settings')) {
-          showErrorMessage(message.payload);
-          
+          toast({
+            title: "Save Failed",
+            description: message.payload,
+            variant: "destructive"
+          });
+
           // Clear timeout and clean up listener
           clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
@@ -174,7 +209,11 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       // Set up timeout after listener is defined
       timeoutId = setTimeout(() => {
         browser.runtime.onMessage.removeListener(messageListener);
-        showErrorMessage('Request timeout - please try again');
+        toast({
+          title: "Request Timeout",
+          description: "Request timeout - please try again",
+          variant: "destructive"
+        });
         setIsSavingConnection(false);
       }, 5000); // 5 second timeout
 
@@ -193,7 +232,11 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       };
     } catch (error) {
       console.error('Failed to save settings:', error);
-      showErrorMessage('Failed to save settings');
+      toast({
+        title: "Save Failed",
+        description: "Failed to save settings",
+        variant: "destructive"
+      });
       setIsSavingConnection(false);
     }
   };
@@ -203,58 +246,89 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       setTransport({ ...transport, pinToContext: context?.url || 'universe:///' });
     } catch (error) {
       console.error('Failed to switch context:', error);
-      showErrorMessage('Failed to switch context');
+      toast({
+        title: "Context Error",
+        description: "Failed to switch context",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUrlChange = (value: string) => {
+    const urlPattern = /^(https?):\/\/([^:]+):(\d+)$/;
+    const match = value.match(urlPattern);
+
+    if (match) {
+      setTransport({
+        ...transport,
+        protocol: match[1] as IProtocol,
+        host: match[2],
+        port: parseInt(match[3])
+      });
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected': return '#10b981';
+      case 'disconnected': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusText = () => {
+    if (isTestingConnection) return 'Testing connection...';
+    switch (connectionStatus) {
+      case 'connected': return 'Connected';
+      case 'disconnected': return 'Connection failed';
+      default: return 'Ready to test';
     }
   };
 
   return (
-    <div className="connection-settings-form">
-      <div className="input-container">
-        <label className="form-label" htmlFor="connection-setting-protocol">Protocol</label>
-        <div className="form-control" id="connection-setting-protocol">
-          <select
-            className="browser-default"
-            value={transport.protocol}
-            onChange={(e) => setTransport({ ...transport, protocol: e.target.value as IProtocol })}
-          >
-            <option value="http">http</option>
-            <option value="https">https</option>
-          </select>
+    <div className={styles.connectionSettingsForm}>
+      {/* Connection Status */}
+      <div className={styles.inputContainer}>
+        <label className={styles.formLabel}>Connection Status</label>
+        <div className={styles.formControl}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            background: '#f9fafb'
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: getStatusColor()
+            }} />
+            <span style={{ fontSize: '14px', color: '#374151' }}>
+              {getStatusText()}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="input-container">
-        <label className="form-label" htmlFor="connection-setting-host">Host</label>
-        <div className="form-control">
+      <div className={styles.inputContainer}>
+        <label className={styles.formLabel} htmlFor="connection-setting-url">Canvas Server URL</label>
+        <div className={styles.formControl}>
           <input
             type="text"
-            id="connection-setting-host"
-            value={transport.host}
-            onChange={(e) => setTransport({ ...transport, host: e.target.value })}
-            placeholder="e.g., localhost or 127.0.0.1"
+            id="connection-setting-url"
+            value={serverUrl}
+            onChange={(e) => handleUrlChange(e.target.value)}
+            placeholder="http://127.0.0.1:8001"
           />
         </div>
       </div>
 
-      <div className="input-container">
-        <label className="form-label" htmlFor="connection-setting-port">Port</label>
-        <div className="form-control">
-          <input
-            type="text"
-            id="connection-setting-port"
-            value={transport.port}
-            onChange={(e) => setTransport({
-              ...transport,
-              port: !e.target.value.length ? "" : (isNaN(Number(e.target.value)) ? transport.port : Number(e.target.value))
-            })}
-            placeholder="e.g., 8000"
-          />
-        </div>
-      </div>
-
-      <div className="input-container">
-        <label className="form-label" htmlFor="connection-setting-token">Auth Token</label>
-        <div className="form-control token-input">
+      <div className={styles.inputContainer}>
+        <label className={styles.formLabel} htmlFor="connection-setting-token">API Token</label>
+        <div className={styles.formControl}>
           <input
             type={showToken ? "text" : "password"}
             id="connection-setting-token"
@@ -267,32 +341,44 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         </div>
       </div>
 
-      {transport.token && (
-        <div className="input-container">
-          <label className="form-label" htmlFor="connection-setting-context">Context</label>
-          <div className="form-control">
+      {contexts.length > 0 && (
+        <div className={styles.inputContainer}>
+          <label className={styles.formLabel} htmlFor="connection-setting-context">Context to Bind to</label>
+          <div className={styles.formControl}>
             <select
+              key={`context-select-${selectedContext?.id || 'none'}-${contexts.length}`}
               className="browser-default"
               id="connection-setting-context"
-              value={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : `${userInfo?.userId}/default`}
-              onChange={(e) => setSelectedContext(contexts.find(context => `${context.userId}/${context.id}` === e.target.value) || null)}
+              defaultValue={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : ''}
+              onChange={async (e) => {
+                const selectedValue = e.target.value;
+                if (selectedValue) {
+                  const foundContext = contexts.find(context => `${context.userId}/${context.id}` === selectedValue);
+                  if (foundContext) {
+                    setSelectedContext(foundContext);
+                    await setSavedSelectedContext(foundContext);
+                  }
+                } else {
+                  setSelectedContext(null);
+                  await setSavedSelectedContext(null);
+                }
+              }}
               disabled={isLoadingContexts}
             >
               {contexts.map((context) => (
-                <option key={context.id} value={`${context.userId}/${context.id}`} selected={`${context.userId}/${context.id}` === `${selectedContext?.userId}/${selectedContext?.id}`}>
-                  {context.url} {context.userId !== userInfo?.userId ? '(Shared)' : ''}
+                <option key={context.id} value={`${context.userId}/${context.id}`}>
+                  {context.id} | {context.url} {context.userId !== userInfo?.userId ? `(${context.userId})` : ''}
                 </option>
               ))}
             </select>
-            {isLoadingContexts && <span className="loading-text">Loading contexts...</span>}
+            {isLoadingContexts && <span className={styles.loadingText}>Loading contexts...</span>}
           </div>
         </div>
       )}
 
-      <div className="input-container popup-button-container" style={{ display: 'flex', gap: '1rem' }}>
+      <div className={styles.inputContainer}>
         <button
-          className="btn grey waves-effect waves-light"
-          style={{ height: '3rem', flex: 1, padding: '5px', lineHeight: 'unset' }}
+          className={styles.btn}
           disabled={isTestingConnection || isSavingConnection}
           onClick={testConnection}
         >
@@ -300,8 +386,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         </button>
 
         <button
-          className="btn blue waves-effect waves-light"
-          style={{ height: '3rem', flex: 1, padding: '5px', lineHeight: 'unset' }}
+          className={styles.btn}
           disabled={isTestingConnection || isSavingConnection}
           onClick={saveConnectionSettings}
         >

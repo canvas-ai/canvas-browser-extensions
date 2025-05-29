@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: {
     protocol: 'http',
     host: '127.0.0.1',
     port: 8001,
-    token: 'canvas-a3ec3d9347f0a99298e519ea8310d0c75367acd2b46f752b',
+    token: '',
     pinToContext: '/',
     isApiToken: true
   }

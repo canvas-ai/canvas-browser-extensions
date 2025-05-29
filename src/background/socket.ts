@@ -75,7 +75,7 @@ class MySocket {
 
   private startReconnectionTimer() {
     this.clearReconnectionTimer();
-    
+
     if (!this.shouldAutoReconnect) {
       return;
     }
@@ -126,6 +126,12 @@ class MySocket {
     return this.reconnectionTimer !== null;
   }
 
+  public setAutoReconnectForSetup(enabled: boolean) {
+    // Temporarily disable/enable auto-reconnect for setup testing
+    // This prevents connection error logging during setup
+    this.shouldAutoReconnect = enabled;
+  }
+
   initializeSocket(reconn = true) {
     if (this.isInitializing) {
       console.log('background.js | [socket.io] Socket initialization already in progress');
@@ -163,9 +169,9 @@ class MySocket {
       canvasFetchContext().then((ctx: IContext) => {
         console.log('background.js | [socket.io] Received context: ', ctx);
         // Update storage - this will trigger the storage listener in index.ts
-        browser.storage.local.set({ 
+        browser.storage.local.set({
           CNVS_CONTEXT: ctx,
-          CNVS_SELECTED_CONTEXT: ctx 
+          CNVS_SELECTED_CONTEXT: ctx
         });
       }).catch(error => {
         console.error('background.js | [socket.io] Error fetching context:', error);
@@ -180,18 +186,25 @@ class MySocket {
 
     this.socket.on('connect_error', (error) => {
       this.sendSocketEvent(SOCKET_EVENTS.connect_error);
-      console.log(`background.js | [socket.io] Browser Connection to "${this.connectionUri()}" failed`);
-      console.log("ERROR: " + error.message);
+      // Only log connection errors if we were previously connected or if auto-reconnect is enabled
+      // This prevents spam during initial setup when server might not be running
+      if (this.shouldAutoReconnect || this.socket?.connected) {
+        console.log(`background.js | [socket.io] Browser Connection to "${this.connectionUri()}" failed`);
+        console.log("ERROR: " + error.message);
+      }
       this.isInitializing = false;
-      
+
       this.startReconnectionTimer();
     });
 
     this.socket.on('connect_timeout', () => {
       this.sendSocketEvent(SOCKET_EVENTS.connect_timeout);
-      console.log('background.js | [socket.io] Canvas Connection Timeout');
+      // Only log timeout errors if we were actively trying to connect (not during setup)
+      if (this.shouldAutoReconnect) {
+        console.log('background.js | [socket.io] Canvas Connection Timeout');
+      }
       this.isInitializing = false;
-      
+
       this.startReconnectionTimer();
     });
 
@@ -199,7 +212,7 @@ class MySocket {
       this.sendSocketEvent(SOCKET_EVENTS.disconnect);
       console.log('background.js | [socket.io] Browser Client disconnected from Canvas');
       this.isInitializing = false;
-      
+
       this.startReconnectionTimer();
     });
 
@@ -211,9 +224,9 @@ class MySocket {
     this.socket.on('context:update', (ctx: { payload: IContext }) => {
       console.log('background.js | [socket.io] Received context update:', ctx);
       // Update storage - this will trigger the storage listener in index.ts
-      browser.storage.local.set({ 
+      browser.storage.local.set({
         CNVS_CONTEXT: ctx.payload,
-        CNVS_SELECTED_CONTEXT: ctx.payload 
+        CNVS_SELECTED_CONTEXT: ctx.payload
       });
     });
     this.socket.on('context:url:set', (payload) => {
@@ -223,9 +236,9 @@ class MySocket {
         const currentContext = result.CNVS_SELECTED_CONTEXT;
         if (currentContext) {
           const updatedContext = { ...currentContext, url: payload.url };
-          browser.storage.local.set({ 
+          browser.storage.local.set({
             CNVS_CONTEXT: updatedContext,
-            CNVS_SELECTED_CONTEXT: updatedContext 
+            CNVS_SELECTED_CONTEXT: updatedContext
           });
         }
       });
@@ -281,11 +294,54 @@ class MySocket {
 
       this.socket.emit('context:list', (response: any) => {
         console.log('background.js | [socket.io] Received context:list response:', response);
-        
+
         if (response && response.status === 'success') {
           resolve(response.payload);
         } else {
           reject(new Error(response?.message || 'Failed to fetch contexts'));
+        }
+      });
+    });
+  }
+
+  requestContextDocuments(contextId: string, featureArray: string[] = [], filterArray: any[] = [], options: any = {}): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.socket.connected) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('context:documents:list', {
+        contextId,
+        featureArray,
+        filterArray,
+        options
+      }, (response: any) => {
+        console.log('background.js | [socket.io] Received context:documents:list response:', response);
+
+        if (response && response.status === 'success') {
+          resolve(response.payload);
+        } else {
+          reject(new Error(response?.message || 'Failed to fetch documents'));
+        }
+      });
+    });
+  }
+
+  requestContextGet(contextId: string): Promise<IContext> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.socket.connected) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit('context:get', contextId, (response: any) => {
+        console.log('background.js | [socket.io] Received context:get response:', response);
+
+        if (response && response.status === 'success') {
+          resolve(response.payload.context);
+        } else {
+          reject(new Error(response?.message || 'Failed to fetch context'));
         }
       });
     });
@@ -332,6 +388,16 @@ export const fetchContextList = async (): Promise<IContext[]> => {
   return socket.requestContextList();
 }
 
+export const fetchContextDocuments = async (contextId: string, featureArray: string[] = [], filterArray: any[] = [], options: any = {}): Promise<any> => {
+  const socket = await getSocket();
+  return socket.requestContextDocuments(contextId, featureArray, filterArray, options);
+}
+
+export const fetchContext = async (contextId: string): Promise<IContext> => {
+  const socket = await getSocket();
+  return socket.requestContextGet(contextId);
+}
+
 export const enableAutoReconnect = async () => {
   const socket = await getSocket();
   socket.enableAutoReconnect();
@@ -357,18 +423,23 @@ export const isReconnectionTimerActive = async (): Promise<boolean> => {
   return socket.isReconnectionTimerActive();
 }
 
+export const setAutoReconnectForSetup = async (enabled: boolean) => {
+  const socket = await getSocket();
+  socket.setAutoReconnectForSetup(enabled);
+}
+
 // Handle context switching - now simplified to just update server and storage
 browser.runtime.onMessage.addListener((message: { action: string; value: string }, sender, sendResponse) => {
   if (message.action === RUNTIME_MESSAGES.context_set_url) {
     const contextId = getContextId(message.value);
     console.log(`background.js | [socket.io] Switching to context: ${contextId}`);
-    
+
     if (socket && socket.isConnected()) {
       return new Promise((resolve) => {
         socket.emit('context:set', contextId, (response: any) => {
           if (response && response.status === 'success') {
             console.log('background.js | [socket.io] Context set successfully on server');
-            
+
             // Update the context in the config
             config.set('transport', {
               ...config.transport,
@@ -379,9 +450,9 @@ browser.runtime.onMessage.addListener((message: { action: string; value: string 
             canvasFetchContext().then((ctx: IContext) => {
               console.log('background.js | [socket.io] Fetched new context: ', ctx);
               // Update storage - this will trigger the storage listener in index.ts
-              browser.storage.local.set({ 
+              browser.storage.local.set({
                 CNVS_CONTEXT: ctx,
-                CNVS_SELECTED_CONTEXT: ctx 
+                CNVS_SELECTED_CONTEXT: ctx
               });
               resolve({ status: 'success' });
             }).catch(error => {

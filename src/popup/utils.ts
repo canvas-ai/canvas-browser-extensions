@@ -12,9 +12,6 @@ export const sanitizeContextUrl = (url: string | undefined) => {
   url = url
       .replace(/\/\//g, '/')
       .replace(/\:/g, '')
-      .split("")
-      .map((ch, i, self) => i && self[i-1] !== '/' ? ch : ch.toUpperCase())
-      .join("");
   return url
 }
 
@@ -24,14 +21,14 @@ export const getContextBreadcrumbs = async (): Promise<Array<{href: string, clas
     const result = await browser.storage.local.get(["CNVS_SELECTED_CONTEXT", "contexts"]);
     const selectedContext = result.CNVS_SELECTED_CONTEXT;
     const contexts = result.contexts;
-    
+
     // Use selected context if available, otherwise fallback to first context in list
     const contextToUse = selectedContext || (contexts && contexts.length > 0 ? contexts[0] : null);
-    
+
     if (!contextToUse || !contextToUse.url) {
       return [];
     }
-    
+
     return createBreadcrumbsFromUrl(contextToUse.url);
   } catch (error) {
     console.error("Error getting context breadcrumbs:", error);
@@ -44,7 +41,7 @@ const createBreadcrumbsFromUrl = (url: string): Array<{href: string, className: 
 
   const sanitizedUrl = sanitizeContextUrl(url);
   const breadcrumbNames = sanitizedUrl.split("/").filter((name) => name !== "");
-  
+
   return breadcrumbNames.map((name) => {
     return {
       href: "#!",

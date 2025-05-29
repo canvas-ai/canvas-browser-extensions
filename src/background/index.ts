@@ -1,7 +1,7 @@
 import { canvasDeleteTab, canvasDeleteTabs, requestFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
 import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
-import { fetchContextList, getSocket, enableAutoReconnect, disableAutoReconnect, forceReconnect, isAutoReconnectEnabled } from "./socket";
+import { fetchContextList, fetchContextDocuments, fetchContext, getSocket, enableAutoReconnect, disableAutoReconnect, forceReconnect, isAutoReconnectEnabled, setAutoReconnectForSetup } from "./socket";
 import index from "./TabIndex";
 import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
 import { browser, getPinnedTabs } from "@/general/utils";
@@ -15,7 +15,7 @@ const getCurrentContext = async (): Promise<IContext | null> => {
   if (selectedContext.CNVS_SELECTED_CONTEXT) {
     return selectedContext.CNVS_SELECTED_CONTEXT;
   }
-  
+
   const contexts = await browser.storage.local.get(["contexts"]);
   return contexts.contexts?.[0] || null;
 };
@@ -28,24 +28,24 @@ let currentContextId: string | null = null;
 // Function to handle context changes
 const handleContextChange = async (newContext: IContext | null) => {
   const newContextId = newContext ? `${newContext.userId}/${newContext.id}` : null;
-  
+
   if (currentContextId === newContextId) {
     return; // No change
   }
-  
+
   console.log(`background.js | Context changed from ${currentContextId} to ${newContextId}`);
   currentContextId = newContextId;
-  
+
   if (!newContext) {
     console.log('background.js | No context selected, clearing canvas tabs');
     index.clearCanvasTabs();
     return;
   }
-  
+
   try {
     console.log('background.js | Fetching tabs for new context...');
     const tabs = await requestFetchTabsForContext();
-    
+
     if (tabs) {
       console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
       // Use silent method first to update storage, then trigger UI update
@@ -57,15 +57,15 @@ const handleContextChange = async (newContext: IContext | null) => {
       // Clear canvas tabs if no data received
       index.clearCanvasTabs();
     }
-    
 
-    
+
+
     // Send success message to popup
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
       payload: 'Context switched successfully'
     });
-    
+
     console.log('background.js | Context switch completed successfully');
   } catch (error) {
     console.error('background.js | Error updating context:', error);
@@ -221,86 +221,139 @@ browser.storage.onChanged.addListener((changes, areaName) => {
 
       case RUNTIME_MESSAGES.socket_test: {
         let isResolved = false;
+
+        // Temporarily disable auto-reconnect to prevent connection error logging during test
+        await setAutoReconnectForSetup(false);
+
         try {
           const testConfig = message.config || config;
-          
+
           const { io } = await import('socket.io-client');
-          
+
           const testSocketOptions = {
             withCredentials: true,
             upgrade: false,
             secure: false,
             transports: ['websocket'],
             reconnection: false,
-            timeout: 5000,
+            timeout: 3000, // Reduced timeout for faster feedback
             auth: {
               token: testConfig.transport.token,
               isApiToken: testConfig.transport.isApiToken || false
+            },
+            // Suppress engine.io logs to prevent connection error spam
+            forceNew: true,
+            autoConnect: false
+          };
+
+          const testConnectionUri = `${testConfig.transport.protocol}://${testConfig.transport.host}:${testConfig.transport.port}`;
+
+          // Suppress console warnings during connection test
+          const originalWarn = console.warn;
+          const originalError = console.error;
+
+          // Filter out expected connection errors during test
+          console.warn = (...args) => {
+            const message = args.join(' ');
+            if (!message.includes('WebSocket connection') &&
+                !message.includes('ERR_CONNECTION_REFUSED') &&
+                !message.includes('socket.io') &&
+                !message.includes('transport error')) {
+              originalWarn.apply(console, args);
             }
           };
-          
-          const testConnectionUri = `${testConfig.transport.protocol}://${testConfig.transport.host}:${testConfig.transport.port}`;
-          
+
+          console.error = (...args) => {
+            const message = args.join(' ');
+            if (!message.includes('WebSocket connection') &&
+                !message.includes('ERR_CONNECTION_REFUSED') &&
+                !message.includes('socket.io') &&
+                !message.includes('transport error')) {
+              originalError.apply(console, args);
+            }
+          };
+
           const testSocket = io(testConnectionUri, testSocketOptions);
-          
+
           const connectionResult: { success: boolean, message?: string } = await new Promise((resolve) => {
-            
+
             const cleanup = () => {
               try {
+                // Restore console methods
+                console.warn = originalWarn;
+                console.error = originalError;
+
                 testSocket.removeAllListeners();
                 testSocket.disconnect();
+                testSocket.close();
               } catch (error) {
-                console.error('Error during test socket cleanup:', error);
+                // Silently handle cleanup errors during test
               }
             };
-            
+
             const resolveOnce = (result: { success: boolean, message?: string }) => {
               if (isResolved) {
-                console.log('Already resolved, ignoring:', result);
                 return;
               }
-              
-              console.log('Resolving with:', result);
+
               isResolved = true;
               cleanup();
               resolve(result);
             };
-            
+
+            // Set up timeout first
+            const timeoutId = setTimeout(() => {
+              resolveOnce({ success: false, message: 'Connection timeout' });
+            }, 3500);
+
             testSocket.once('connect', () => {
-              console.log('Test socket connected');
+              clearTimeout(timeoutId);
               resolveOnce({ success: true });
             });
-            
+
             testSocket.once('connect_error', (error) => {
-              console.log('Test socket connect_error:', error.message);
-              resolveOnce({ success: false, message: error.message || 'Connection failed' });
+              clearTimeout(timeoutId);
+              // Don't log connection errors during test - they're expected
+              resolveOnce({ success: false, message: 'Connection failed' });
             });
-            
+
             testSocket.once('connect_timeout', () => {
-              console.log('Test socket connect_timeout');
+              clearTimeout(timeoutId);
               resolveOnce({ success: false, message: 'Connection timeout' });
             });
-            
+
             testSocket.once('disconnect', (reason) => {
-              console.log('Test socket disconnected:', reason);
+              clearTimeout(timeoutId);
               if (!isResolved) {
-                resolveOnce({ success: false, message: 'Connection disconnected: ' + reason });
+                resolveOnce({ success: false, message: 'Connection disconnected' });
               }
             });
-                        
-            console.log('Test socket connecting to:', testConnectionUri);
+
+            // Start the connection attempt
+            try {
+              testSocket.connect();
+            } catch (error) {
+              clearTimeout(timeoutId);
+              resolveOnce({ success: false, message: 'Failed to initiate connection' });
+            }
           });
-                    
+
           if (connectionResult.success) {
             sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_success, payload: 'Connection successful!' });
           } else {
             sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_error, payload: connectionResult.message || 'Connection failed. Please check your settings.' });
           }
         } catch (error: any) {
-          console.error('background.js | Error testing connection:', error);
-          if(!isResolved) {
-            sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_error, payload: error?.message || 'Connection failed. Please check your settings.' });
+          // Only log unexpected errors, not connection failures
+          if (!error.message?.includes('connection') && !error.message?.includes('refused')) {
+            console.error('background.js | Unexpected error during connection test:', error);
           }
+          if(!isResolved) {
+            sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_test_error, payload: 'Connection failed. Please check your settings.' });
+          }
+        } finally {
+          // Re-enable auto-reconnect after test
+          await setAutoReconnectForSetup(true);
         }
         break;
       }
@@ -393,7 +446,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Invalid configuration data' });
           break;
         }
-        
+
         try {
           await config.setMultiple(message.value);
           sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });
@@ -413,6 +466,49 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           console.log('background.js | Context list fetched: ', contexts);
         }).catch(error => {
           console.error('background.js | Error fetching context list:', error);
+        });
+        break;
+
+      case 'context:documents:list':
+        if (!message.payload || !message.payload.contextId) {
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Context ID is required' });
+          break;
+        }
+
+        fetchContextDocuments(
+          message.payload.contextId,
+          message.payload.featureArray || [],
+          message.payload.filterArray || [],
+          message.payload.options || {}
+        ).then(documents => {
+          sendRuntimeMessage({
+            type: 'context:documents:list:result',
+            payload: documents
+          });
+          console.log('background.js | Context documents fetched: ', documents);
+        }).catch(error => {
+          console.error('background.js | Error fetching context documents:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error fetching documents: ${error.message}` });
+        });
+        break;
+
+      case 'context:get':
+        if (!message.payload || !message.payload.contextId) {
+          // If no contextId provided, get current context
+          const currentContext = await getCurrentContext();
+          sendRuntimeMessage({ type: 'context:get:result', payload: currentContext });
+          break;
+        }
+
+        fetchContext(message.payload.contextId).then(context => {
+          sendRuntimeMessage({
+            type: 'context:get:result',
+            payload: context
+          });
+          console.log('background.js | Context fetched: ', context);
+        }).catch(error => {
+          console.error('background.js | Error fetching context:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error fetching context: ${error.message}` });
         });
         break;
 
@@ -522,7 +618,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
             console.error('background.js | Error refreshing canvas tabs:', error);
             sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error refreshing canvas tabs' });
           }
-          break;  
+          break;
         }
 
       case RUNTIME_MESSAGES.canvas_tabs_openInBrowser:
