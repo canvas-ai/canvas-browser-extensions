@@ -267,9 +267,52 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || payload.contextId !== context.id) {
-      console.log('background.js | Document insert event not for current context, ignoring');
+    if (!context || (payload.contextId !== context.id.split("/")[1] && payload.contextId !== context.id)) {
+      console.log('background.js | Document insert event not for current context, ignoring', payload.contextId, context.id);
       return;
+    }
+
+    // Check if featureArray includes "data/abstraction/tab" and context URL matches
+    if (payload.featureArray && 
+        payload.featureArray.includes("data/abstraction/tab") && 
+        payload.url === context.url) {
+      
+      console.log('background.js | [socket.io] Tab document inserted for matching context, adding to canvas tabs');
+      
+      // Extract tab documents from the payload
+      const documents = payload.documents || (payload.document ? [payload.document] : []);
+      
+      documents.forEach((doc: any, docIndex: number) => {
+        if (doc && doc.schema === "data/abstraction/tab" && doc.data) {
+          // Create a canvas tab object with the document ID
+          const canvasTab: ICanvasTab = {
+            ...doc.data,
+            docId: payload.documentIds ? payload.documentIds[docIndex] : payload.documentId,
+            url: doc.data.url,
+            title: doc.data.title || doc.data.url
+          };
+          
+          console.log('background.js | [socket.io] Adding tab to canvas tabs:', canvasTab);
+          
+          // Add to canvas tabs index (silent to avoid duplicate UI updates)
+          index.insertCanvasTabSilent(canvasTab);
+        }
+      });
+      
+      // Update local tabs data to stay in sync
+      console.log('background.js | [socket.io] Updating local canvas tabs data due to tab document insert');
+      updateLocalCanvasTabsData();
+
+      // Force immediate UI update
+      await index.updateBrowserTabs();
+
+      // Notify UI of the change
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: `Tab(s) synced to canvas from context`
+      });
+      
+      return; // Exit early since we handled the tab-specific logic
     }
 
     // For document inserts, we might want to open new tabs if they are URLs
