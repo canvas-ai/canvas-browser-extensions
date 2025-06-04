@@ -26,10 +26,11 @@ interface IContext {
 }
 
 type IProtocol = "http" | "https";
+type IContextChangeBehavior = "Close Current and Open New" | "Save and Close Current and Open New" | "Keep Current and Open New" | "Keep Current and Do Not Open New";
 
 interface IConfigProps {
   sync: {
-    tabBehaviorOnContextChange: "Close" | "Save and Close" | "Keep";
+    tabBehaviorOnContextChange: IContextChangeBehavior;
     autoOpenCanvasTabs: boolean
   },
 

@@ -28,9 +28,10 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
           defaultValue={config.sync.tabBehaviorOnContextChange} 
           onChange={(e) => saveSyncSettings({...config.sync, tabBehaviorOnContextChange: e.target.value as IConfigProps["sync"]["tabBehaviorOnContextChange"] })}
         >
-          <option value="Close">Close</option>
-          <option value="Save and Close">Save and Close</option>
-          <option value="Keep">Keep</option>
+          <option value="Close Current and Open New">Close Current and Open New</option>
+          <option value="Save and Close Current and Open New">Save and Close Current and Open New</option>
+          <option value="Keep Current and Open New">Keep Current and Open New</option>
+          <option value="Keep Current and Do Not Open New">Keep Current and Do Not Open New</option>
         </select>
       </div>
     </div>

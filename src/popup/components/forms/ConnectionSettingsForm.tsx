@@ -14,7 +14,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const [userInfo] = useUserInfo();
   const [contexts] = useContextList();
   const [config, setConfig] = useConfig();
-  const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext();
+  const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext({ savePrev: true });
   const { toast } = useToast();
 
   const [selectedContext, setSelectedContext] = useState<IContext | null>(null);
@@ -164,9 +164,7 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
       const updatedConfig = { ...config, transport };
       await setConfig(updatedConfig);
 
-      if (selectedContext) {
-        await setSavedSelectedContext(selectedContext);
-      }
+      await setSavedSelectedContext(selectedContext);
 
       // Set up a timeout to clean up the listener if no response comes
       let timeoutId: NodeJS.Timeout;
@@ -349,18 +347,16 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
               key={`context-select-${selectedContext?.id || 'none'}-${contexts.length}`}
               className="browser-default"
               id="connection-setting-context"
-              defaultValue={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : ''}
-              onChange={async (e) => {
+              value={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : 'default'}
+              onChange={(e) => {
                 const selectedValue = e.target.value;
                 if (selectedValue) {
                   const foundContext = contexts.find(context => `${context.userId}/${context.id}` === selectedValue);
                   if (foundContext) {
                     setSelectedContext(foundContext);
-                    await setSavedSelectedContext(foundContext);
                   }
                 } else {
                   setSelectedContext(null);
-                  await setSavedSelectedContext(null);
                 }
               }}
               disabled={isLoadingContexts}

@@ -13,7 +13,7 @@ const SetupWindow: React.FC<SetupWindowProps> = ({ onSetupComplete }) => {
   const [userInfo] = useUserInfo();
   const [contexts] = useContextList();
   const [config, setConfig] = useConfig();
-  const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext();
+  const [savedSelectedContext, setSavedSelectedContext] = useSelectedContext({ savePrev: true });
   const { toast } = useToast();
 
   // Use the same state patterns as ConnectionSettingsForm
