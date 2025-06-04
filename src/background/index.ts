@@ -1,11 +1,11 @@
 import { canvasDeleteTab, canvasDeleteTabs, requestFetchTabsForContext, canvasInsertTab, canvasInsertTabArray, canvasRemoveTab, canvasRemoveTabs, canvasUpdateTab } from "./canvas";
-import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
+import { browserCloseTabArray, browserIsValidTabUrl, browserOpenTabArray, onContextTabsUpdated, sendRuntimeMessage, stripTabProperties } from "./utils";
 import config from "@/general/config";
 import { fetchContextList, fetchContextDocuments, fetchContext, getSocket, enableAutoReconnect, disableAutoReconnect, forceReconnect, isAutoReconnectEnabled, setAutoReconnectForSetup } from "./socket";
 import index from "./TabIndex";
-import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
-import { browser, getPinnedTabs } from "@/general/utils";
-import { updateSessionsList } from "./session";
+import { RUNTIME_MESSAGES } from "@/general/constants";
+import { browser } from "@/general/utils";
+import { setContextUrl } from "./context";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
@@ -22,19 +22,16 @@ const getCurrentContext = async (): Promise<IContext | null> => {
 
 
 
-// Track the current context to detect changes
-let currentContextId: string | null = null;
-
 // Function to handle context changes
-const handleContextChange = async (newContext: IContext | null) => {
+const handleContextChange = async (oldContext: IContext | null, newContext: IContext | null) => {
   const newContextId = newContext ? `${newContext.userId}/${newContext.id}` : null;
+  const oldContextId = oldContext ? `${oldContext.userId}/${oldContext.id}` : null;
 
-  if (currentContextId === newContextId) {
+  if (oldContextId === newContextId) {
     return; // No change
   }
 
-  console.log(`background.js | Context changed from ${currentContextId} to ${newContextId}`);
-  currentContextId = newContextId;
+  console.log(`background.js | Context changed from ${oldContextId} to ${newContextId}`);
 
   if (!newContext) {
     console.log('background.js | No context selected, clearing canvas tabs');
@@ -56,69 +53,24 @@ const handleContextChange = async (newContext: IContext | null) => {
     // Also update browser tabs to recalculate sync status
     await index.updateBrowserTabs();
   } else {
-    try {
-      console.log('background.js | Fetching tabs for new context...');
-      const tabs = await requestFetchTabsForContext();
-
-      if (tabs && tabs.length > 0) {
-        console.log(`background.js | Received ${tabs.length} tabs for context ${newContextId}`);
-        // Use silent method first to update storage, then trigger UI update
-        index.insertCanvasTabArraySilent(tabs, true);
-        // Now update browser tabs to recalculate sync status and notify UI
-        await index.updateBrowserTabs();
-      } else {
-        console.log('background.js | No tabs found for new context - clearing canvas tabs');
-        // Get current tabs before clearing
-        const currentTabs = index.getCanvasTabArray();
-        // Clear canvas tabs if no data received or empty array
-        index.clearCanvasTabs();
-        // Notify UI about the tab clearing
-        if (currentTabs.length > 0) {
-          onContextTabsUpdated({
-            canvasTabs: { removedTabs: currentTabs }
-          });
-        }
-        // Also send a direct update to ensure UI is cleared
-        sendRuntimeMessage({
-          type: RUNTIME_MESSAGES.index_get_deltaCanvasToBrowser,
-          payload: []
-        });
-        // Also update browser tabs to recalculate sync status
-        await index.updateBrowserTabs();
-      }
-
-
-
-      // Send success message to popup
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.success_message,
-        payload: 'Context switched successfully'
-      });
-
-      console.log('background.js | Context switch completed successfully');
-    } catch (error) {
-      console.error('background.js | Error updating context:', error);
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.error_message,
-        payload: 'Error updating context'
-      });
-    }
+    console.log('background.js | Using setContextUrl to handle context change');
+    await setContextUrl({ payload: newContext.url });
   }
 };
 
 // Initialize current context tracking
 const initializeContextTracking = async () => {
   const context = await getCurrentContext();
-  currentContextId = context ? `${context.userId}/${context.id}` : null;
-  console.log(`background.js | Initial context: ${currentContextId}`);
+  console.log(`background.js | Initial context: ${context ? `${context.userId}/${context.id}` : null}`);
 };
 
 // Storage listener to monitor context changes
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && changes.CNVS_SELECTED_CONTEXT) {
     const newContext = changes.CNVS_SELECTED_CONTEXT.newValue;
-    console.log('background.js | Detected context change in storage:', newContext);
-    handleContextChange(newContext);
+    const oldContext = changes.CNVS_SELECTED_CONTEXT.oldValue;
+    console.log('background.js | Detected context change in storage:', newContext, oldContext);
+    handleContextChange(oldContext, newContext);
   }
 });
 

@@ -402,7 +402,7 @@ class MySocket {
 
     // For document removal, we might want to close corresponding tabs based on config
     await config.load(); // Ensure config is loaded
-    if (config.sync.tabBehaviorOnContextChange === "Close" || config.sync.tabBehaviorOnContextChange === "Save and Close") {
+    if (config.sync.tabBehaviorOnContextChange === "Close Current and Open New" || config.sync.tabBehaviorOnContextChange === "Save and Close Current and Open New") {
       // For now, we'll just update the tabs data and let the existing sync logic handle it
       // TODO: Implement sophisticated document-to-tab matching if needed
       console.log('background.js | Document removed, updating local tabs data');

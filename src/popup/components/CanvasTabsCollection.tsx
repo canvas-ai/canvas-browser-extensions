@@ -15,15 +15,13 @@ const CanvasTabsCollection: React.FC<CanvasTabsCollectionTypes> = ({ canvasTabs,
 
   const removeCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Close icon clicked: ', tab.url);
-    if(!tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.context_tab_remove, tab }).catch((error) => {
-        console.error('UI | Error deleting tabs from canvas:', error);
+        console.error('UI | Error removing tab from canvas:', error);
     });
   };
 
   const deleteCanvasToBrowserTabClicked = (tab: ICanvasTab) => {
     console.log('UI | Delete icon clicked: ', tab.url);
-    if(!tab.id) return;
     browser.runtime.sendMessage({ action: RUNTIME_MESSAGES.canvas_tab_delete, tab }).catch((error) => {
         console.error('UI | Error deleting tab from canvas:', error);
     });
