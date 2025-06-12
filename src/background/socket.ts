@@ -292,18 +292,14 @@ class MySocket {
             title: doc.data.title || doc.data.url
           };
           
-          console.log('background.js | [socket.io] Adding tab to canvas tabs:', canvasTab);
+          console.log('background.js | [socket.io] Adding tab to canvas tabs with docId:', canvasTab.docId, 'for URL:', canvasTab.url);
           
           // Add to canvas tabs index (silent to avoid duplicate UI updates)
           index.insertCanvasTabSilent(canvasTab);
         }
       });
       
-      // Update local tabs data to stay in sync
-      console.log('background.js | [socket.io] Updating local canvas tabs data due to tab document insert');
-      updateLocalCanvasTabsData();
-
-      // Force immediate UI update
+      // Force immediate UI update for tab changes
       await index.updateBrowserTabs();
 
       // Notify UI of the change
@@ -311,6 +307,9 @@ class MySocket {
         type: RUNTIME_MESSAGES.success_message,
         payload: `Tab(s) synced to canvas from context`
       });
+      
+      // Send tab info messages to update UI
+      index.sendAllTabInfoMessages();
       
       return; // Exit early since we handled the tab-specific logic
     }
@@ -590,29 +589,50 @@ export const getSocket = async () => {
 
 export const updateLocalCanvasTabsData = () => {
   console.log('background.js | Fetching latest canvas tabs from server...');
+  
+  // Preserve existing document IDs before refetching
+  const existingTabs = index.getCanvasTabArray();
+  const urlToDocIdMap = new Map<string, number>();
+  existingTabs.forEach(tab => {
+    if (tab.docId && tab.url) {
+      urlToDocIdMap.set(tab.url, tab.docId);
+    }
+  });
+  
   requestFetchTabsForContext().then((tabs: chrome.tabs.Tab[]) => {
     if (!tabs) {
       sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'});
       return console.log('ERROR: background.js | Error fetching tabs from Canvas');
     }
     console.log(`background.js | Received ${tabs.length} canvas tabs from server`);
+    
+    // Restore document IDs for tabs that already had them
+    const tabsWithPreservedDocIds = tabs.map(tab => {
+      const existingDocId = urlToDocIdMap.get(tab.url as string);
+      if (existingDocId) {
+        console.log(`background.js | Preserving docId ${existingDocId} for URL: ${tab.url}`);
+        return { ...tab, docId: existingDocId };
+      }
+      return tab;
+    });
+    
     // Get current tabs before updating to calculate the difference
     const currentTabs = index.getCanvasTabArray();
     // Use silent method to avoid duplicate UI updates
-    index.insertCanvasTabArraySilent(tabs, true);
+    index.insertCanvasTabArraySilent(tabsWithPreservedDocIds, true);
 
     // Notify UI about the changes
     const { onContextTabsUpdated } = require('./utils');
-    if (tabs.length === 0 && currentTabs.length > 0) {
+    if (tabsWithPreservedDocIds.length === 0 && currentTabs.length > 0) {
       // All tabs were removed
       onContextTabsUpdated({
         canvasTabs: { removedTabs: currentTabs }
       });
-    } else if (tabs.length > 0) {
+    } else if (tabsWithPreservedDocIds.length > 0) {
       // Tabs were added/updated - for simplicity, we'll just set all tabs
       // A more sophisticated approach would calculate insertedTabs and removedTabs
       onContextTabsUpdated({
-        canvasTabs: { insertedTabs: tabs }
+        canvasTabs: { insertedTabs: tabsWithPreservedDocIds }
       });
     }
   }).then(() => {

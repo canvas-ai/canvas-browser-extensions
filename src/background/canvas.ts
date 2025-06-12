@@ -136,7 +136,7 @@ export function canvasInsertDocument(document: any, featureArray: string[] = [],
         if (document.schema === 'data/abstraction/tab' && document.data && response.payload) {
           const insertedTab = {
             ...document.data,
-            docId: response.payload.id
+            docId: response.payload
           };
 
                   // Add to canvas tabs index (without triggering UI updates)
@@ -262,7 +262,7 @@ export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneRespon
         // Update the tab with the document ID from the response
         const insertedTab = {
           ...tab,
-          docId: response.payload.id
+          docId: response.payload
         };
 
         // Add to canvas tabs index (without triggering UI updates)
@@ -381,7 +381,24 @@ function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "dele
 
     socket.on(`${ROUTE}:result`, handleSuccessResponse);
 
-    if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+    // Ensure we have a valid document ID
+    if (!tab.docId) {
+      tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+    }
+    
+    // Check if we still don't have a document ID
+    if (!tab.docId) {
+      const errorMessage = `Cannot ${log} tab: No document ID found for URL ${tab.url}. Tab may not be synced to Canvas.`;
+      console.error(`background.js | ${errorMessage}`);
+      sendRuntimeMessage({ 
+        type: RUNTIME_MESSAGES.error_message, 
+        payload: errorMessage 
+      });
+      socket.removeAllListeners(`${ROUTE}:result`);
+      reject(new Error(errorMessage));
+      return;
+    }
+
     socket.emit(ROUTE, {
       contextId: await getContextId(),
       documentId: tab.docId
@@ -392,19 +409,55 @@ function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "dele
 function deleteOrRemoveTabs(ROUTE: string, tabs: ICanvasTab[], log: "remove" | "delete") {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    tabs = tabs.map(tab => {
-      if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-      return tab;
+    
+    // Ensure all tabs have document IDs and filter out those that don't
+    const validTabs: ICanvasTab[] = [];
+    const invalidTabs: ICanvasTab[] = [];
+    
+    tabs.forEach(tab => {
+      if (!tab.docId) {
+        tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+      }
+      
+      if (tab.docId) {
+        validTabs.push(tab);
+      } else {
+        invalidTabs.push(tab);
+        console.error(`background.js | Cannot ${log} tab: No document ID found for URL ${tab.url}. Tab may not be synced to Canvas.`);
+      }
     });
+    
+    // If no valid tabs, reject with error
+    if (validTabs.length === 0) {
+      const errorMessage = `Cannot ${log} tabs: No valid document IDs found for any of the ${tabs.length} tab(s).`;
+      console.error(`background.js | ${errorMessage}`);
+      sendRuntimeMessage({ 
+        type: RUNTIME_MESSAGES.error_message, 
+        payload: errorMessage 
+      });
+      reject(new Error(errorMessage));
+      return;
+    }
+    
+    // If some tabs are invalid, warn user
+    if (invalidTabs.length > 0) {
+      const warningMessage = `${invalidTabs.length} of ${tabs.length} tab(s) could not be ${log}d (not synced to Canvas). Proceeding with ${validTabs.length} valid tab(s).`;
+      console.warn(`background.js | ${warningMessage}`);
+      sendRuntimeMessage({ 
+        type: RUNTIME_MESSAGES.error_message, 
+        payload: warningMessage 
+      });
+    }
+    
     socket.emit(ROUTE, {
       contextId: await getContextId(),
-      documentIdArray: tabs.map(tab => tab.docId)
+      documentIdArray: validTabs.map(tab => tab.docId)
     }, (res) => {
       if (res.status === "success") {
         console.log(`background.js | Successful ${log} tabs from canvas result: `, res);
-        tabs.forEach(tab => index.removeCanvasTab(tab.url as string));
-        onContextTabsUpdated({ canvasTabs: { removedTabs: tabs } });
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `Tabs ${log}d from Canvas` });
+        validTabs.forEach(tab => index.removeCanvasTab(tab.url as string));
+        onContextTabsUpdated({ canvasTabs: { removedTabs: validTabs } });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `${validTabs.length} tab(s) ${log}d from Canvas` });
         index.updateBrowserTabsWithDelay();
         resolve(res);
       } else {
