@@ -76,7 +76,7 @@ export class TabIndex {
 			this.browserTabIdToUrl.clear();
 		}
 
-		tabArray.forEach((tab) => this.insertBrowserTab(tab));		
+		tabArray.forEach((tab) => this.insertBrowserTab(tab));
 	}
 
 	hasBrowserTab(url: string) {
@@ -98,7 +98,7 @@ export class TabIndex {
 	async updateBrowserTabs() {
 		console.log("background.js | Updating browser tabs in index");
 		try {
-			const tabs = await browser.tabs.query({});			
+			const tabs = await browser.tabs.query({});
 			console.log(
 				`background.js | Found ${tabs.length} open browser tabs, updating index`
 			);
@@ -237,7 +237,7 @@ export class TabIndex {
 		try {
 			const result = await browser.storage.local.get(['CNVS_CANVAS_TABS']);
 			const canvasTabsArray = result.CNVS_CANVAS_TABS || [];
-			
+
 			if (canvasTabsArray.length > 0) {
 				console.log(`background.js | Loading ${canvasTabsArray.length} canvas tabs from storage`);
 				// Don't save to storage again during loading to avoid recursion
@@ -271,11 +271,20 @@ export class TabIndex {
 			// is activated.
 			// Defaults to true to conserve memory on restore
 			discarded: true, // tab.discarded,
-			
+
 			incognito: tab.incognito,
 			audible: tab.audible,
 			mutedInfo: tab.mutedInfo,
 		};
+	}
+
+	// Debugging method to check docId status
+	logCanvasTabsWithDocIds() {
+		console.log('background.js | Canvas tabs in index with docIds:');
+		for (const [url, tab] of this.canvasTabs) {
+			console.log(`  - ${url}: docId=${tab.docId}, id=${tab.id}`);
+		}
+		console.log(`background.js | Total canvas tabs: ${this.canvasTabs.size}`);
 	}
 }
 

@@ -688,9 +688,21 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         break;
 
       case RUNTIME_MESSAGES.canvas_tab_delete:
-        if (!message.tab) return console.error('background.js | No tab specified');
+        if (!message.tab) {
+          console.error('background.js | No tab specified for canvas_tab_delete');
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'No tab specified for deletion' });
+          return;
+        }
+        console.log('background.js | Processing canvas_tab_delete for tab:', message.tab);
         canvasDeleteTab(message.tab).then((res: any) => {
-          if (!res || res.status === 'error') return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
+          if (!res || res.status === 'error') {
+            console.error('background.js | canvas_tab_delete failed:', res);
+            return sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error deleting tab from Canvas' });
+          }
+          console.log('background.js | canvas_tab_delete completed successfully:', res);
+        }).catch((error) => {
+          console.error('background.js | canvas_tab_delete exception:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error deleting tab: ${error.message}` });
         });
         break;
 

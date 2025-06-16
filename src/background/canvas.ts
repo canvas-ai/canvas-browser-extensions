@@ -41,30 +41,30 @@ export const canvasFetchContext = async (): Promise<IContext> => {
 export const requestFetchTabsForContext = async (): Promise<chrome.tabs.Tab[]> => {
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
-    socket.on(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT, (res: any) => {
-      console.log(`background.js | [${SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT}] Tabs fetched: `, res.payload);
-      socket.removeAllListeners(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT);
-      if (res && res.status === 'success' && res.payload) {
-        resolve(res.payload.map((document: any) => ({...document.data, docId: document.id})));
-      } else {
-        reject(new Error(res?.message || 'Failed to fetch tabs'));
-        console.error('background.js | Invalid payload received for context:documents:list:result:', res);
-      }
-    });
     console.log("background.js | Fetching tabs for context: ", await getContextId());
+
     socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST, {
       contextId: await getContextId(),
       featureArray: genFeatureArray("READ"),
       filterArray: [],
       options: {}
     }, (res: any) => {
-      console.log(`background.js | [${SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST}] Tabs fetched: `, res.payload);
-      socket.removeAllListeners(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST_RESULT);
+      console.log(`background.js | [${SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST}] Server response: `, res);
+
       if (res && res.status === 'success' && res.payload) {
-        resolve(res);
+        // Ensure we properly map docId from the response
+        const tabsWithDocId = res.payload.map((document: any) => {
+          const tab = {
+            ...document.data,
+            docId: document.id  // This is crucial - store the document ID
+          };
+          console.log(`background.js | Mapped tab: ${tab.url} with docId: ${tab.docId}`);
+          return tab;
+        });
+        resolve(tabsWithDocId);
       } else {
+        console.error('background.js | Invalid response for context:documents:list:', res);
         reject(new Error(res?.message || 'Failed to fetch tabs'));
-        console.error('background.js | Invalid payload received for context:documents:list:result:', res);
       }
     });
   });
@@ -309,10 +309,14 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
         console.log(`background.js | Tab array inserted successfully: `, response);
 
         // Map the inserted tabs with their document IDs
-        const insertedTabs = tabArray.map((tab, index) => ({
-          ...tab,
-          docId: response.payload[index]?.id
-        }));
+        const insertedTabs = tabArray.map((tab, index) => {
+          const docId = response.payload[index]?.id || response.payload[index];
+          console.log(`background.js | Mapping inserted tab: ${tab.url} with docId: ${docId}`);
+          return {
+            ...tab,
+            docId: docId
+          };
+        });
 
         index.insertCanvasTabArraySilent(insertedTabs, false);
 
@@ -362,30 +366,75 @@ function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "dele
   return new Promise(async (resolve, reject) => {
     const socket = await getSocket();
 
+    // Enhanced logging for debugging
+    console.log(`background.js | Starting ${log} operation for tab:`, tab);
+    console.log(`background.js | Tab docId: ${tab.docId}, URL: ${tab.url}`);
+
     // Extract the duplicated success handling logic into a reusable function
     const handleSuccessResponse = (res: any) => {
+      console.log(`background.js | Success response for ${log}:`, res);
       socket.removeAllListeners(`${ROUTE}:result`);
       if (res.status === "success") {
         console.log(`background.js | Successful tab(${tab.id}) ${log} from canvas: `, res);
         index.removeCanvasTab(tab.url as string);
         onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `Tab ${log}d from Canvas` });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `Tab ${log}d from Canvas successfully` });
         index.updateBrowserTabsWithDelay();
         resolve(res);
       } else {
         console.error(`background.js | Failed ${log} for tab ${tab.id}:`)
         console.error(res);
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Failed to ${log} tab from Canvas: ${res?.message || 'Unknown error'}` });
         resolve(false);
       }
     };
 
-    socket.on(`${ROUTE}:result`, handleSuccessResponse);
+    const handleErrorResponse = (error: any) => {
+      console.error(`background.js | Error during ${log} operation:`, error);
+      socket.removeAllListeners(`${ROUTE}:result`);
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error ${log}ing tab from Canvas: ${error?.message || 'Connection error'}` });
+      resolve(false);
+    };
 
-    if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-    socket.emit(ROUTE, {
-      contextId: await getContextId(),
-      documentId: tab.docId
-    }, handleSuccessResponse);
+    // Check if socket is connected
+    if (!socket || !socket.isConnected()) {
+      console.error(`background.js | Socket not connected for ${log} operation`);
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Connection to Canvas server not available' });
+      resolve(false);
+      return;
+    }
+
+    // Ensure we have a docId
+    if(!tab.docId) {
+      tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+      console.log(`background.js | Retrieved docId from index: ${tab.docId} for URL: ${tab.url}`);
+    }
+
+    if (!tab.docId) {
+      console.error(`background.js | Cannot ${log} tab - no docId found for URL: ${tab.url}`);
+      console.error('background.js | Current canvas tabs index state:');
+      index.logCanvasTabsWithDocIds();
+      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Cannot ${log} tab - document ID not found. Try refreshing canvas tabs first.` });
+      resolve(false);
+      return;
+    }
+
+    // Set up listeners
+    socket.on(`${ROUTE}:result`, handleSuccessResponse);
+    socket.on('error', handleErrorResponse);
+
+    const contextId = await getContextId();
+    console.log(`background.js | Emitting ${ROUTE} with contextId: ${contextId}, documentId: ${tab.docId}`);
+
+    try {
+      socket.emit(ROUTE, {
+        contextId,
+        documentId: tab.docId
+      }, handleSuccessResponse);
+    } catch (error) {
+      console.error(`background.js | Exception emitting ${ROUTE}:`, error);
+      handleErrorResponse(error);
+    }
   });
 }
 
@@ -462,10 +511,14 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
         console.log(`background.js | Document tab array inserted successfully: `, response);
 
         // Map the inserted tabs with their document IDs
-        const insertedTabs = tabArray.map((tab, index) => ({
-          ...tab,
-          docId: response.payload[index]?.id
-        }));
+        const insertedTabs = tabArray.map((tab, index) => {
+          const docId = response.payload[index]?.id || response.payload[index];
+          console.log(`background.js | Mapping document tab: ${tab.url} with docId: ${docId}`);
+          return {
+            ...tab,
+            docId: docId
+          };
+        });
 
         // Add all tabs to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabArraySilent(insertedTabs, false);
