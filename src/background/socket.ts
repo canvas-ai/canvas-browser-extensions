@@ -261,7 +261,7 @@ class MySocket {
   }
 
   private async handleDocumentInsert(payload: any) {
-    console.log('background.js | [socket.io] Document inserted:', payload);
+    console.log('background.js | [socket.io] 🎉 DOCUMENT INSERT EVENT RECEIVED:', JSON.stringify(payload, null, 2));
 
     // Check if this is for our current context
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
