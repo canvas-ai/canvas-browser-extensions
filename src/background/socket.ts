@@ -267,38 +267,61 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || (payload.contextId !== context.id.split("/")[1] && payload.contextId !== context.id)) {
-      console.log('background.js | Document insert event not for current context, ignoring', payload.contextId, context.id);
+    if (!context) {
+      console.log('background.js | No current context available, ignoring document insert event');
       return;
     }
 
-    // Check if featureArray includes "data/abstraction/tab" and context URL matches
-    if (payload.featureArray && 
-        payload.featureArray.includes("data/abstraction/tab") && 
-        payload.url === context.url) {
-      
-      console.log('background.js | [socket.io] Tab document inserted for matching context, adding to canvas tabs');
-      
-      // Extract tab documents from the payload
-      const documents = payload.documents || (payload.document ? [payload.document] : []);
-      
-      documents.forEach((doc: any, docIndex: number) => {
-        if (doc && doc.schema === "data/abstraction/tab" && doc.data) {
-          // Create a canvas tab object with the document ID
-          const canvasTab: ICanvasTab = {
-            ...doc.data,
-            docId: payload.documentIds ? payload.documentIds[docIndex] : payload.documentId,
-            url: doc.data.url,
-            title: doc.data.title || doc.data.url
-          };
-          
-          console.log('background.js | [socket.io] Adding tab to canvas tabs:', canvasTab);
-          
-          // Add to canvas tabs index (silent to avoid duplicate UI updates)
-          index.insertCanvasTabSilent(canvasTab);
-        }
+    // Enhanced context ID checking - handle different formats
+    const payloadContextId = payload.contextId;
+    const currentContextId = context.id;
+
+    // Extract the UUID part from context IDs that may have format like "contextId/contextId"
+    const normalizeContextId = (id: string) => {
+      if (!id) return '';
+      return id.includes('/') ? id.split('/').pop() : id;
+    };
+
+    const normalizedPayloadContextId = normalizeContextId(payloadContextId);
+    const normalizedCurrentContextId = normalizeContextId(currentContextId);
+
+    if (normalizedPayloadContextId !== normalizedCurrentContextId) {
+      console.log(`background.js | Document insert event not for current context - payload: ${payloadContextId} (normalized: ${normalizedPayloadContextId}), current: ${currentContextId} (normalized: ${normalizedCurrentContextId})`);
+      return;
+    }
+
+    console.log(`background.js | Document insert event matches current context: ${normalizedCurrentContextId}`);
+
+    // Extract documents from payload
+    const documents = payload.documents || (payload.document ? [payload.document] : []);
+    const documentIds = payload.documentIds || (payload.documentId ? [payload.documentId] : []);
+
+    // Handle tab documents specifically
+    const tabDocuments = documents.filter((doc: any) =>
+      doc && doc.schema === "data/abstraction/tab" && doc.data
+    );
+
+    if (tabDocuments.length > 0) {
+      console.log(`background.js | [socket.io] Found ${tabDocuments.length} tab document(s) in insert event`);
+
+      // Process each tab document
+      tabDocuments.forEach((doc: any, docIndex: number) => {
+        const docId = documentIds[docIndex] || doc.id;
+
+        // Create a canvas tab object with the document ID
+        const canvasTab: ICanvasTab = {
+          ...doc.data,
+          docId: docId,
+          url: doc.data.url,
+          title: doc.data.title || doc.data.url
+        };
+
+        console.log(`background.js | [socket.io] Adding tab to canvas tabs index:`, canvasTab);
+
+        // Add to canvas tabs index (silent to avoid duplicate UI updates)
+        index.insertCanvasTabSilent(canvasTab);
       });
-      
+
       // Update local tabs data to stay in sync
       console.log('background.js | [socket.io] Updating local canvas tabs data due to tab document insert');
       updateLocalCanvasTabsData();
@@ -309,57 +332,92 @@ class MySocket {
       // Notify UI of the change
       sendRuntimeMessage({
         type: RUNTIME_MESSAGES.success_message,
-        payload: `Tab(s) synced to canvas from context`
+        payload: `${tabDocuments.length} tab(s) synced to canvas from context`
       });
-      
+
+      // Check if we should auto-open these tabs
+      await config.load(); // Ensure config is loaded
+      if (config.sync.autoOpenCanvasTabs) {
+        console.log(`background.js | [socket.io] Auto-opening ${tabDocuments.length} tab(s) due to autoOpenCanvasTabs setting`);
+
+        // Import and use existing utilities
+        const { getPinnedTabs } = await import('@/general/utils');
+        const { browserOpenTabArray } = await import('./utils');
+
+        const pinnedTabs = await getPinnedTabs();
+        const tabsToOpen = tabDocuments
+          .filter((doc: any) => doc.data && doc.data.url)
+          .map((doc: any) => ({ url: doc.data.url }))
+          .filter((tab: any) => !pinnedTabs.some((u: string) => u === tab.url));
+
+        if (tabsToOpen.length > 0) {
+          console.log(`background.js | [socket.io] Opening ${tabsToOpen.length} new tabs:`, tabsToOpen);
+          await browserOpenTabArray(tabsToOpen);
+
+          sendRuntimeMessage({
+            type: RUNTIME_MESSAGES.success_message,
+            payload: `Opened ${tabsToOpen.length} new tab(s) from context`
+          });
+        } else {
+          console.log('background.js | [socket.io] All tabs are already pinned, skipping auto-open');
+        }
+      }
+
       return; // Exit early since we handled the tab-specific logic
     }
 
-    // For document inserts, we might want to open new tabs if they are URLs
-    if (payload.documents || payload.document) {
-      const documents = payload.documents || [payload.document];
-      const tabUrls = documents
-        .filter((doc: any) => {
-          if (!doc || !doc.url) return false;
-          try {
-            new URL(doc.url);
-            return true;
-          } catch {
-            return false;
-          }
-        })
-        .map((doc: any) => doc.url);
+    // Handle regular document inserts (non-tab documents)
+    const urlDocuments = documents.filter((doc: any) => {
+      if (!doc || !doc.url) return false;
+      try {
+        new URL(doc.url);
+        return true;
+      } catch {
+        return false;
+      }
+    });
 
-      if (tabUrls.length > 0) {
-        await config.load(); // Ensure config is loaded
-        if (config.sync.autoOpenCanvasTabs) {
-          console.log(`background.js | Opening ${tabUrls.length} new tabs for inserted documents`);
-          // Import and use existing utilities
-          const { getPinnedTabs } = await import('@/general/utils');
-          const { browserOpenTabArray } = await import('./utils');
+    if (urlDocuments.length > 0) {
+      console.log(`background.js | [socket.io] Found ${urlDocuments.length} URL document(s) in insert event`);
 
-          const pinnedTabs = await getPinnedTabs();
-          const urlsToOpen = tabUrls.filter((url: string) => !pinnedTabs.some(u => u === url));
+      await config.load(); // Ensure config is loaded
+      if (config.sync.autoOpenCanvasTabs) {
+        console.log(`background.js | Opening ${urlDocuments.length} new tabs for inserted URL documents`);
 
-          if (urlsToOpen.length > 0) {
-            await browserOpenTabArray(urlsToOpen.map((url: string) => ({ url })));
-          }
+        // Import and use existing utilities
+        const { getPinnedTabs } = await import('@/general/utils');
+        const { browserOpenTabArray } = await import('./utils');
+
+        const pinnedTabs = await getPinnedTabs();
+        const urlsToOpen = urlDocuments
+          .map((doc: any) => doc.url)
+          .filter((url: string) => !pinnedTabs.some((u: string) => u === url));
+
+        if (urlsToOpen.length > 0) {
+          await browserOpenTabArray(urlsToOpen.map((url: string) => ({ url })));
+
+          sendRuntimeMessage({
+            type: RUNTIME_MESSAGES.success_message,
+            payload: `Opened ${urlsToOpen.length} new tab(s) for URL documents`
+          });
         }
       }
     }
 
-    // Update local tabs data to stay in sync
+    // Update local tabs data to stay in sync (for any document inserts)
     console.log('background.js | [socket.io] Updating local canvas tabs data due to document insert');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
     await index.updateBrowserTabs();
 
-    // Notify UI of the change
-    sendRuntimeMessage({
-      type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) added to context`
-    });
+    // Notify UI of the change (if not already notified above)
+    if (tabDocuments.length === 0 && urlDocuments.length === 0) {
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: `${documents.length} document(s) added to context`
+      });
+    }
   }
 
   private async handleDocumentUpdate(payload: any) {
@@ -369,8 +427,19 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || payload.contextId !== context.id) {
-      console.log('background.js | Document update event not for current context, ignoring');
+    if (!context) {
+      console.log('background.js | No current context available, ignoring document update event');
+      return;
+    }
+
+    // Enhanced context ID checking - handle different formats
+    const normalizeContextId = (id: string) => {
+      if (!id) return '';
+      return id.includes('/') ? id.split('/').pop() : id;
+    };
+
+    if (normalizeContextId(payload.contextId) !== normalizeContextId(context.id)) {
+      console.log(`background.js | Document update event not for current context - payload: ${payload.contextId}, current: ${context.id}`);
       return;
     }
 
@@ -395,8 +464,19 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || payload.contextId !== context.id) {
-      console.log('background.js | Document remove event not for current context, ignoring');
+    if (!context) {
+      console.log('background.js | No current context available, ignoring document remove event');
+      return;
+    }
+
+    // Enhanced context ID checking - handle different formats
+    const normalizeContextId = (id: string) => {
+      if (!id) return '';
+      return id.includes('/') ? id.split('/').pop() : id;
+    };
+
+    if (normalizeContextId(payload.contextId) !== normalizeContextId(context.id)) {
+      console.log(`background.js | Document remove event not for current context - payload: ${payload.contextId}, current: ${context.id}`);
       return;
     }
 
@@ -429,8 +509,19 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || payload.contextId !== context.id) {
-      console.log('background.js | Document delete event not for current context, ignoring');
+    if (!context) {
+      console.log('background.js | No current context available, ignoring document delete event');
+      return;
+    }
+
+    // Enhanced context ID checking - handle different formats
+    const normalizeContextId = (id: string) => {
+      if (!id) return '';
+      return id.includes('/') ? id.split('/').pop() : id;
+    };
+
+    if (normalizeContextId(payload.contextId) !== normalizeContextId(context.id)) {
+      console.log(`background.js | Document delete event not for current context - payload: ${payload.contextId}, current: ${context.id}`);
       return;
     }
 
@@ -456,8 +547,19 @@ class MySocket {
     const currentContext = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
     const context = currentContext.CNVS_SELECTED_CONTEXT;
 
-    if (!context || payload.contextId !== context.id) {
-      console.log('background.js | Documents delete event not for current context, ignoring');
+    if (!context) {
+      console.log('background.js | No current context available, ignoring documents delete event');
+      return;
+    }
+
+    // Enhanced context ID checking - handle different formats
+    const normalizeContextId = (id: string) => {
+      if (!id) return '';
+      return id.includes('/') ? id.split('/').pop() : id;
+    };
+
+    if (normalizeContextId(payload.contextId) !== normalizeContextId(context.id)) {
+      console.log(`background.js | Documents delete event not for current context - payload: ${payload.contextId}, current: ${context.id}`);
       return;
     }
 

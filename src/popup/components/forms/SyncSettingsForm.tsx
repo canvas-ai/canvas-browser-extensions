@@ -23,9 +23,9 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
     <div className="input-container">
       <label className="form-label">Handle existing tabs on context change</label>
       <div className="form-control">
-        <select 
-          className="browser-default" 
-          defaultValue={config.sync.tabBehaviorOnContextChange} 
+        <select
+          className="browser-default"
+          defaultValue={config.sync.tabBehaviorOnContextChange}
           onChange={(e) => saveSyncSettings({...config.sync, tabBehaviorOnContextChange: e.target.value as IConfigProps["sync"]["tabBehaviorOnContextChange"] })}
         >
           <option value="Close Current and Open New">Close Current and Open New</option>
@@ -35,10 +35,10 @@ const SyncSettingsForm: React.FC<any> = ({ }) => {
         </select>
       </div>
     </div>
-    
+
     <SettingCheckbox
-      prop={'sync.autoOpenCanvasTabs'} 
-      title="Automatically open tabs on context change" /> 
+      prop={'sync.autoOpenCanvasTabs'}
+      title="Automatically open tabs on context update" />
 
   </div>
   );
