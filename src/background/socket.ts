@@ -258,6 +258,39 @@ class MySocket {
     this.socket.on('document:remove', this.handleDocumentRemove.bind(this));
     this.socket.on('document:delete', this.handleDocumentDelete.bind(this));
     this.socket.on('documents:delete', this.handleDocumentsDelete.bind(this));
+
+    // Add after the existing event listeners (around line 150+)
+
+    // Document event listeners
+    this.socket.on('document:insert', (payload: any) => {
+      console.log('�� Browser Extension: Received document:insert event!', payload);
+
+      // Handle auto-open functionality if enabled
+      this.handleDocumentInsert(payload);
+    });
+
+    this.socket.on('context:workspace:document:inserted', (payload: any) => {
+      console.log('🔌 Browser Extension: Received context:workspace:document:inserted event!', payload);
+
+      // This is the more specific event from the context about workspace changes
+      this.handleDocumentInsert(payload);
+    });
+
+    this.socket.on('workspace:document:inserted', (payload: any) => {
+      console.log('🔌 Browser Extension: Received workspace:document:inserted event!', payload);
+
+      // Direct workspace event
+      this.handleDocumentInsert(payload);
+    });
+
+    // Generic context update handler
+    this.socket.on('context:updated', (payload: any) => {
+      console.log('🔌 Browser Extension: Received context:updated event!', payload);
+
+      if (payload.operation === 'document:inserted') {
+        this.handleDocumentInsert(payload);
+      }
+    });
   }
 
   private async handleDocumentInsert(payload: any) {
