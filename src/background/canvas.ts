@@ -26,14 +26,35 @@ const getContext = async () => {
 };
 
 const getContextId = async () => {
+  // First try to get the context ID from the selected context in storage
+  try {
+    const result = await browser.storage.local.get(['CNVS_SELECTED_CONTEXT']);
+    const selectedContext = result.CNVS_SELECTED_CONTEXT;
+
+    if (selectedContext && selectedContext.id) {
+      console.log('background.js | Using selected context ID:', selectedContext.id);
+      return selectedContext.id;
+    }
+
+    console.log('background.js | No selected context found, falling back to URL extraction');
+  } catch (error) {
+    console.error('background.js | Error getting selected context:', error);
+  }
+
+  // Fallback to URL-based extraction
   const contextUrl = await getContext();
+  console.log('background.js | Context URL for ID extraction:', contextUrl);
 
   // Extract context ID from URL - handle different formats
   if (contextUrl.includes('://')) {
-    return contextUrl.replace(/^.*:\/\//, '').replace(/\/$/, '') || 'universe';
+    const extractedId = contextUrl.replace(/^.*:\/\//, '').replace(/\/$/, '') || 'default';
+    console.log('background.js | Extracted context ID from URL:', extractedId);
+    return extractedId;
   }
 
-  return contextUrl || 'universe';
+  const fallbackId = contextUrl || 'default';
+  console.log('background.js | Using fallback context ID:', fallbackId);
+  return fallbackId;
 };
 
 // REST API Functions for Context Operations
@@ -358,7 +379,9 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
       const contextId = await getContextId();
       const featureArray = genFeatureArray("WRITE");
 
-      console.log(`background.js | Inserting ${tabArray.length} tabs via REST API`);
+      console.log(`background.js | Inserting ${tabArray.length} tabs via REST API to context:`, contextId);
+      console.log(`background.js | Tabs to insert:`, tabArray.map(tab => ({ url: tab.url, title: tab.title })));
+      console.log(`background.js | API endpoint:`, `${baseUrl}/contexts/${contextId}/documents/batch`);
 
       const requestBody = {
         documents: tabArray.map((tab) => formatTabProperties(tab)),
@@ -366,14 +389,20 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
         options: {}
       };
 
+      console.log(`background.js | Request body:`, JSON.stringify(requestBody, null, 2));
+
       const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/batch`, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody)
       });
 
+      console.log(`background.js | Response status:`, response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error(`Failed to insert documents: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`background.js | Error response:`, errorText);
+        throw new Error(`Failed to insert documents: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();

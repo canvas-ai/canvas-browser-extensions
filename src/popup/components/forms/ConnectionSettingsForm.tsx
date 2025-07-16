@@ -94,6 +94,16 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
             description: message.payload
           });
 
+          // Fetch contexts immediately after successful test
+          console.log('ConnectionSettingsForm: Fetching contexts after successful test...');
+          browser.runtime.sendMessage({
+            action: RUNTIME_MESSAGES.context_list
+          }).then(() => {
+            console.log('ConnectionSettingsForm: Context list request sent');
+          }).catch(error => {
+            console.error('ConnectionSettingsForm: Failed to request context list:', error);
+          });
+
           // Clear timeout and clean up listener
           clearTimeout(timeoutId);
           browser.runtime.onMessage.removeListener(messageListener);
@@ -221,8 +231,6 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
         value: updatedConfig
       });
 
-      handleContextChange(selectedContext);
-
       // Clean up timeout if component unmounts
       return () => {
         clearTimeout(timeoutId);
@@ -242,6 +250,36 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
   const handleContextChange = async (context: IContext | null) => {
     try {
       setTransport({ ...transport, pinToContext: context?.url || 'universe:///' });
+
+      // Send context change message to background script
+      if (context) {
+        console.log('ConnectionSettingsForm: Changing context to:', context);
+        await browser.runtime.sendMessage({
+          action: RUNTIME_MESSAGES.context_set_url,
+          payload: { url: context.url }
+        });
+
+        // Update the selected context in storage
+        await setSavedSelectedContext(context);
+
+        toast({
+          title: "Context Changed",
+          description: `Switched to context: ${context.id}`,
+        });
+      } else {
+        // Switch to default context
+        await browser.runtime.sendMessage({
+          action: RUNTIME_MESSAGES.context_set_url,
+          payload: { url: 'universe:///' }
+        });
+
+        await setSavedSelectedContext(null);
+
+        toast({
+          title: "Context Changed",
+          description: "Switched to default context",
+        });
+      }
     } catch (error) {
       console.error('Failed to switch context:', error);
       toast({
@@ -350,13 +388,15 @@ const ConnectionSettingsForm: React.FC<ConnectionSettingsFormTypes> = ({ closePo
               value={selectedContext ? `${selectedContext.userId}/${selectedContext.id}` : 'default'}
               onChange={(e) => {
                 const selectedValue = e.target.value;
-                if (selectedValue) {
+                if (selectedValue && selectedValue !== 'default') {
                   const foundContext = contexts.find(context => `${context.userId}/${context.id}` === selectedValue);
                   if (foundContext) {
                     setSelectedContext(foundContext);
+                    handleContextChange(foundContext);
                   }
                 } else {
                   setSelectedContext(null);
+                  handleContextChange(null);
                 }
               }}
               disabled={isLoadingContexts}

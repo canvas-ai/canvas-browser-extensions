@@ -10,6 +10,19 @@ const Header: React.FC = () => {
   useEffect(() => {
     const updateBreadcrumbs = async () => {
       const contextToUse = selectedContext || (contextList && contextList.length > 0 ? contextList[0] : null);
+
+      if (!contextToUse) {
+        console.log('Header: No context available for breadcrumbs');
+        setBreadcrumbs([{
+          href: "#!",
+          className: "breadcrumb black-text",
+          textContent: "(default) universe:///"
+        }]);
+        return;
+      }
+
+      console.log('Header: Using context for breadcrumbs:', contextToUse.id, contextToUse.url);
+
       const newBreadcrumbs = await getContextBreadcrumbsFromContext(contextToUse);
       setBreadcrumbs(newBreadcrumbs);
     };

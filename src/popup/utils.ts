@@ -62,10 +62,10 @@ export const getContextBreadcrumbsFromContext = async (context: IContext | null)
     // Determine if context is shared
     const isShared = context.userId && userInfo?.userId && context.userId !== userInfo.userId;
 
-    // Format: "context.id | context.url" or "context.id (shared) | context.url"
+    // Format: "(context.id) context.url" or "(context.id) context.url (shared)"
     const contextLabel = isShared
-      ? `${context.id} (shared) | ${context.url}`
-      : `${context.id} | ${context.url}`;
+      ? `(${context.id}) ${context.url} (shared)`
+      : `(${context.id}) ${context.url}`;
 
     return [{
       href: "#!",
@@ -73,8 +73,8 @@ export const getContextBreadcrumbsFromContext = async (context: IContext | null)
       textContent: contextLabel
     }];
   } catch (error) {
-    // Fallback to just context.id | context.url if userInfo not available
-    const contextLabel = `${context.id} | ${context.url}`;
+    // Fallback to just (context.id) context.url if userInfo not available
+    const contextLabel = `(${context.id}) ${context.url}`;
     return [{
       href: "#!",
       className: "breadcrumb black-text",

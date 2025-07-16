@@ -559,7 +559,22 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_get_tree, payload: contextForTree?.tree });
         break;
 
+      case RUNTIME_MESSAGES.context_set_url:
+        if (!message.payload || !message.payload.url) {
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Context URL is required' });
+          break;
+        }
 
+        try {
+          console.log('background.js | Setting context URL:', message.payload.url);
+          const { setContextUrl } = await import('./context');
+          await setContextUrl({ payload: message.payload.url });
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Context changed successfully' });
+        } catch (error: any) {
+          console.error('background.js | Error setting context URL:', error);
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error changing context: ${error.message}` });
+        }
+        break;
 
       case RUNTIME_MESSAGES.context_refresh_tabs:
         console.log('background.js | Refreshing tabs for current context...');

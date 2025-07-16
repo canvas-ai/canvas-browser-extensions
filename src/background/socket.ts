@@ -53,20 +53,26 @@ class MySocket {
 
   connect() {
     if (!this.socket) {
-      this.initializeSocket(false);
+      console.log('background.js | [socket.io] Creating new socket connection');
+      this.socket = io(this.connectionUri(), getSocketOptions());
+    } else if (!this.socket.connected) {
+      console.log('background.js | [socket.io] Reconnecting existing socket');
+      this.socket.connect();
     }
   }
 
   connectionUri() {
-    return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}/websocket`;
+    return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}`;
   }
 
   reconnect() {
     if (this.socket) {
+      console.log('background.js | [socket.io] Disconnecting existing socket');
       this.socket.disconnect();
       this.socket = null;
     }
-    this.initializeSocket(false);
+    console.log('background.js | [socket.io] Creating new socket for reconnection');
+    this.socket = io(this.connectionUri(), getSocketOptions());
   }
 
   private startReconnectionTimer() {
@@ -144,6 +150,7 @@ class MySocket {
     this.isInitializing = true;
     console.log('background.js | [socket.io] Initializing WebSocket connection to /websocket');
 
+    // Create or reconnect socket
     if (reconn) {
       this.reconnect();
     } else {
@@ -151,15 +158,16 @@ class MySocket {
     }
 
     if (!this.socket) {
-      console.error('background.js | [socket.io] Failed to initialize socket');
+      console.error('background.js | [socket.io] Failed to create socket');
       this.isInitializing = false;
       this.startReconnectionTimer();
       return;
     }
 
+    // Set up event listeners
     this.socket.on('connect', () => {
       console.log('background.js | [socket.io] Browser Client connected to Canvas WebSocket');
-      console.log('background.js | [socket.io] Using token:', config.transport.token);
+      console.log('background.js | [socket.io] Using token:', config.transport.token ? '[TOKEN SET]' : '[NO TOKEN]');
 
       this.clearReconnectionTimer();
 
@@ -183,6 +191,23 @@ class MySocket {
       });
 
       updateLocalCanvasTabsData();
+    });
+
+    this.socket.on('authenticated', (data) => {
+      console.log('background.js | [socket.io] Socket authenticated with user data:', data);
+      this.sendSocketEvent(SOCKET_EVENTS.authenticated, data);
+
+      // Fetch contexts after authentication
+      console.log('background.js | [socket.io] Fetching contexts after authentication...');
+      import('./canvas').then(({ canvasFetchContextList }) => {
+        return canvasFetchContextList();
+      }).then(contexts => {
+        console.log('background.js | [socket.io] Contexts fetched after authentication:', contexts);
+        browser.storage.local.set({ contexts });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.context_list, payload: contexts });
+      }).catch(error => {
+        console.error('background.js | [socket.io] Error fetching contexts after authentication:', error);
+      });
     });
 
     this.socket.on('connect_error', (error) => {
@@ -215,10 +240,6 @@ class MySocket {
       this.isInitializing = false;
 
       this.startReconnectionTimer();
-    });
-
-    this.socket.on("authenticated", (data: { userId: string, email: string }) => {
-      this.sendSocketEvent(SOCKET_EVENTS.authenticated, data);
     });
 
     // Context-related events - update storage directly
@@ -265,6 +286,12 @@ class MySocket {
     this.socket.on('context:document:updated', this.handleDocumentUpdate.bind(this));
     this.socket.on('context:document:removed', this.handleDocumentRemove.bind(this));
     this.socket.on('context:document:deleted', this.handleDocumentDelete.bind(this));
+
+    // Backend event names (with dots) - THESE ARE THE ACTUAL EVENTS EMITTED
+    this.socket.on('document.inserted', this.handleDocumentInsert.bind(this));
+    this.socket.on('document.updated', this.handleDocumentUpdate.bind(this));
+    this.socket.on('document.removed', this.handleDocumentRemove.bind(this));
+    this.socket.on('document.deleted', this.handleDocumentDelete.bind(this));
 
     // Legacy document events (for backwards compatibility)
     this.socket.on('document:insert', this.handleDocumentInsert.bind(this));

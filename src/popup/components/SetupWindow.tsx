@@ -86,6 +86,16 @@ const SetupWindow: React.FC<SetupWindowProps> = ({ onSetupComplete }) => {
           browser.runtime.onMessage.removeListener(messageListener);
           setIsConnecting(false);
 
+          // Fetch contexts immediately after successful test
+          console.log('SetupWindow: Fetching contexts after successful test...');
+          browser.runtime.sendMessage({
+            action: RUNTIME_MESSAGES.context_list
+          }).then(() => {
+            console.log('SetupWindow: Context list request sent');
+          }).catch(error => {
+            console.error('SetupWindow: Failed to request context list:', error);
+          });
+
           // First establish the main socket connection, then fetch contexts
           setTimeout(() => {
             console.log('SetupWindow: Establishing main socket connection...');
@@ -247,6 +257,47 @@ const SetupWindow: React.FC<SetupWindowProps> = ({ onSetupComplete }) => {
     }
   };
 
+  const handleContextChange = async (context: IContext | null) => {
+    try {
+      // Send context change message to background script
+      if (context) {
+        console.log('SetupWindow: Changing context to:', context);
+        await browser.runtime.sendMessage({
+          action: RUNTIME_MESSAGES.context_set_url,
+          payload: { url: context.url }
+        });
+
+        // Update the selected context in storage
+        await setSavedSelectedContext(context);
+
+        toast({
+          title: "Context Changed",
+          description: `Switched to context: ${context.id}`,
+        });
+      } else {
+        // Switch to default context
+        await browser.runtime.sendMessage({
+          action: RUNTIME_MESSAGES.context_set_url,
+          payload: { url: 'universe:///' }
+        });
+
+        await setSavedSelectedContext(null);
+
+        toast({
+          title: "Context Changed",
+          description: "Switched to default context",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to switch context:', error);
+      toast({
+        title: "Context Error",
+        description: "Failed to switch context",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleUrlChange = (value: string) => {
     const urlPattern = /^(https?):\/\/([^:]+):(\d+)$/;
     const match = value.match(urlPattern);
@@ -343,8 +394,13 @@ const SetupWindow: React.FC<SetupWindowProps> = ({ onSetupComplete }) => {
               onChange={(e) => {
                 if (e.target.value === 'default') {
                   setSelectedContext(null);
+                  handleContextChange(null);
                 } else {
-                  setSelectedContext(contexts.find(context => `${context.userId}/${context.id}` === e.target.value) || null);
+                  const foundContext = contexts.find(context => `${context.userId}/${context.id}` === e.target.value);
+                  setSelectedContext(foundContext || null);
+                  if (foundContext) {
+                    handleContextChange(foundContext);
+                  }
                 }
               }}
               disabled={connectionStatus !== 'connected'}
