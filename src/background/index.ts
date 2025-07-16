@@ -6,6 +6,7 @@ import index from "./TabIndex";
 import { RUNTIME_MESSAGES } from "@/general/constants";
 import { browser } from "@/general/utils";
 import { setContextUrl } from "./context";
+import { canvasFetchContextDocuments, canvasFetchContext } from "./canvas";
 
 console.log('background.js | Initializing Canvas Browser Extension background worker');
 
@@ -491,7 +492,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           break;
         }
 
-        fetchContextDocuments(
+        canvasFetchContextDocuments(
           message.payload.contextId,
           message.payload.featureArray || [],
           message.payload.filterArray || [],
@@ -516,7 +517,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           break;
         }
 
-        fetchContext(message.payload.contextId).then(context => {
+        canvasFetchContext().then(context => {
           sendRuntimeMessage({
             type: 'context:get:result',
             payload: context
@@ -745,7 +746,15 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         break;
 
       case RUNTIME_MESSAGES.user_info:
-        socket.emit('user:info');
+        // User info should be fetched via REST API or handled locally
+        // For now, we'll send a placeholder response
+        sendRuntimeMessage({
+          type: RUNTIME_MESSAGES.user_info,
+          payload: {
+            userId: 'local-user',
+            email: 'user@canvas.local'
+          }
+        });
         break;
 
       default:

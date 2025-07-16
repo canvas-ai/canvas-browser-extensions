@@ -3,143 +3,174 @@ import { getSocket } from "./socket";
 import index from "./TabIndex";
 import { genFeatureArray, getCurrentBrowser, onContextTabsUpdated, sendRuntimeMessage } from "./utils";
 import { browser } from "@/general/utils";
+import config from "@/general/config";
+import { stripTabProperties } from "./utils";
 
-const getContext = async () => {
-  const selectedContext = await browser.storage.local.get(["CNVS_SELECTED_CONTEXT"]);
-  if (selectedContext.CNVS_SELECTED_CONTEXT) {
-    return selectedContext.CNVS_SELECTED_CONTEXT;
-  }
-
-  const contexts = await browser.storage.local.get(["contexts"]);
-  return contexts.contexts[0] || null;
-}
-
-const getContextId = async () => {
-  try {
-    const context: IContext | null = await getContext();
-    if(!context) return "default";
-    return `${context.userId}/${context.id}`;
-  } catch (error) {
-    console.error("background.js | Error getting context id", error);
-    return 'default';
-  }
+// REST API Helper Functions
+const getApiBaseUrl = async () => {
+  await config.load();
+  return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}`;
 };
 
+const getAuthHeaders = async () => {
+  await config.load();
+  return {
+    'Authorization': `Bearer ${config.transport.token}`,
+    'Content-Type': 'application/json'
+  };
+};
+
+const getContext = async () => {
+  await config.load();
+  return config.transport.pinToContext || 'universe:///';
+};
+
+const getContextId = async () => {
+  const contextUrl = await getContext();
+
+  // Extract context ID from URL - handle different formats
+  if (contextUrl.includes('://')) {
+    return contextUrl.replace(/^.*:\/\//, '').replace(/\/$/, '') || 'universe';
+  }
+
+  return contextUrl || 'universe';
+};
+
+// REST API Functions for Context Operations
 export const canvasFetchContext = async (): Promise<IContext> => {
-  const socket = await getSocket();
-  return new Promise(async (resolve, reject) => {
-    socket.emit('context:get', await getContextId(), (response: any) => {
-      if (response && response.status === 'success') {
-        resolve(response.payload.context);
-      } else {
-        reject(new Error(response?.message || 'Failed to fetch context'));
-      }
+  const baseUrl = await getApiBaseUrl();
+  const headers = await getAuthHeaders();
+  const contextId = await getContextId();
+
+  try {
+    const response = await fetch(`${baseUrl}/contexts/${contextId}`, {
+      method: 'GET',
+      headers
     });
-  });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch context: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.context || data;
+  } catch (error) {
+    console.error('background.js | Error fetching context via REST:', error);
+    throw error;
+  }
 };
 
 export const requestFetchTabsForContext = async (): Promise<chrome.tabs.Tab[]> => {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    console.log("background.js | Fetching tabs for context: ", await getContextId());
+  const baseUrl = await getApiBaseUrl();
+  const headers = await getAuthHeaders();
+  const contextId = await getContextId();
 
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST, {
-      contextId: await getContextId(),
-      featureArray: genFeatureArray("READ"),
-      filterArray: [],
-      options: {}
-    }, (res: any) => {
-      console.log(`background.js | [${SOCKET_MESSAGES.DOCUMENT_CONTEXT.LIST}] Server response: `, res);
+  try {
+    console.log(`background.js | Fetching tabs for context: ${contextId}`);
 
-      if (res && res.status === 'success' && res.payload) {
-        // Ensure we properly map docId from the response
-        const tabsWithDocId = res.payload.map((document: any) => {
-          const tab = {
-            ...document.data,
-            docId: document.id  // This is crucial - store the document ID
-          };
-          console.log(`background.js | Mapped tab: ${tab.url} with docId: ${tab.docId}`);
-          return tab;
-        });
-        resolve(tabsWithDocId);
-      } else {
-        console.error('background.js | Invalid response for context:documents:list:', res);
-        reject(new Error(res?.message || 'Failed to fetch tabs'));
-      }
+    const response = await fetch(`${baseUrl}/contexts/${contextId}/documents?schema=data/abstraction/tab`, {
+      method: 'GET',
+      headers
     });
-  });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch documents: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const documents = data.documents || data;
+
+    // Map documents to tabs with docId
+    const tabsWithDocId = documents.map((document: any) => {
+      const tab = {
+        ...document.data,
+        docId: document.id  // Store the document ID
+      };
+      console.log(`background.js | Mapped tab: ${tab.url} with docId: ${tab.docId}`);
+      return tab;
+    });
+
+    return tabsWithDocId;
+  } catch (error) {
+    console.error('background.js | Error fetching tabs via REST:', error);
+    throw error;
+  }
 };
 
 export function canvasFetchContextUrl(): Promise<string> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.CONTEXT.GET_URL, await getContextId(), (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching context URL", res);
-        reject("Error fetching context url from Canvas");
-      } else {
-        console.log("background.js | Context URL fetched: ", res);
-        resolve(res.payload);
-      }
-    });
-  });
+  return canvasFetchContext().then(ctx => ctx.url);
 }
 
 export function canvasFetchDocuments(featureArray: string[]): Promise<any> {
   return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET_ARRAY, {
-      contextId: await getContextId(),
-      featureArray
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error fetching documents", res);
-        reject("Error fetching documents from Canvas");
-      } else {
-        console.log("background.js | Documents fetched: ", res);
-        resolve(res);
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
+      const contextId = await getContextId();
+
+      const queryParams = new URLSearchParams();
+      if (featureArray.length > 0) {
+        queryParams.append('features', featureArray.join(','));
       }
-    });
+
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents?${queryParams}`, {
+        method: 'GET',
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch documents: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("background.js | Documents fetched via REST: ", data);
+      resolve(data);
+    } catch (error) {
+      console.error("background.js | Error fetching documents via REST:", error);
+      reject(error);
+    }
   });
 }
 
 export function canvasInsertDocument(document: any, featureArray: string[] = [], options: any = {}): Promise<any> {
   return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-
     if (!document) {
       reject(new Error("Document is required"));
       return;
     }
 
     try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
       const contextId = await getContextId();
 
-      // Use the socket's emit method which returns a Promise
-      const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
-        contextId,
+      const requestBody = {
         document,
         featureArray,
         options
+      };
+
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody)
       });
 
-      if (!response) {
-        console.error("background.js | No response received for document insert");
-        reject(new Error("No response received from Canvas"));
-        return;
+      if (!response.ok) {
+        throw new Error(`Failed to insert document: ${response.status} ${response.statusText}`);
       }
 
-      if (response.status === "success") {
-        console.log("background.js | Document inserted successfully: ", response);
+      const data = await response.json();
+      console.log("background.js | Document inserted successfully via REST: ", data);
 
-        // Update tab index and sync status if this is a tab document
-        if (document.schema === 'data/abstraction/tab' && document.data && response.payload) {
-          const insertedTab = {
-            ...document.data,
-            docId: response.payload.id
-          };
+      // Update tab index and sync status if this is a tab document
+      if (document.schema === 'data/abstraction/tab' && document.data && data.document) {
+        const insertedTab = {
+          ...document.data,
+          docId: data.document.id
+        };
 
-                  // Add to canvas tabs index (without triggering UI updates)
+        // Add to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabSilent(insertedTab);
 
         // Notify UI about the tab changes
@@ -152,146 +183,166 @@ export function canvasInsertDocument(document: any, featureArray: string[] = [],
 
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
-        }
-
-        resolve(response);
-      } else if (response.status === "error") {
-        console.error("background.js | Error inserting document: ", response);
-        reject(new Error(response.message || "Error inserting document to Canvas"));
-      } else {
-        console.error("background.js | Unexpected response status: ", response);
-        reject(new Error("Unexpected response from Canvas"));
       }
+
+      resolve(data);
     } catch (error) {
-      console.error("background.js | Exception in canvasInsertDocument: ", error);
+      console.error("background.js | Error inserting document via REST:", error);
       reject(error);
     }
   });
 }
 
-// Enhanced version with proper tab features and write permissions
 export function canvasInsertDocumentWithFeatures(document: any, options: any = {}): Promise<any> {
-  const featureArray = genFeatureArray("WRITE");
-  return canvasInsertDocument(document, featureArray, options);
+  return canvasInsertDocument(document, genFeatureArray("WRITE"), options);
 }
 
 export function canvasUpdateDocument(document: any): Promise<any> {
   return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, {
-      contextId: await getContextId(),
-      document
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error updating document", res);
-        reject("Error updating document in Canvas");
-      } else {
-        console.log("background.js | Document updated: ", res);
-        resolve(res);
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
+      const contextId = await getContextId();
+
+      if (!document.id) {
+        throw new Error("Document ID is required for update");
       }
-    });
+
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/${document.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ document })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update document: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("background.js | Document updated via REST: ", data);
+      resolve(data);
+    } catch (error) {
+      console.error("background.js | Error updating document via REST:", error);
+      reject(error);
+    }
   });
 }
 
 export function canvasDeleteDocument(documentId: string): Promise<any> {
   return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, {
-      contextId: await getContextId(),
-      documentId
-    }, (res) => {
-      if (!res || res.status !== "success") {
-        console.error("background.js | Error deleting document", res);
-        reject("Error deleting document from Canvas");
-      } else {
-        console.log("background.js | Document deleted: ", res);
-        resolve(res);
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
+      const contextId = await getContextId();
+
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/${documentId}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete document: ${response.status} ${response.statusText}`);
       }
-    });
+
+      const data = await response.json();
+      console.log("background.js | Document deleted via REST: ", data);
+      resolve(data);
+    } catch (error) {
+      console.error("background.js | Error deleting document via REST:", error);
+      reject(error);
+    }
   });
 }
 
 export function canvasFetchTab(docId: number) {
   return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    socket.emit(
-      SOCKET_MESSAGES.DOCUMENT_CONTEXT.GET,
-      {
-        contextId: await getContextId(),
-        documentId: docId
-      },
-      genFeatureArray("READ"),
-      (res) => {
-        console.log("background.js | Tab fetched: ", res);
-        resolve(res);
-      }
-    );
-  });
-}
-
-export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-
-    if (!tab) {
-      reject(new Error("background.js | Invalid tab"));
-      return;
-    }
-
     try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
       const contextId = await getContextId();
-      const featureArray = genFeatureArray("WRITE");
 
-      // Use the socket's emit method which returns a Promise
-      const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT, {
-        contextId,
-        document: formatTabProperties(tab),
-        featureArray,
-        options: {}
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/${docId}`, {
+        method: 'GET',
+        headers
       });
 
-      if (!response) {
-        console.error("background.js | No response received for tab insert");
-        reject(new Error("No response received from Canvas"));
-        return;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch document: ${response.status} ${response.statusText}`);
       }
 
-      if (response.status === "success") {
-        console.log(`background.js | Tab ${tab.id} inserted successfully: `, response);
-
-        // Update the tab with the document ID from the response
-        const insertedTab = {
-          ...tab,
-          docId: response.payload.id
-        };
-
-        // Add to canvas tabs index (without triggering UI updates)
-        index.insertCanvasTabSilent(insertedTab);
-
-        // Notify UI about the tab changes
-        onContextTabsUpdated({
-          canvasTabs: { insertedTabs: [insertedTab] }
-        });
-
-        // Send success message
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tab inserted to Canvas' });
-
-        // Update browser tabs to recalculate synced status (debounced)
-        index.updateBrowserTabsWithDelay();
-
-        resolve(response);
-      } else if (response.status === "error") {
-        console.error(`background.js | Error inserting tab ${tab.id}: `, response);
-        reject(new Error(response.message || "Error inserting tab to Canvas"));
-      } else {
-        console.error(`background.js | Unexpected response status for tab ${tab.id}: `, response);
-        reject(new Error("Unexpected response from Canvas"));
-      }
+      const data = await response.json();
+      console.log("background.js | Tab fetched via REST: ", data);
+      resolve(data);
     } catch (error) {
-      console.error("background.js | Exception in canvasInsertTab: ", error);
+      console.error("background.js | Error fetching tab via REST:", error);
       reject(error);
     }
   });
+}
+
+// REST API function for fetching context list
+export async function canvasFetchContextList(): Promise<IContext[]> {
+  try {
+    const baseUrl = await getApiBaseUrl();
+    const headers = await getAuthHeaders();
+
+    const response = await fetch(`${baseUrl}/contexts`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch contexts: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log("background.js | Context list fetched via REST: ", data);
+    return data.contexts || data;
+  } catch (error) {
+    console.error("background.js | Error fetching context list via REST:", error);
+    throw error;
+  }
+}
+
+// REST API function for fetching context documents
+export async function canvasFetchContextDocuments(contextId: string, featureArray: string[] = [], filterArray: any[] = [], options: any = {}): Promise<any> {
+  try {
+    const baseUrl = await getApiBaseUrl();
+    const headers = await getAuthHeaders();
+
+    const queryParams = new URLSearchParams();
+    if (featureArray.length > 0) {
+      queryParams.append('features', featureArray.join(','));
+    }
+    if (filterArray.length > 0) {
+      queryParams.append('filters', JSON.stringify(filterArray));
+    }
+    if (Object.keys(options).length > 0) {
+      queryParams.append('options', JSON.stringify(options));
+    }
+
+    const response = await fetch(`${baseUrl}/contexts/${contextId}/documents?${queryParams}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch context documents: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log("background.js | Context documents fetched via REST: ", data);
+    return data;
+  } catch (error) {
+    console.error("background.js | Error fetching context documents via REST:", error);
+    throw error;
+  }
+}
+
+// Tab-specific operations using REST API
+export function canvasInsertTab(tab: ICanvasTab): Promise<ICanvasInsertOneResponse> {
+  const tabDocument = formatTabProperties(tab);
+  return canvasInsertDocument(tabDocument, genFeatureArray("WRITE"));
 }
 
 export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasInsertResponse> {
@@ -301,226 +352,41 @@ export function canvasInsertTabArray(tabArray: ICanvasTab[]): Promise<ICanvasIns
       return;
     }
 
-    const socket = await getSocket();
-    socket.on(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY_RESULT, (response: any) => {
-      socket.removeAllListeners(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY_RESULT);
-      console.log('background.js | Tab array inserted to Canvas: ', response);
-      if (response && response.status === 'success' && response.payload) {
-        console.log(`background.js | Tab array inserted successfully: `, response);
-
-        // Map the inserted tabs with their document IDs
-        const insertedTabs = tabArray.map((tab, index) => {
-          const docId = response.payload[index]?.id || response.payload[index];
-          console.log(`background.js | Mapping inserted tab: ${tab.url} with docId: ${docId}`);
-          return {
-            ...tab,
-            docId: docId
-          };
-        });
-
-        index.insertCanvasTabArraySilent(insertedTabs, false);
-
-        // Notify UI about the tab changes
-        onContextTabsUpdated({
-          canvasTabs: { insertedTabs }
-        });
-
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Tabs inserted to Canvas' });
-
-        // Update browser tabs to recalculate synced status (debounced)
-        index.updateBrowserTabsWithDelay();
-
-        resolve(response);
-
-      } else if (response.status === "error") {
-        console.error("background.js | Error inserting tab array: ", response);
-        reject(new Error(response.message || "Error inserting tab array to Canvas"));
-      } else {
-        console.error("background.js | Unexpected response status for tab array: ", response);
-        reject(new Error("Unexpected response from Canvas"));
-      }
-    });
-
     try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
       const contextId = await getContextId();
       const featureArray = genFeatureArray("WRITE");
 
-      socket.emit(SOCKET_MESSAGES.DOCUMENT_CONTEXT.INSERT_ARRAY, {
-        contextId,
-        documents: tabArray.map((tab) => formatTabProperties(tab))
-      }, featureArray);
-    } catch (error) {
-      console.error("background.js | Exception in canvasInsertTabArray: ", error);
-      reject(error);
-    }
-  });
-}
+      console.log(`background.js | Inserting ${tabArray.length} tabs via REST API`);
 
-export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
-  return new Promise((resolve, reject) => {
-    // TODO: Implement the logic for updating a tab
-  });
-}
-
-function deleteOrRemoveTab(ROUTE: string, tab: ICanvasTab, log: "remove" | "delete") {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-
-    // Enhanced logging for debugging
-    console.log(`background.js | Starting ${log} operation for tab:`, tab);
-    console.log(`background.js | Tab docId: ${tab.docId}, URL: ${tab.url}`);
-
-    // Extract the duplicated success handling logic into a reusable function
-    const handleSuccessResponse = (res: any) => {
-      console.log(`background.js | Success response for ${log}:`, res);
-      socket.removeAllListeners(`${ROUTE}:result`);
-      if (res.status === "success") {
-        console.log(`background.js | Successful tab(${tab.id}) ${log} from canvas: `, res);
-        index.removeCanvasTab(tab.url as string);
-        onContextTabsUpdated({ canvasTabs: { removedTabs: [tab] } });
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `Tab ${log}d from Canvas successfully` });
-        index.updateBrowserTabsWithDelay();
-        resolve(res);
-      } else {
-        console.error(`background.js | Failed ${log} for tab ${tab.id}:`)
-        console.error(res);
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Failed to ${log} tab from Canvas: ${res?.message || 'Unknown error'}` });
-        resolve(false);
-      }
-    };
-
-    const handleErrorResponse = (error: any) => {
-      console.error(`background.js | Error during ${log} operation:`, error);
-      socket.removeAllListeners(`${ROUTE}:result`);
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Error ${log}ing tab from Canvas: ${error?.message || 'Connection error'}` });
-      resolve(false);
-    };
-
-    // Check if socket is connected
-    if (!socket || !socket.isConnected()) {
-      console.error(`background.js | Socket not connected for ${log} operation`);
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Connection to Canvas server not available' });
-      resolve(false);
-      return;
-    }
-
-    // Ensure we have a docId
-    if(!tab.docId) {
-      tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-      console.log(`background.js | Retrieved docId from index: ${tab.docId} for URL: ${tab.url}`);
-    }
-
-    if (!tab.docId) {
-      console.error(`background.js | Cannot ${log} tab - no docId found for URL: ${tab.url}`);
-      console.error('background.js | Current canvas tabs index state:');
-      index.logCanvasTabsWithDocIds();
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: `Cannot ${log} tab - document ID not found. Try refreshing canvas tabs first.` });
-      resolve(false);
-      return;
-    }
-
-    // Set up listeners
-    socket.on(`${ROUTE}:result`, handleSuccessResponse);
-    socket.on('error', handleErrorResponse);
-
-    const contextId = await getContextId();
-    console.log(`background.js | Emitting ${ROUTE} with contextId: ${contextId}, documentId: ${tab.docId}`);
-
-    try {
-      socket.emit(ROUTE, {
-        contextId,
-        documentId: tab.docId
-      }, handleSuccessResponse);
-    } catch (error) {
-      console.error(`background.js | Exception emitting ${ROUTE}:`, error);
-      handleErrorResponse(error);
-    }
-  });
-}
-
-function deleteOrRemoveTabs(ROUTE: string, tabs: ICanvasTab[], log: "remove" | "delete") {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    tabs = tabs.map(tab => {
-      if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
-      return tab;
-    });
-    socket.emit(ROUTE, {
-      contextId: await getContextId(),
-      documentIdArray: tabs.map(tab => tab.docId)
-    }, (res) => {
-      if (res.status === "success") {
-        console.log(`background.js | Successful ${log} tabs from canvas result: `, res);
-        tabs.forEach(tab => index.removeCanvasTab(tab.url as string));
-        onContextTabsUpdated({ canvasTabs: { removedTabs: tabs } });
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `Tabs ${log}d from Canvas` });
-        index.updateBrowserTabsWithDelay();
-        resolve(res);
-      } else {
-        console.error(`background.js | Failed ${log} for tabs:`)
-        console.error(res);
-        resolve(false);
-      }
-    });
-  });
-}
-
-export function canvasRemoveTab(tab: ICanvasTab) {
-  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE, tab, "remove");
-}
-
-export function canvasDeleteTab(tab: ICanvasTab) {
-  return deleteOrRemoveTab(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE, tab, "delete");
-}
-
-export function canvasRemoveTabs(tabs: ICanvasTab[]) {
-  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.REMOVE_ARRAY, tabs, "remove");
-}
-
-export function canvasDeleteTabs(tabs: ICanvasTab[]) {
-  return deleteOrRemoveTabs(SOCKET_MESSAGES.DOCUMENT_CONTEXT.DELETE_ARRAY, tabs, "delete");
-}
-
-export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: string[]): Promise<ICanvasInsertResponse> {
-  return new Promise(async (resolve, reject) => {
-    const socket = await getSocket();
-    if (!tabArray || !tabArray.length) {
-      reject(new Error("background.js | Invalid tab array"));
-      return;
-    }
-
-    try {
-      const contextId = await getContextId();
-      const featureArray = genFeatureArray("WRITE");
-
-      console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
-
-      const response: any = await socket.emit(SOCKET_MESSAGES.DOCUMENT.INSERT_ARRAY, {
-        contextId,
+      const requestBody = {
         documents: tabArray.map((tab) => formatTabProperties(tab)),
-        contextUrlArray
-      }, featureArray);
+        featureArray,
+        options: {}
+      };
 
-      if (!response) {
-        console.error("background.js | No response received for document tab array insert");
-        reject(new Error("No response received from Canvas"));
-        return;
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/batch`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to insert documents: ${response.status} ${response.statusText}`);
       }
 
-      if (response.status === "success") {
-        console.log(`background.js | Document tab array inserted successfully: `, response);
+      const data = await response.json();
+      console.log("background.js | Tab array inserted successfully via REST: ", data);
 
-        // Map the inserted tabs with their document IDs
-        const insertedTabs = tabArray.map((tab, index) => {
-          const docId = response.payload[index]?.id || response.payload[index];
-          console.log(`background.js | Mapping document tab: ${tab.url} with docId: ${docId}`);
-          return {
-            ...tab,
-            docId: docId
-          };
-        });
+      // Update tab index with inserted tabs
+      if (data.documents && Array.isArray(data.documents)) {
+        const insertedTabs = data.documents.map((doc: any, index: number) => ({
+          ...tabArray[index],
+          docId: doc.id
+        }));
 
-        // Add all tabs to canvas tabs index (without triggering UI updates)
+        // Add to canvas tabs index (without triggering UI updates)
         index.insertCanvasTabArraySilent(insertedTabs, false);
 
         // Notify UI about the tab changes
@@ -529,45 +395,211 @@ export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: 
         });
 
         // Send success message
-        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: 'Document tabs inserted to Canvas' });
+        sendRuntimeMessage({ type: RUNTIME_MESSAGES.success_message, payload: `${insertedTabs.length} tabs inserted to Canvas` });
 
         // Update browser tabs to recalculate synced status (debounced)
         index.updateBrowserTabsWithDelay();
-
-        resolve(response);
-      } else if (response.status === "error") {
-        console.error("background.js | Error inserting document tab array: ", response);
-        reject(new Error(response.message || "Error inserting document tab array to Canvas"));
-      } else {
-        console.error("background.js | Unexpected response status for document tab array: ", response);
-        reject(new Error("Unexpected response from Canvas"));
       }
+
+      resolve(data);
     } catch (error) {
-      console.error("background.js | Exception in documentInsertTabArray: ", error);
+      console.error("background.js | Error inserting tab array via REST:", error);
+      reject(error);
+    }
+  });
+}
+
+export function canvasUpdateTab(tab: ITabDocumentSchema): Promise<any> {
+  const tabData = tab.data;
+  if (!tabData.docId) {
+    throw new Error("Document ID is required for tab update");
+  }
+
+  return canvasUpdateDocument({
+    id: tabData.docId,
+    schema: tab.schema,
+    data: stripTabProperties(tabData)
+  });
+}
+
+function deleteOrRemoveTab(operation: "remove" | "delete", tab: ICanvasTab, log: "remove" | "delete") {
+  return new Promise(async (resolve, reject) => {
+    console.log(`background.js | Attempting to ${log} tab: `, tab);
+
+    const handleSuccessResponse = (res: any) => {
+      console.log(`background.js | Tab ${log} successful:`, res);
+
+      // Remove from canvas tabs index
+      index.removeCanvasTab(tab.url as string);
+
+      // Notify UI about the change
+      onContextTabsUpdated({
+        canvasTabs: { removedTabs: [tab] }
+      });
+
+      // Send success message
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: `Tab ${log}d from Canvas`
+      });
+
+      // Update browser tabs to recalculate synced status (debounced)
+      index.updateBrowserTabsWithDelay();
+
+      resolve(true);
+    };
+
+    const handleErrorResponse = (error: any) => {
+      console.error(`background.js | Tab ${log} failed:`, error);
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.error_message,
+        payload: `Failed to ${log} tab from Canvas: ${error.message || error}`
+      });
+      resolve(false);
+    };
+
+    try {
+      // Ensure we have a docId
+      if (!tab.docId) {
+        tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
+        console.log(`background.js | Retrieved docId from index: ${tab.docId} for URL: ${tab.url}`);
+      }
+
+      if (!tab.docId) {
+        console.error(`background.js | Cannot ${log} tab - no docId found for URL: ${tab.url}`);
+        console.error('background.js | Current canvas tabs index state:');
+        index.logCanvasTabsWithDocIds();
+        sendRuntimeMessage({
+          type: RUNTIME_MESSAGES.error_message,
+          payload: `Cannot ${log} tab - document ID not found. Try refreshing canvas tabs first.`
+        });
+        resolve(false);
+        return;
+      }
+
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
+      const contextId = await getContextId();
+
+      const endpoint = operation === "delete"
+        ? `${baseUrl}/contexts/${contextId}/documents/${tab.docId}`
+        : `${baseUrl}/contexts/${contextId}/documents/${tab.docId}/remove`;
+
+      const response = await fetch(endpoint, {
+        method: operation === "delete" ? 'DELETE' : 'POST',
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${operation} document: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      handleSuccessResponse(data);
+    } catch (error) {
+      handleErrorResponse(error);
+    }
+  });
+}
+
+function deleteOrRemoveTabs(operation: "remove" | "delete", tabs: ICanvasTab[], log: "remove" | "delete") {
+  console.log(`background.js | Starting batch ${log} operation for ${tabs.length} tabs`);
+
+  // Process each tab individually and collect promises
+  const promises = tabs.map(tab => deleteOrRemoveTab(operation, tab, log));
+
+  return Promise.all(promises).then(results => {
+    const successCount = results.filter(Boolean).length;
+    const errorCount = results.length - successCount;
+
+    console.log(`background.js | Batch ${log} completed: ${successCount} successful, ${errorCount} errors`);
+
+    if (successCount > 0) {
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.success_message,
+        payload: `${successCount} tab(s) ${log}d from Canvas${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+      });
+    }
+
+    if (errorCount > 0) {
+      sendRuntimeMessage({
+        type: RUNTIME_MESSAGES.error_message,
+        payload: `${errorCount} tab(s) failed to ${log}`
+      });
+    }
+
+    return results;
+  });
+}
+
+export function canvasRemoveTab(tab: ICanvasTab) {
+  return deleteOrRemoveTab("remove", tab, "remove");
+}
+
+export function canvasDeleteTab(tab: ICanvasTab) {
+  return deleteOrRemoveTab("delete", tab, "delete");
+}
+
+export function canvasRemoveTabs(tabs: ICanvasTab[]) {
+  return deleteOrRemoveTabs("remove", tabs, "remove");
+}
+
+export function canvasDeleteTabs(tabs: ICanvasTab[]) {
+  return deleteOrRemoveTabs("delete", tabs, "delete");
+}
+
+export function documentInsertTabArray(tabArray: ICanvasTab[], contextUrlArray: string[]): Promise<ICanvasInsertResponse> {
+  return new Promise(async (resolve, reject) => {
+    if (!tabArray || !tabArray.length) {
+      reject(new Error("background.js | Invalid tab array"));
+      return;
+    }
+
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const headers = await getAuthHeaders();
+      const contextId = await getContextId();
+      const featureArray = genFeatureArray("WRITE");
+
+      console.log(`SAVING FOR CONTEXT ${contextUrlArray.toString()}`, tabArray);
+
+      const requestBody = {
+        documents: tabArray.map((tab) => formatTabProperties(tab)),
+        contextUrlArray,
+        featureArray
+      };
+
+      const response = await fetch(`${baseUrl}/contexts/${contextId}/documents/batch`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to insert documents: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("background.js | Document tab array inserted successfully via REST: ", data);
+      resolve(data);
+    } catch (error) {
+      console.error("background.js | Error inserting document tab array via REST:", error);
       reject(error);
     }
   });
 }
 
 export function formatTabProperties(tab: ICanvasTab): IFormattedTabProperties {
-  if(!tab.docId) tab.docId = index.getCanvasDocumentIdByTabUrl(tab.url as string);
   return {
     schema: 'data/abstraction/tab',
     data: {
-      url: tab.url,
-      browser: getCurrentBrowser(),
-      ...tab, id: tab.docId || tab.id
-    },
+      ...tab,
+      browser: getCurrentBrowser()
+    }
   };
 }
 
 async function getUserInfo(): Promise<null | IUserInfo> {
-  try {
-    const result = await browser.storage.local.get(["CNVS_USER_INFO"]);
-    const userInfo = result.CNVS_USER_INFO || null;
-    return userInfo;
-  } catch (error) {
-    console.error("Error retrieving user info:", error);
-    return null;
-  }
+  // This should be implemented via REST API if needed
+  return null;
 }

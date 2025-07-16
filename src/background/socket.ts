@@ -1,29 +1,27 @@
-import config from '@/general/config';
-import io, { ManagerOptions, Socket, SocketOptions } from 'socket.io-client';
-import { canvasFetchContext, requestFetchTabsForContext } from './canvas';
-import index from './TabIndex';
-import { sendRuntimeMessage } from './utils';
-import { RUNTIME_MESSAGES, SOCKET_EVENTS } from '@/general/constants';
-import browser from 'webextension-polyfill';
+import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
+import config from "@/general/config";
+import index from "./TabIndex";
+import { sendRuntimeMessage, onContextTabsUpdated } from "./utils";
+import { RUNTIME_MESSAGES, SOCKET_EVENTS } from "@/general/constants";
+import { canvasFetchContext, requestFetchTabsForContext } from "./canvas";
+import { browser } from "@/general/utils";
 
 const extractUserEmail = (): string => {
   try {
-    if (config.transport.token && !config.transport.isApiToken) {
-      const tokenParts = config.transport.token.split('.');
-      if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
-        return payload.email || '';
-      }
+    const manifest = chrome.runtime.getManifest();
+    const oauth2 = manifest.oauth2;
+    if (oauth2 && oauth2.scopes && oauth2.scopes.includes('email')) {
+      // Return a placeholder or attempt to get actual user email if available
+      return 'user@canvas.local';
     }
-  } catch (e) {
-    console.warn('Failed to parse token for email:', e);
+  } catch (error) {
+    console.log('background.js | [socket.io] No user email available, using placeholder');
   }
-  return '';
+  return 'user@canvas.local';
 };
 
 const getContextId = (contextName: string = 'default') => {
-  const userEmail = extractUserEmail();
-  return userEmail ? `${userEmail}/${contextName}` : contextName;
+  return contextName;
 };
 
 const getSocketOptions = (): Partial<ManagerOptions & SocketOptions> => {
@@ -32,13 +30,13 @@ const getSocketOptions = (): Partial<ManagerOptions & SocketOptions> => {
     upgrade: false,
     secure: false,
     transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    timeout: 10000,
+    reconnection: false,
     auth: {
       token: config.transport.token,
       isApiToken: config.transport.isApiToken || false
+    },
+    query: {
+      userEmail: extractUserEmail()
     }
   };
 };
@@ -51,38 +49,40 @@ class MySocket {
 
   constructor() {
     this.socket = null;
-    this.initializeSocket(false);
   }
 
   connect() {
-    if (this.socket) {
-      this.socket.disconnect();
+    if (!this.socket) {
+      this.initializeSocket(false);
     }
-    this.socket = io(this.connectionUri(), getSocketOptions());
-    return this.socket;
   }
 
   connectionUri() {
-    return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}`;
+    return `${config.transport.protocol}://${config.transport.host}:${config.transport.port}/websocket`;
   }
 
   reconnect() {
     if (this.socket) {
       this.socket.disconnect();
+      this.socket = null;
     }
-    this.connect();
+    this.initializeSocket(false);
   }
 
   private startReconnectionTimer() {
-    this.clearReconnectionTimer();
-
     if (!this.shouldAutoReconnect) {
+      console.log('background.js | [socket.io] Auto-reconnect disabled, skipping reconnection timer');
       return;
+    }
+
+    if (this.reconnectionTimer) {
+      return; // Timer already active
     }
 
     console.log('background.js | [socket.io] Starting reconnection timer (5 seconds)');
     this.reconnectionTimer = setTimeout(() => {
-      console.log('background.js | [socket.io] Attempting automatic reconnection...');
+      console.log('background.js | [socket.io] Reconnection timer fired, attempting to reconnect');
+      this.clearReconnectionTimer();
       this.initializeSocket(true);
     }, 5000);
   }
@@ -91,6 +91,7 @@ class MySocket {
     if (this.reconnectionTimer) {
       clearTimeout(this.reconnectionTimer);
       this.reconnectionTimer = null;
+      console.log('background.js | [socket.io] Reconnection timer cleared');
     }
   }
 
@@ -113,9 +114,8 @@ class MySocket {
   }
 
   public forceReconnect() {
-    console.log('background.js | [socket.io] Force reconnection requested');
     this.clearReconnectionTimer();
-    this.initializeSocket(true);
+    this.reconnect();
   }
 
   public isAutoReconnectEnabled() {
@@ -127,9 +127,10 @@ class MySocket {
   }
 
   public setAutoReconnectForSetup(enabled: boolean) {
-    // Temporarily disable/enable auto-reconnect for setup testing
-    // This prevents connection error logging during setup
     this.shouldAutoReconnect = enabled;
+    if (!enabled) {
+      this.clearReconnectionTimer();
+    }
   }
 
   initializeSocket(reconn = true) {
@@ -141,7 +142,7 @@ class MySocket {
     this.clearReconnectionTimer();
 
     this.isInitializing = true;
-    console.log('background.js | [socket.io] Initializing socket connection');
+    console.log('background.js | [socket.io] Initializing WebSocket connection to /websocket');
 
     if (reconn) {
       this.reconnect();
@@ -157,7 +158,7 @@ class MySocket {
     }
 
     this.socket.on('connect', () => {
-      console.log('background.js | [socket.io] Browser Client connected to Canvas');
+      console.log('background.js | [socket.io] Browser Client connected to Canvas WebSocket');
       console.log('background.js | [socket.io] Using token:', config.transport.token);
 
       this.clearReconnectionTimer();
@@ -165,16 +166,16 @@ class MySocket {
       this.sendSocketEvent(SOCKET_EVENTS.connect);
       this.isInitializing = false;
 
-      // After successful connection, fetch the current context
+      // After successful connection, fetch the current context via REST API
       canvasFetchContext().then((ctx: IContext) => {
-        console.log('background.js | [socket.io] Received context: ', ctx);
+        console.log('background.js | [socket.io] Received context via REST: ', ctx);
         // Update storage - this will trigger the storage listener in index.ts
         browser.storage.local.set({
           CNVS_CONTEXT: ctx,
           CNVS_SELECTED_CONTEXT: ctx
         });
       }).catch(error => {
-        console.error('background.js | [socket.io] Error fetching context:', error);
+        console.error('background.js | [socket.io] Error fetching context via REST:', error);
         sendRuntimeMessage({
           type: RUNTIME_MESSAGES.error_message,
           payload: 'Error fetching context from Canvas'
@@ -220,7 +221,7 @@ class MySocket {
       this.sendSocketEvent(SOCKET_EVENTS.authenticated, data);
     });
 
-    // Context-related events - now update storage directly
+    // Context-related events - update storage directly
     this.socket.on('context:update', (ctx: { payload: IContext }) => {
       console.log('background.js | [socket.io] Received context update:', ctx);
       // Update storage - this will trigger the storage listener in index.ts
@@ -229,6 +230,7 @@ class MySocket {
         CNVS_SELECTED_CONTEXT: ctx.payload
       });
     });
+
     this.socket.on('context:url:set', (payload) => {
       console.log('background.js | [socket.io] Received context:url:set event:', payload);
       // Fetch current context and update its URL
@@ -244,6 +246,7 @@ class MySocket {
       });
     });
 
+    // Context list updates
     const contextListResult = (payload: IContext[]) => {
       console.log('background.js | [socket.io] Received context list:', payload);
       browser.storage.local.set({ contexts: payload });
@@ -252,45 +255,23 @@ class MySocket {
     this.socket.on('context:list', contextListResult);
     this.socket.on('context:list:result', contextListResult);
 
-    // Document event listeners
+    // Workspace and Context Document Events
+    this.socket.on('workspace:document:inserted', this.handleDocumentInsert.bind(this));
+    this.socket.on('workspace:document:updated', this.handleDocumentUpdate.bind(this));
+    this.socket.on('workspace:document:removed', this.handleDocumentRemove.bind(this));
+    this.socket.on('workspace:document:deleted', this.handleDocumentDelete.bind(this));
+
+    this.socket.on('context:document:inserted', this.handleDocumentInsert.bind(this));
+    this.socket.on('context:document:updated', this.handleDocumentUpdate.bind(this));
+    this.socket.on('context:document:removed', this.handleDocumentRemove.bind(this));
+    this.socket.on('context:document:deleted', this.handleDocumentDelete.bind(this));
+
+    // Legacy document events (for backwards compatibility)
     this.socket.on('document:insert', this.handleDocumentInsert.bind(this));
     this.socket.on('document:update', this.handleDocumentUpdate.bind(this));
     this.socket.on('document:remove', this.handleDocumentRemove.bind(this));
     this.socket.on('document:delete', this.handleDocumentDelete.bind(this));
     this.socket.on('documents:delete', this.handleDocumentsDelete.bind(this));
-
-    // Add after the existing event listeners (around line 150+)
-
-    // Document event listeners
-    this.socket.on('document:insert', (payload: any) => {
-      console.log('�� Browser Extension: Received document:insert event!', payload);
-
-      // Handle auto-open functionality if enabled
-      this.handleDocumentInsert(payload);
-    });
-
-    this.socket.on('context:workspace:document:inserted', (payload: any) => {
-      console.log('🔌 Browser Extension: Received context:workspace:document:inserted event!', payload);
-
-      // This is the more specific event from the context about workspace changes
-      this.handleDocumentInsert(payload);
-    });
-
-    this.socket.on('workspace:document:inserted', (payload: any) => {
-      console.log('🔌 Browser Extension: Received workspace:document:inserted event!', payload);
-
-      // Direct workspace event
-      this.handleDocumentInsert(payload);
-    });
-
-    // Generic context update handler
-    this.socket.on('context:updated', (payload: any) => {
-      console.log('🔌 Browser Extension: Received context:updated event!', payload);
-
-      if (payload.operation === 'document:inserted') {
-        this.handleDocumentInsert(payload);
-      }
-    });
   }
 
   private async handleDocumentInsert(payload: any) {
@@ -325,132 +306,18 @@ class MySocket {
 
     console.log(`background.js | Document insert event matches current context: ${normalizedCurrentContextId}`);
 
-    // Extract documents from payload
-    const documents = payload.documents || (payload.document ? [payload.document] : []);
-    const documentIds = payload.documentIds || (payload.documentId ? [payload.documentId] : []);
-
-    // Handle tab documents specifically
-    const tabDocuments = documents.filter((doc: any) =>
-      doc && doc.schema === "data/abstraction/tab" && doc.data
-    );
-
-    if (tabDocuments.length > 0) {
-      console.log(`background.js | [socket.io] Found ${tabDocuments.length} tab document(s) in insert event`);
-
-      // Process each tab document
-      tabDocuments.forEach((doc: any, docIndex: number) => {
-        const docId = documentIds[docIndex] || doc.id;
-
-        // Create a canvas tab object with the document ID
-        const canvasTab: ICanvasTab = {
-          ...doc.data,
-          docId: docId,
-          url: doc.data.url,
-          title: doc.data.title || doc.data.url
-        };
-
-        console.log(`background.js | [socket.io] Adding tab to canvas tabs index:`, canvasTab);
-
-        // Add to canvas tabs index (silent to avoid duplicate UI updates)
-        index.insertCanvasTabSilent(canvasTab);
-      });
-
-      // Update local tabs data to stay in sync
-      console.log('background.js | [socket.io] Updating local canvas tabs data due to tab document insert');
-      updateLocalCanvasTabsData();
-
-      // Force immediate UI update
-      await index.updateBrowserTabs();
-
-      // Notify UI of the change
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.success_message,
-        payload: `${tabDocuments.length} tab(s) synced to canvas from context`
-      });
-
-      // Check if we should auto-open these tabs
-      await config.load(); // Ensure config is loaded
-      if (config.sync.autoOpenCanvasTabs) {
-        console.log(`background.js | [socket.io] Auto-opening ${tabDocuments.length} tab(s) due to autoOpenCanvasTabs setting`);
-
-        // Import and use existing utilities
-        const { getPinnedTabs } = await import('@/general/utils');
-        const { browserOpenTabArray } = await import('./utils');
-
-        const pinnedTabs = await getPinnedTabs();
-        const tabsToOpen = tabDocuments
-          .filter((doc: any) => doc.data && doc.data.url)
-          .map((doc: any) => ({ url: doc.data.url }))
-          .filter((tab: any) => !pinnedTabs.some((u: string) => u === tab.url));
-
-        if (tabsToOpen.length > 0) {
-          console.log(`background.js | [socket.io] Opening ${tabsToOpen.length} new tabs:`, tabsToOpen);
-          await browserOpenTabArray(tabsToOpen);
-
-          sendRuntimeMessage({
-            type: RUNTIME_MESSAGES.success_message,
-            payload: `Opened ${tabsToOpen.length} new tab(s) from context`
-          });
-        } else {
-          console.log('background.js | [socket.io] All tabs are already pinned, skipping auto-open');
-        }
-      }
-
-      return; // Exit early since we handled the tab-specific logic
-    }
-
-    // Handle regular document inserts (non-tab documents)
-    const urlDocuments = documents.filter((doc: any) => {
-      if (!doc || !doc.url) return false;
-      try {
-        new URL(doc.url);
-        return true;
-      } catch {
-        return false;
-      }
-    });
-
-    if (urlDocuments.length > 0) {
-      console.log(`background.js | [socket.io] Found ${urlDocuments.length} URL document(s) in insert event`);
-
-      await config.load(); // Ensure config is loaded
-      if (config.sync.autoOpenCanvasTabs) {
-        console.log(`background.js | Opening ${urlDocuments.length} new tabs for inserted URL documents`);
-
-        // Import and use existing utilities
-        const { getPinnedTabs } = await import('@/general/utils');
-        const { browserOpenTabArray } = await import('./utils');
-
-        const pinnedTabs = await getPinnedTabs();
-        const urlsToOpen = urlDocuments
-          .map((doc: any) => doc.url)
-          .filter((url: string) => !pinnedTabs.some((u: string) => u === url));
-
-        if (urlsToOpen.length > 0) {
-          await browserOpenTabArray(urlsToOpen.map((url: string) => ({ url })));
-
-          sendRuntimeMessage({
-            type: RUNTIME_MESSAGES.success_message,
-            payload: `Opened ${urlsToOpen.length} new tab(s) for URL documents`
-          });
-        }
-      }
-    }
-
-    // Update local tabs data to stay in sync (for any document inserts)
-    console.log('background.js | [socket.io] Updating local canvas tabs data due to document insert');
+    // Fetch updated documents from REST API instead of using socket data
+    console.log('background.js | [socket.io] Fetching updated tabs data via REST API due to document insert');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
     await index.updateBrowserTabs();
 
-    // Notify UI of the change (if not already notified above)
-    if (tabDocuments.length === 0 && urlDocuments.length === 0) {
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.success_message,
-        payload: `${documents.length} document(s) added to context`
-      });
-    }
+    // Notify UI of the change
+    sendRuntimeMessage({
+      type: RUNTIME_MESSAGES.success_message,
+      payload: 'Document(s) added to context'
+    });
   }
 
   private async handleDocumentUpdate(payload: any) {
@@ -476,8 +343,8 @@ class MySocket {
       return;
     }
 
-    // Update local tabs data to stay in sync
-    console.log('background.js | [socket.io] Updating local canvas tabs data due to document update');
+    // Fetch updated documents from REST API
+    console.log('background.js | [socket.io] Fetching updated tabs data via REST API due to document update');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
@@ -486,7 +353,7 @@ class MySocket {
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) updated in context`
+      payload: 'Document(s) updated in context'
     });
   }
 
@@ -513,16 +380,8 @@ class MySocket {
       return;
     }
 
-    // For document removal, we might want to close corresponding tabs based on config
-    await config.load(); // Ensure config is loaded
-    if (config.sync.tabBehaviorOnContextChange === "Close Current and Open New" || config.sync.tabBehaviorOnContextChange === "Save and Close Current and Open New") {
-      // For now, we'll just update the tabs data and let the existing sync logic handle it
-      // TODO: Implement sophisticated document-to-tab matching if needed
-      console.log('background.js | Document removed, updating local tabs data');
-    }
-
-    // Update local tabs data to stay in sync
-    console.log('background.js | [socket.io] Updating local canvas tabs data due to document remove');
+    // Fetch updated documents from REST API
+    console.log('background.js | [socket.io] Fetching updated tabs data via REST API due to document remove');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
@@ -531,7 +390,7 @@ class MySocket {
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) removed from context`
+      payload: 'Document(s) removed from context'
     });
   }
 
@@ -558,8 +417,8 @@ class MySocket {
       return;
     }
 
-    // Update local tabs data to stay in sync
-    console.log('background.js | [socket.io] Updating local canvas tabs data due to document delete');
+    // Fetch updated documents from REST API
+    console.log('background.js | [socket.io] Fetching updated tabs data via REST API due to document delete');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
@@ -568,7 +427,7 @@ class MySocket {
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.documentIds?.length || payload.documentId ? 1 : 0} document(s) permanently deleted`
+      payload: 'Document(s) permanently deleted'
     });
   }
 
@@ -596,8 +455,8 @@ class MySocket {
       return;
     }
 
-    // Update local tabs data to stay in sync
-    console.log('background.js | [socket.io] Updating local canvas tabs data due to documents delete');
+    // Fetch updated documents from REST API
+    console.log('background.js | [socket.io] Fetching updated tabs data via REST API due to documents delete');
     updateLocalCanvasTabsData();
 
     // Force immediate UI update
@@ -606,7 +465,7 @@ class MySocket {
     // Notify UI of the change
     sendRuntimeMessage({
       type: RUNTIME_MESSAGES.success_message,
-      payload: `${payload.count || payload.documentIds?.length || 0} documents permanently deleted`
+      payload: `Multiple documents permanently deleted`
     });
   }
 
@@ -615,94 +474,32 @@ class MySocket {
   }
 
   emit(endpoint: string, ...args: any[]) {
-    if (!this.socket || !this.socket.connected) {
-      console.error('background.js | [socket.io] Cannot emit event, socket not connected');
-      return Promise.reject(new Error('Socket not connected'));
-    }
     return new Promise((resolve, reject) => {
-      this.socket!.emit(endpoint, ...args, (response: any) => {
-        if (response && response.status === 'error') {
-          reject(new Error(response.message || 'Socket operation failed'));
-        } else {
-          resolve(response);
-        }
+      if (!this.socket || !this.socket.connected) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+
+      this.socket.emit(endpoint, ...args, (response: any) => {
+        resolve(response);
       });
     });
   }
 
   on(event: string, callback: (res: any) => void) {
-    this.socket!.on(event, callback);
+    this.socket?.on(event, callback);
   }
 
   removeAllListeners(event: string) {
-    this.socket!.removeAllListeners(event);
+    this.socket?.removeAllListeners(event);
   }
 
   isConnected() {
-    return this.socket !== null && this.socket.connected;
+    return this.socket?.connected || false;
   }
 
-  requestContextList(): Promise<IContext[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket || !this.socket.connected) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('context:list', (response: any) => {
-        console.log('background.js | [socket.io] Received context:list response:', response);
-
-        if (response && response.status === 'success') {
-          resolve(response.payload);
-        } else {
-          reject(new Error(response?.message || 'Failed to fetch contexts'));
-        }
-      });
-    });
-  }
-
-  requestContextDocuments(contextId: string, featureArray: string[] = [], filterArray: any[] = [], options: any = {}): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket || !this.socket.connected) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('context:documents:list', {
-        contextId,
-        featureArray,
-        filterArray,
-        options
-      }, (response: any) => {
-        console.log('background.js | [socket.io] Received context:documents:list response:', response);
-
-        if (response && response.status === 'success') {
-          resolve(response.payload);
-        } else {
-          reject(new Error(response?.message || 'Failed to fetch documents'));
-        }
-      });
-    });
-  }
-
-  requestContextGet(contextId: string): Promise<IContext> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket || !this.socket.connected) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-
-      this.socket.emit('context:get', contextId, (response: any) => {
-        console.log('background.js | [socket.io] Received context:get response:', response);
-
-        if (response && response.status === 'success') {
-          resolve(response.payload.context);
-        } else {
-          reject(new Error(response?.message || 'Failed to fetch context'));
-        }
-      });
-    });
-  }
+  // Note: Removed requestContextList, requestContextDocuments, requestContextGet
+  // These should now use REST API calls from canvas.ts
 }
 
 let socket: MySocket;
@@ -721,142 +518,65 @@ export const getSocket = async () => {
   }
   socket = new MySocket();
   return socket;
-}
+};
 
 export const updateLocalCanvasTabsData = () => {
-  console.log('background.js | Fetching latest canvas tabs from server...');
-  requestFetchTabsForContext().then((tabs: chrome.tabs.Tab[]) => {
-    if (!tabs) {
-      sendRuntimeMessage({ type: RUNTIME_MESSAGES.error_message, payload: 'Error fetching tabs from Canvas'});
-      return console.log('ERROR: background.js | Error fetching tabs from Canvas');
-    }
-    console.log(`background.js | Received ${tabs.length} canvas tabs from server`);
-    // Get current tabs before updating to calculate the difference
-    const currentTabs = index.getCanvasTabArray();
-    // Use silent method to avoid duplicate UI updates
+  // Use REST API to fetch current tabs for context
+  requestFetchTabsForContext().then(tabs => {
+    console.log(`background.js | [socket.io] Updated local canvas tabs data: ${tabs.length} tabs`);
+
+    // Use silent method first to update storage
     index.insertCanvasTabArraySilent(tabs, true);
 
-    // Notify UI about the changes
-    const { onContextTabsUpdated } = require('./utils');
-    if (tabs.length === 0 && currentTabs.length > 0) {
-      // All tabs were removed
-      onContextTabsUpdated({
-        canvasTabs: { removedTabs: currentTabs }
-      });
-    } else if (tabs.length > 0) {
-      // Tabs were added/updated - for simplicity, we'll just set all tabs
-      // A more sophisticated approach would calculate insertedTabs and removedTabs
-      onContextTabsUpdated({
-        canvasTabs: { insertedTabs: tabs }
-      });
-    }
-  }).then(() => {
+    // Then update browser tabs to recalculate sync status and notify UI
     index.updateBrowserTabs();
-  }).catch((error) => {
-    console.error('background.js | Error updating local canvas tabs data:', error);
+  }).catch(error => {
+    console.error('background.js | [socket.io] Error updating local canvas tabs data:', error);
   });
-}
+};
 
+// REST API wrapper functions (these now use canvas.ts REST API functions)
 export const fetchContextList = async (): Promise<IContext[]> => {
-  const socket = await getSocket();
-  return socket.requestContextList();
-}
+  const { canvasFetchContextList } = await import('./canvas');
+  return canvasFetchContextList();
+};
 
 export const fetchContextDocuments = async (contextId: string, featureArray: string[] = [], filterArray: any[] = [], options: any = {}): Promise<any> => {
-  const socket = await getSocket();
-  return socket.requestContextDocuments(contextId, featureArray, filterArray, options);
-}
+  const { canvasFetchContextDocuments } = await import('./canvas');
+  return canvasFetchContextDocuments(contextId, featureArray, filterArray, options);
+};
 
 export const fetchContext = async (contextId: string): Promise<IContext> => {
-  const socket = await getSocket();
-  return socket.requestContextGet(contextId);
-}
+  const { canvasFetchContext } = await import('./canvas');
+  return canvasFetchContext();
+};
 
 export const enableAutoReconnect = async () => {
   const socket = await getSocket();
   socket.enableAutoReconnect();
-}
+};
 
 export const disableAutoReconnect = async () => {
   const socket = await getSocket();
   socket.disableAutoReconnect();
-}
+};
 
 export const forceReconnect = async () => {
   const socket = await getSocket();
   socket.forceReconnect();
-}
+};
 
 export const isAutoReconnectEnabled = async (): Promise<boolean> => {
   const socket = await getSocket();
   return socket.isAutoReconnectEnabled();
-}
+};
 
 export const isReconnectionTimerActive = async (): Promise<boolean> => {
   const socket = await getSocket();
   return socket.isReconnectionTimerActive();
-}
+};
 
 export const setAutoReconnectForSetup = async (enabled: boolean) => {
   const socket = await getSocket();
   socket.setAutoReconnectForSetup(enabled);
-}
-
-// Handle context switching - now simplified to just update server and storage
-browser.runtime.onMessage.addListener((message: { action: string; value: string }, sender, sendResponse) => {
-  if (message.action === RUNTIME_MESSAGES.context_set_url) {
-    const contextId = getContextId(message.value);
-    console.log(`background.js | [socket.io] Switching to context: ${contextId}`);
-
-    if (socket && socket.isConnected()) {
-      return new Promise((resolve) => {
-        socket.emit('context:set', contextId, (response: any) => {
-          if (response && response.status === 'success') {
-            console.log('background.js | [socket.io] Context set successfully on server');
-
-            // Update the context in the config
-            config.set('transport', {
-              ...config.transport,
-              pinToContext: message.value
-            });
-
-            // Fetch the new context and update storage - storage listener will handle the rest
-            canvasFetchContext().then((ctx: IContext) => {
-              console.log('background.js | [socket.io] Fetched new context: ', ctx);
-              // Update storage - this will trigger the storage listener in index.ts
-              browser.storage.local.set({
-                CNVS_CONTEXT: ctx,
-                CNVS_SELECTED_CONTEXT: ctx
-              });
-              resolve({ status: 'success' });
-            }).catch(error => {
-              console.error('background.js | [socket.io] Error fetching new context:', error);
-              sendRuntimeMessage({
-                type: RUNTIME_MESSAGES.error_message,
-                payload: 'Error fetching new context data'
-              });
-              resolve({ status: 'error', message: error.message });
-            });
-          } else {
-            console.error('background.js | [socket.io] Failed to set context on server:', response);
-            sendRuntimeMessage({
-              type: RUNTIME_MESSAGES.error_message,
-              payload: response?.message || 'Failed to switch context on server'
-            });
-            resolve({ status: 'error', message: response?.message || 'Failed to switch context' });
-          }
-        });
-      });
-    } else {
-      console.error('background.js | [socket.io] Cannot switch context: socket not connected');
-      sendRuntimeMessage({
-        type: RUNTIME_MESSAGES.error_message,
-        payload: 'Cannot switch context: not connected to server'
-      });
-      return Promise.resolve({ status: 'error', message: 'Socket not connected' });
-    }
-  }
-  return Promise.resolve();
-});
-
-export default MySocket;
+};
