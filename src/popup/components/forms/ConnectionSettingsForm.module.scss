@@ -73,6 +73,51 @@
       margin-top: 4px;
     }
 
+    // Primary button styles
+    .btn {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      background: #111827;
+      color: white;
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      &:not(:disabled):hover {
+        background: #374151;
+      }
+    }
+
+    // Secondary button styles
+    .btnSecondary {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid #d1d5db;
+      background: #f9fafb;
+      color: #374151;
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      &:not(:disabled):hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+      }
+    }
+
     // Buttons container
     &:last-child {
       display: flex;

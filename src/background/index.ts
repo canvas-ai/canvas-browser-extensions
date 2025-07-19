@@ -440,6 +440,24 @@ browser.storage.onChanged.addListener((changes, areaName) => {
           return Promise.resolve({ status: 'error', message: error?.message || 'Failed to check auto reconnect status' });
         }
 
+      case RUNTIME_MESSAGES.socket_disconnect:
+        try {
+          console.log('background.js | Manual disconnect requested');
+          await setAutoReconnectForSetup(false); // Disable auto-reconnect
+
+          const currentSocket = await getSocket();
+          if (currentSocket && currentSocket.isConnected()) {
+            currentSocket.destroy();
+            console.log('background.js | Socket disconnected successfully');
+          }
+
+          sendRuntimeMessage({ type: RUNTIME_MESSAGES.socket_status, payload: false });
+          return Promise.resolve({ status: 'success', message: 'Disconnected successfully' });
+        } catch (error: any) {
+          console.error('background.js | Error disconnecting socket:', error);
+          return Promise.resolve({ status: 'error', message: error?.message || 'Failed to disconnect' });
+        }
+
       // Config
       case RUNTIME_MESSAGES.config_get:
         sendRuntimeMessage({ type: RUNTIME_MESSAGES.config_get, payload: config });

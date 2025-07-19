@@ -1,7 +1,5 @@
 import React from 'react';
-import ConnectionSettingsForm from '../forms/ConnectionSettingsForm';
-import SyncSettingsForm from '../forms/SyncSettingsForm';
-import BrowserIdentitySettingsForm from '../forms/BrowserIdentitySettingsForm';
+import AuthenticationSettingsForm from '../forms/AuthenticationSettingsForm';
 
 const Settings: React.FC<any> = ({ }) => {
   return (
@@ -9,23 +7,9 @@ const Settings: React.FC<any> = ({ }) => {
       <h5>Settings</h5>
       <hr />
       <div className="settings-box">
-        <h6>Browser Identity Settings</h6>
+        <h6>Canvas Connection & Authentication</h6>
         <div>
-          <BrowserIdentitySettingsForm />
-        </div>
-      </div>
-      <hr />
-      <div className="settings-box">
-        <h6>Context Sync Settings</h6>
-        <div>
-          <SyncSettingsForm />
-        </div>
-      </div>
-      <hr />
-      <div className="settings-box">
-        <h6>Connection Settings</h6>
-        <div>
-          <ConnectionSettingsForm />
+          <AuthenticationSettingsForm />
         </div>
       </div>
     </div>

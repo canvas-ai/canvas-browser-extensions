@@ -4,6 +4,7 @@ export const RUNTIME_MESSAGES = {
   socket_test: "socket:test",
   socket_test_success: "socket:test:success",
   socket_test_error: "socket:test:error",
+  socket_disconnect: "socket:disconnect",
   socket_enable_auto_reconnect: "socket:enable_auto_reconnect",
   socket_disable_auto_reconnect: "socket:disable_auto_reconnect",
   socket_force_reconnect: "socket:force_reconnect",
