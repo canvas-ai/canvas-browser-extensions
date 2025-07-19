@@ -1,0 +1,9 @@
+# Icon assets directory
+#
+# Current logo: logo-br_64x64.png (64x64 Canvas logo)
+# This logo is used for all icon sizes in the extension manifests
+#
+# The 64x64 size works well for:
+# - Browser toolbar (16px, 32px)
+# - Extension management (48px)
+# - Chrome Web Store (128px)

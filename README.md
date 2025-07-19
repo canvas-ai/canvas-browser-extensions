@@ -1,32 +1,236 @@
-# canvas-ui-browser
+# Canvas Browser Extension v2.0
 
-Canvas UI browser extension(beta)
+A browser extension for seamlessly syncing browser tabs with Canvas server contexts.
 
-## Installation Chrome
+## Features
 
-- git clone https://github.com/idncsk/canvas-ui-browser.git
-- cd canvas-ui-browser
-- yarn install
-- yarn build #(or yarn dev)
-- Open Chrome > Extensions > Manage Extensions
-- Tick "Developer mode"
-- Click on "Load unpacked"
-- Select canvas-ui-browser/chromium
-- Ensure extension is pinned on your toolbar
+- **Real-time synchronization** between browser tabs and Canvas server contexts
+- **Configurable sync behaviors** (auto-sync new tabs, auto-open context tabs, etc.)
+- **Context binding** for organizing tabs by project/workspace
+- **Cross-browser support** (Chromium-based browsers & Firefox)
+- **WebSocket integration** for live updates
+- **Secure API token authentication**
 
-## Installation Firefox
+## Installation
 
-- git clone https://github.com/idncsk/canvas-ui-browser.git
-- cd canvas-ui-browser
-- yarn install
-- yarn build #(or yarn dev)
-- Open Firefox > about:debugging#/runtime/this-firefox
-- Load Temporary Add-on
-- Select canvas-ui-browser/firefox
-- Ensure extension is pinned on your toolbar
+### Development Installation
 
-## Screenshots
+1. **Install dependencies** (from browser extension directory):
+   ```bash
+   cd src/ui/browser-extension
+   npm install
+   ```
 
-![Screenshot #1](doc/screenshot1.png "Screenshot 1")
+2. **Build the extension**:
+   ```bash
+   # Development build (unminified, with console logs)
+   npm run dev
+   
+   # Production build (minified, optimized)
+   npm run build
+   ```
 
-![Screenshot #2](doc/screenshot2.png "Screenshot 2")
+3. **Load in browser**:
+
+   **Chromium browsers (Chrome, Edge, Brave, etc.):**
+   - Open `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `packages/chromium/` directory
+
+   **Firefox:**
+   - Open `about:debugging`
+   - Click "This Firefox"
+   - Click "Load Temporary Add-on"
+   - Select the `packages/firefox/manifest.json` file
+
+4. **Extension logo**: 
+   - The extension uses `assets/icons/logo-br_64x64.png` as the main logo
+   - This 64x64 Canvas logo works for all icon sizes in the browser
+
+### Production Installation
+
+*Coming soon: Extension will be published to browser stores*
+
+## Setup
+
+1. **Install and run Canvas server** (see main project README)
+
+2. **Generate API token**:
+   - Open Canvas web interface (usually http://127.0.0.1:8001)
+   - Go to Settings > API Tokens
+   - Create new token with appropriate permissions
+
+3. **Configure extension**:
+   - Click extension icon in browser toolbar
+   - Click Settings button (opens new tab)
+   - Enter server URL and API token
+   - Test connection and bind to a context
+
+## Usage
+
+### Basic Workflow
+
+1. **Connect to Canvas server** via extension settings
+2. **Bind to a context** (or create new one)
+3. **Sync tabs** using the popup interface:
+   - **Browser → Canvas**: Sync browser tabs to Canvas context
+   - **Canvas → Browser**: Open Canvas context tabs in browser
+
+### Popup Interface
+
+- **Connection status**: Green/red indicator showing server connection
+- **Search**: Find tabs by title or URL
+- **Browser → Canvas**: List of unsynced browser tabs
+- **Canvas → Browser**: List of context tabs not open in browser
+- **Bulk operations**: Select multiple tabs for batch actions
+
+### Sync Behaviors
+
+Configure in Settings page:
+
+- **Auto-sync new tabs**: Automatically save new browser tabs to Canvas
+- **Auto-open context tabs**: Automatically open new context tabs in browser
+- **Auto-close removed tabs**: Close browser tabs when removed from context
+- **Browser-specific sync**: Only sync tabs from this browser instance
+- **Context change behavior**: What to do when switching contexts
+
+## Architecture
+
+```
+src/ui/browser-extension/
+├── manifest-*.json          # Browser-specific manifests (source)
+├── package.json             # Build dependencies and scripts
+├── build.mjs                # Build script for packaging
+├── src/
+│   ├── background/          # Service worker and modules
+│   │   ├── service-worker.js
+│   │   └── modules/         # Core functionality modules
+│   ├── popup/               # Extension popup UI
+│   └── settings/            # Settings page UI
+├── assets/                  # Icons and static files
+├── build/                   # Intermediate build files (esbuild output)
+└── packages/                # Final browser packages
+    ├── chromium/            # Chrome/Edge ready package
+    ├── firefox/             # Firefox ready package
+    ├── canvas-extension-chromium.zip
+    └── canvas-extension-firefox.zip
+```
+
+### Key Components
+
+- **Service Worker**: Background script handling API calls and tab events
+- **Storage Manager**: Chrome storage abstraction for settings
+- **API Client**: Canvas server REST API communication
+- **WebSocket Client**: Real-time updates from Canvas server
+- **Tab Manager**: Browser tab operations and document conversion
+- **Sync Engine**: Coordination between browser and Canvas
+
+## Architecture Diagram 
+
+graph TB
+    subgraph "Browser Extension"
+        UI["Popup UI<br/>📱 Tabbed Interface"]
+        SW["Service Worker<br/>⚙️ Background Process"]
+        TM["Tab Manager<br/>📑 Browser Tabs"]
+        SE["Sync Engine<br/>🔄 Core Logic"]
+        WS["WebSocket Client<br/>🌐 Real-time Conn"]
+        API["API Client<br/>📡 REST Calls"]
+        BS["Browser Storage<br/>💾 Settings & State"]
+    end
+    
+    subgraph "Canvas Server"
+        WSS["WebSocket Server<br/>📨 socket.io"]
+        REST["REST API<br/>📋 /rest/v2"]
+        CM["Context Manager<br/>📂 Manages Contexts"]
+        DB["Database<br/>🗄️ LMDB + Bitmaps"]
+    end
+    
+    subgraph "Browser"
+        TABS["Browser Tabs<br/>🌐 Actual Tabs"]
+    end
+    
+    UI -->|"Tab Actions<br/>(sync, open, close)"| SW
+    SW --> SE
+    SE --> TM
+    SE --> WS
+    SE --> API
+    SE --> BS
+    
+    TM <-->|"Create/Close/Track"| TABS
+    WS <-->|"Real-time Events<br/>document.inserted<br/>document.removed"| WSS
+    API <-->|"HTTP Requests<br/>GET/POST/DELETE"| REST
+    
+    WSS --> CM
+    REST --> CM
+    CM --> DB
+    
+    style SE fill:#e1f5fe
+    style WS fill:#f3e5f5
+    style CM fill:#fff3e0
+
+## Development
+
+### File Structure
+
+The extension follows a modular architecture:
+
+- **Background modules** handle core functionality
+- **UI components** are separate HTML/CSS/JS files
+- **Manifest files** support both Chromium and Firefox
+
+### Adding Features
+
+1. **Background functionality**: Add to appropriate module in `src/background/modules/`
+2. **UI features**: Update popup or settings HTML/CSS/JS
+3. **API endpoints**: Extend the API client module
+4. **Storage**: Use the storage manager for persistent data
+
+### Testing
+
+*Testing framework coming soon*
+
+## Browser Compatibility
+
+- **Chrome**: v88+
+- **Edge**: v88+
+- **Firefox**: v109+
+- **Brave**: v1.20+
+- **Opera**: v74+
+
+## Security
+
+- API tokens stored securely via browser storage
+- Strict Content Security Policy
+- Input validation and sanitization
+- HTTPS-only communication in production
+
+## Troubleshooting
+
+### Connection Issues
+
+1. Verify Canvas server is running
+2. Check server URL and API token
+3. Ensure no firewall blocking connections
+4. Try refreshing API token
+
+### Sync Problems
+
+1. Check browser console for errors
+2. Verify context is properly bound
+3. Restart extension (disable/enable)
+4. Clear extension storage and reconfigure
+
+### Performance
+
+- Extension optimized for minimal resource usage
+- WebSocket connections auto-retry with backoff
+- Efficient tab tracking and updates
+
+## Contributing
+
+See main project CONTRIBUTING.md for guidelines.
+
+## License
+
+See main project LICENSE file. 

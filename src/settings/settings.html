@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Extension Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-content">
+        <img src="../../assets/icons/logo-br_64x64.png" alt="Canvas" class="logo">
+        <div>
+          <h1>Canvas Extension Settings</h1>
+          <p class="subtitle">Configure your connection to Canvas server</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Connection Settings -->
+      <section class="settings-section">
+        <h2>Connection Settings</h2>
+
+        <div class="form-group">
+          <label for="browserIdentity">Browser Identity</label>
+          <input type="text" id="browserIdentity" placeholder="e.g., firefox@work, chrome@ws1"
+                 class="input-field" required>
+          <small class="help-text">Unique identifier for this browser instance</small>
+        </div>
+
+        <div class="form-group">
+          <label for="serverUrl">Canvas Server URL</label>
+          <input type="url" id="serverUrl" value="http://127.0.0.1:8001"
+                 class="input-field" required>
+          <small class="help-text">URL of your Canvas server instance</small>
+        </div>
+
+        <div class="form-group">
+          <label for="apiBasePath">REST API Base Path</label>
+          <input type="text" id="apiBasePath" value="/rest/v2"
+                 class="input-field" required>
+          <small class="help-text">API base path (usually /rest/v2)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="apiToken">API Token</label>
+          <input type="password" id="apiToken" placeholder="canvas-..."
+                 class="input-field" required>
+          <small class="help-text">Generate this token from the Canvas web interface</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="testConnectionBtn" class="btn secondary">Test Connection</button>
+          <button type="button" id="connectBtn" class="btn primary">Connect</button>
+          <button type="button" id="disconnectBtn" class="btn danger" style="display: none;">Disconnect</button>
+        </div>
+
+        <div class="connection-status" id="connectionStatus">
+          <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-text" id="statusText">Not connected</span>
+          </div>
+          <div class="status-details" id="statusDetails"></div>
+        </div>
+      </section>
+
+      <!-- Context Settings -->
+      <section class="settings-section" id="contextSection" style="display: none;">
+        <h2>Context Binding</h2>
+
+        <div class="form-group">
+          <label for="contextSelect">Select Context</label>
+          <select id="contextSelect" class="input-field">
+            <option value="">Loading contexts...</option>
+          </select>
+          <small class="help-text">Choose the context to sync tabs with</small>
+        </div>
+
+        <div class="form-group">
+          <label for="newContextUrl">Or Create New Context</label>
+          <input type="text" id="newContextUrl" placeholder="e.g., /work/project-alpha"
+                 class="input-field">
+          <small class="help-text">Create a new context with this URL path</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="createContextBtn" class="btn secondary">Create Context</button>
+          <button type="button" id="bindContextBtn" class="btn primary">Bind to Selected Context</button>
+        </div>
+
+        <div class="current-context" id="currentContext" style="display: none;">
+          <h3>
+            <span class="status-dot connected" id="contextStatusDot"></span>
+            Current Context
+          </h3>
+          <div class="context-info">
+            <div class="context-id" id="boundContextId">-</div>
+            <div class="context-url" id="boundContextUrl">-</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sync Settings -->
+      <section class="settings-section">
+        <h2>Sync Settings</h2>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoSyncNewTabs">
+            Auto-sync newly opened tabs
+          </label>
+          <small class="help-text">Automatically save valid tabs to Canvas when opened</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoOpenNewTabs">
+            Auto-open newly added context tabs
+          </label>
+          <small class="help-text">Automatically open tabs when added to the context</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoCloseRemovedTabs">
+            Auto-close removed tabs
+          </label>
+          <small class="help-text">Automatically close tabs when removed from context</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="syncOnlyThisBrowser">
+            Sync only tabs for this browser instance
+          </label>
+          <small class="help-text">Filter tabs to only those from this browser identity</small>
+        </div>
+
+        <div class="form-group">
+          <label for="contextChangeBehavior">On Context Change</label>
+          <select id="contextChangeBehavior" class="input-field">
+            <option value="close-open-new">Close current and open new</option>
+            <option value="save-close-open-new">Save & close current, open new</option>
+            <option value="keep-open-new">Keep current, open new</option>
+            <option value="keep-only">Keep current, don't open new</option>
+          </select>
+          <small class="help-text">What to do with tabs when switching contexts</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="saveSettingsBtn" class="btn primary">Save Settings</button>
+          <button type="button" id="saveAndCloseBtn" class="btn primary">Save Settings and Close</button>
+          <button type="button" id="resetSettingsBtn" class="btn secondary">Reset to Defaults</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Status Messages -->
+    <div class="toast" id="toast" style="display: none;"></div>
+  </div>
+
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

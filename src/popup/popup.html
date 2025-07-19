@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Extension</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../../assets/icons/logo-br_64x64.png" alt="Canvas" class="logo">
+      <div class="connection-info">
+        <div class="connection-status">
+          <span class="status-dot" id="connectionStatus"></span>
+          <span class="status-text" id="connectionText">Disconnected</span>
+        </div>
+        <div class="context-info" id="contextInfo">
+          <span class="context-id" id="contextId">-</span>
+          <span class="context-url" id="contextUrl">No context</span>
+        </div>
+      </div>
+    </div>
+    <button class="settings-btn" id="settingsBtn" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Global Search -->
+  <div class="search-section">
+    <input type="text" id="searchInput" placeholder="Search tabs..." class="search-input">
+  </div>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="browser-to-canvas" id="browserToCanvasTab">
+      Browser → Canvas
+    </button>
+    <button class="tab-btn" data-tab="canvas-to-browser" id="canvasToBrowserTab">
+      Canvas → Browser
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Browser to Canvas Tab -->
+    <div class="tab-content active" id="browser-to-canvas">
+      <!-- Sync Settings for Browser to Canvas -->
+      <div class="sync-settings">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoSyncNew"> Auto-sync new tabs
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="showSyncedTabs"> Show already synced tabs
+        </label>
+      </div>
+
+      <div class="tab-section">
+        <div class="section-header">
+          <h3>Unsynced Browser Tabs</h3>
+          <div class="section-actions">
+            <button class="action-btn secondary" id="syncAllBtn">Sync All</button>
+            <button class="action-btn danger" id="closeAllBtn">Close All</button>
+          </div>
+        </div>
+        <div class="tab-list" id="browserToCanvasList">
+          <div class="empty-state">No unsynced tabs</div>
+        </div>
+        <div class="bulk-actions" id="browserBulkActions" style="display: none;">
+          <button class="action-btn primary" id="syncSelectedBtn">Sync Selected</button>
+          <button class="action-btn danger" id="closeSelectedBtn">Close Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas to Browser Tab -->
+    <div class="tab-content" id="canvas-to-browser">
+      <!-- Sync Settings for Canvas to Browser -->
+      <div class="sync-settings">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoOpenNew"> Auto-open context tabs
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="showAllCanvasTabs"> Show all context tabs
+        </label>
+      </div>
+
+      <div class="tab-section">
+        <div class="section-header">
+          <h3>Canvas Context Tabs</h3>
+          <div class="section-actions">
+            <button class="action-btn secondary" id="openAllBtn">Open All</button>
+          </div>
+        </div>
+        <div class="tab-list" id="canvasToBrowserList">
+          <div class="empty-state">No context tabs to open</div>
+        </div>
+        <div class="bulk-actions" id="canvasBulkActions" style="display: none;">
+          <button class="action-btn primary" id="openSelectedBtn">Open Selected</button>
+          <button class="action-btn warning" id="removeSelectedBtn">Remove Selected</button>
+          <button class="action-btn danger" id="deleteSelectedBtn">Delete Selected</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

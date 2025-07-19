@@ -1,0 +1,379 @@
+/* Canvas Extension Settings CSS */
+/* Clean, minimalistic black and white theme inspired by shadcn */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #0a0a0a;
+  background-color: #fafafa;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: #ffffff;
+  border-left: 1px solid #e4e4e7;
+  border-right: 1px solid #e4e4e7;
+}
+
+/* Header */
+.header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e4e4e7;
+  background-color: #fafafa;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header .logo {
+  width: 48px;
+  height: 48px;
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0a0a0a;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #71717a;
+}
+
+/* Main content */
+.main {
+  padding: 32px;
+}
+
+/* Settings sections */
+.settings-section {
+  margin-bottom: 48px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #f4f4f5;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin-bottom: 24px;
+}
+
+/* Form groups */
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0a0a0a;
+  margin-bottom: 8px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.15s;
+  background-color: #ffffff;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #0a0a0a;
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.1);
+}
+
+.input-field:disabled {
+  background-color: #f4f4f5;
+  color: #71717a;
+  cursor: not-allowed;
+}
+
+.help-text {
+  display: block;
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 6px;
+}
+
+/* Checkbox labels */
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  padding: 12px 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.checkbox-label .help-text {
+  margin-top: 4px;
+  margin-left: 32px;
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Connection status */
+.connection-status {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #ef4444;
+}
+
+.status-dot.connected {
+  background-color: #22c55e;
+}
+
+.status-dot.disconnected {
+  background-color: #ef4444;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #0a0a0a;
+}
+
+.status-details {
+  font-size: 13px;
+  color: #71717a;
+}
+
+/* Context info */
+.current-context {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+.current-context h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin-bottom: 12px;
+}
+
+.context-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-id {
+  font-size: 14px;
+  font-weight: 500;
+  color: #0a0a0a;
+}
+
+.context-url {
+  font-size: 13px;
+  color: #71717a;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  background-color: #ffffff;
+  color: #0a0a0a;
+}
+
+.btn:hover {
+  background-color: #f4f4f5;
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.1);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  border-color: #0a0a0a;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background-color: #262626;
+}
+
+.btn.secondary {
+  background-color: #f4f4f5;
+  border-color: #e4e4e7;
+  color: #0a0a0a;
+}
+
+.btn.secondary:hover:not(:disabled) {
+  background-color: #e4e4e7;
+}
+
+.btn.danger {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn.danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+  background-color: #22c55e;
+}
+
+.toast.error {
+  background-color: #ef4444;
+}
+
+.toast.warning {
+  background-color: #f59e0b;
+}
+
+.toast.info {
+  background-color: #3b82f6;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Select elements */
+select.input-field {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+  appearance: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .container {
+    border-left: none;
+    border-right: none;
+  }
+
+  .header {
+    padding: 16px 20px;
+  }
+
+  .main {
+    padding: 20px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f4f4f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}

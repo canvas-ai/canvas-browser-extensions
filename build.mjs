@@ -1,66 +1,48 @@
 import archiver from 'archiver'
-import autoprefixer from 'autoprefixer'
-import * as dotenv from 'dotenv'
 import esbuild from 'esbuild'
-import postcssPlugin from 'esbuild-style-plugin'
 import fs from 'fs-extra'
 import process from 'node:process'
-import tailwindcss from 'tailwindcss'
 import path from 'path'
-
-dotenv.config()
 
 const outdir = 'build'
 const packagesDir = 'packages'
-const appName = 'test'
+const appName = 'canvas-extension-'
 
 const isDev = process.env.NODE_ENV === 'dev'
 
 let buildConfig = {
-  entryPoints: [
-    'src/background/index.ts',
-    'src/content-script/index.ts',
-    'src/popup/index.tsx',
-  ],
+  entryPoints: {
+    'background/service-worker': 'src/background/service-worker.js',
+    'popup/popup': 'src/popup/popup.js',
+    'settings/settings': 'src/settings/settings.js',
+  },
   bundle: true,
   outdir: outdir,
   treeShaking: true,
-  minify: true,
-  drop: ['console', 'debugger'],
+  minify: !isDev,
+  drop: isDev ? [] : ['console', 'debugger'],
   legalComments: 'none',
   define: {
-    'process.env.NODE_ENV': '"production"',
+    'process.env.NODE_ENV': isDev ? '"development"' : '"production"',
   },
-  jsxFactory: 'h',
-  jsxFragment: 'Fragment',
-  jsx: 'automatic',
+  format: 'esm',
+  target: ['chrome88', 'firefox109'],
   loader: {
-    '.gif': 'dataurl',
-    '.png': 'dataurl',
-    '.svg': 'dataurl',
-    '.woff2': 'file',
-    '.woff': 'file',
-    '.css': 'css'
+    '.png': 'file',
+    '.svg': 'file',
+    '.ico': 'file',
+    '.css': 'text'
   },
-  plugins: [
-    postcssPlugin({
-      postcss: {
-        plugins: [tailwindcss, autoprefixer],
-      },
-    }),
-  ],
-  external: [''],
-}
-
-if (isDev) {
-  buildConfig = { ...buildConfig, ...{ minify: false, drop: [] } }
+  external: [],
 }
 
 async function deleteOldDir() {
   await fs.remove(outdir)
+  await fs.remove(packagesDir)
 }
 
 async function runEsbuild() {
+  console.log('Building JavaScript files...')
   await esbuild.build(buildConfig)
 }
 
@@ -83,8 +65,13 @@ async function copyFiles(entryPoints, targetDir) {
   )
 }
 
-function copyDirectoryContent(source = 'public', destination = 'build') {
+function copyDirectoryContent(source, destination) {
   try {
+    if (!fs.existsSync(source)) {
+      console.log(`Source directory ${source} does not exist, skipping...`)
+      return
+    }
+
     // Get list of files and directories in source directory
     const items = fs.readdirSync(source);
 
@@ -109,31 +96,81 @@ function copyDirectoryContent(source = 'public', destination = 'build') {
       }
     }
   } catch (err) {
-    console.error('Error copying files:', err);
+    console.error('Error copying directory content:', err);
   }
 }
 
 async function exportForBrowser(browser) {
+  console.log(`Building for ${browser}...`)
+
+  const browserDir = `./${outdir}/${browser}`
+
+    // Common files to copy
   const commonFiles = [
-    { src: 'build/background/index.js', dst: 'background.js' },
-    { src: 'build/content-script/index.js', dst: 'content-script.js' },
-    { src: 'src/popup/index.html', dst: 'popup/popup.html' },
-    { src: 'build/popup/index.js', dst: 'popup/popup.js' },
-    { src: 'build/popup/index.css', dst: 'popup/popup.css' },
-    // { src: 'src/assets/16.png', dst: '16.png' },
-    // { src: 'src/assets/48.png', dst: '48.png' },
-    // { src: 'src/assets/128.png', dst: '128.png' },
-    // { src: 'src/assets/240.png', dst: '240.png' },
+    // Background script
+    { src: 'build/background/service-worker.js', dst: 'service-worker.js' },
+
+    // Popup files
+    { src: 'src/popup/popup.html', dst: 'popup/popup.html' },
+    { src: 'build/popup/popup.js', dst: 'popup/popup.js' },
+    { src: 'src/popup/popup.css', dst: 'popup/popup.css' },
+
+    // Settings files
+    { src: 'src/settings/settings.html', dst: 'settings/settings.html' },
+    { src: 'build/settings/settings.js', dst: 'settings/settings.js' },
+    { src: 'src/settings/settings.css', dst: 'settings/settings.css' },
+
+    // Manifest (browser-specific)
+    { src: `manifest-${browser}.json`, dst: 'manifest.json' },
   ]
 
-  await copyFiles(
-    [...commonFiles, { src: `src/manifest-${browser}.json`, dst: 'manifest.json' }],
-    `./${outdir}/${browser}`,
-  )
+  // Copy all files
+  await copyFiles(commonFiles, browserDir)
 
-  copyDirectoryContent('public', path.join('build', browser, 'popup'));
+  // Copy assets directory if it exists
+  if (fs.existsSync('assets')) {
+    console.log(`Copying assets for ${browser}...`)
+    copyDirectoryContent('assets', path.join(browserDir, 'assets'))
+  } else {
+    // Create basic icon structure if assets don't exist
+    await fs.ensureDir(path.join(browserDir, 'assets', 'icons'))
+    console.log(`Assets directory not found, created placeholder for ${browser}`)
+    console.warn(`⚠️  Missing logo: assets/icons/logo-br_64x64.png`)
+    console.warn(`   The extension will work but may show broken icon images`)
+  }
 
-  await zipFolder(`./${outdir}/${browser}`)
+  // Update manifest paths for the build structure
+  const manifestPath = path.join(browserDir, 'manifest.json')
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+
+    // Update background script path
+    if (manifest.background) {
+      if (browser === 'chromium') {
+        manifest.background.service_worker = 'service-worker.js'
+      } else if (browser === 'firefox') {
+        manifest.background.scripts = ['service-worker.js']
+      }
+    }
+
+    // Update popup path
+    if (manifest.action && manifest.action.default_popup) {
+      manifest.action.default_popup = 'popup/popup.html'
+    }
+
+    // Update web accessible resources
+    if (manifest.web_accessible_resources) {
+      manifest.web_accessible_resources[0].resources = ['settings/settings.html']
+    }
+
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+  }
+
+  // Create zip package
+  await zipFolder(browserDir)
+
+  // Copy to packages directory
+  await fs.ensureDir(packagesDir)
   await copyFiles(
     [
       {
@@ -144,6 +181,7 @@ async function exportForBrowser(browser) {
     `./${packagesDir}`,
   )
 
+  // Also copy unzipped folder
   await copyFiles(
     [
       {
@@ -153,19 +191,42 @@ async function exportForBrowser(browser) {
     ],
     `./${packagesDir}`,
   )
+
+  console.log(`✅ ${browser} build complete`)
 }
 
 async function build() {
-  await deleteOldDir()
-  await runEsbuild()
+  console.log('🚀 Starting Canvas Browser Extension build...')
 
-  // chromium
-  await exportForBrowser('chromium');
+  try {
+    // Clean previous builds
+    await deleteOldDir()
 
-  // firefox
-  await exportForBrowser('firefox');
+    // Build JavaScript with esbuild
+    await runEsbuild()
 
-  console.log('Build success.')
+    // Build for Chromium-based browsers
+    await exportForBrowser('chromium')
+
+    // Build for Firefox
+    await exportForBrowser('firefox')
+
+    console.log('🎉 Build completed successfully!')
+    console.log('')
+    console.log('📦 Packages created:')
+    console.log(`  - packages/chromium/ (development)`)
+    console.log(`  - packages/firefox/ (development)`)
+    console.log(`  - packages/${appName}chromium.zip (distribution)`)
+    console.log(`  - packages/${appName}firefox.zip (distribution)`)
+    console.log('')
+    console.log('🔧 To install for development:')
+    console.log('  Chrome: Load unpacked -> packages/chromium/')
+    console.log('  Firefox: about:debugging -> Load Temporary Add-on -> packages/firefox/manifest.json')
+
+  } catch (error) {
+    console.error('❌ Build failed:', error)
+    process.exit(1)
+  }
 }
 
 build()
