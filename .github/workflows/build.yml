@@ -1,0 +1,127 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on Node.js
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: src/ui/browser-extension/package-lock.json
+
+    - name: Install dependencies
+      working-directory: src/ui/browser-extension
+      run: npm ci
+
+    - name: Validate manifests
+      working-directory: src/ui/browser-extension
+      run: |
+        echo "Validating manifest files..."
+        # Check if manifests exist and are valid JSON
+        node -pe "JSON.parse(require('fs').readFileSync('manifest-chromium.json', 'utf8'))" > /dev/null
+        node -pe "JSON.parse(require('fs').readFileSync('manifest-firefox.json', 'utf8'))" > /dev/null
+        echo "✅ Manifests are valid"
+
+    - name: Test build functionality
+      working-directory: src/ui/browser-extension
+      run: |
+        echo "Testing development build..."
+        npm run build:dev
+
+        echo "Verifying build outputs..."
+        ls -la packages/
+
+        # Check if required files exist
+        test -f packages/chromium/manifest.json || exit 1
+        test -f packages/firefox/manifest.json || exit 1
+        test -f packages/chromium/service-worker.js || exit 1
+        test -f packages/firefox/service-worker.js || exit 1
+
+        echo "✅ Development build successful"
+
+  build-dev:
+    name: Build Development Packages
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: src/ui/browser-extension/package-lock.json
+
+    - name: Install dependencies
+      working-directory: src/ui/browser-extension
+      run: npm ci
+
+    - name: Build development packages
+      working-directory: src/ui/browser-extension
+      run: npm run build:dev
+
+    - name: Test packages
+      working-directory: src/ui/browser-extension
+      run: |
+        echo "Testing Chromium package..."
+        test -f packages/canvas-extension-chromium.zip
+        unzip -t packages/canvas-extension-chromium.zip
+
+        echo "Testing Firefox package..."
+        test -f packages/canvas-extension-firefox.zip
+        unzip -t packages/canvas-extension-firefox.zip
+
+        echo "Testing package contents..."
+        cd packages/chromium
+        test -f manifest.json
+        test -f service-worker.js
+        test -f popup/popup.html
+        test -f popup/popup.js
+        test -f settings/settings.html
+        test -f settings/settings.js
+
+        echo "✅ All packages validated successfully"
+
+    - name: Upload Chromium development package
+      uses: actions/upload-artifact@v4
+      with:
+        name: canvas-extension-chromium-dev
+        path: src/ui/browser-extension/packages/canvas-extension-chromium.zip
+        retention-days: 7
+
+    - name: Upload Firefox development package
+      uses: actions/upload-artifact@v4
+      with:
+        name: canvas-extension-firefox-dev
+        path: src/ui/browser-extension/packages/canvas-extension-firefox.zip
+        retention-days: 7
+
+    - name: Upload unpackaged Chromium folder
+      uses: actions/upload-artifact@v4
+      with:
+        name: canvas-extension-chromium-folder-dev
+        path: src/ui/browser-extension/packages/chromium/
+        retention-days: 7
+
+    - name: Upload unpackaged Firefox folder
+      uses: actions/upload-artifact@v4
+      with:
+        name: canvas-extension-firefox-folder-dev
+        path: src/ui/browser-extension/packages/firefox/
+        retention-days: 7

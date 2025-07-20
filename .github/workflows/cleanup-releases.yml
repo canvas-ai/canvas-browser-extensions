@@ -1,0 +1,137 @@
+name: Cleanup Old Releases
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      keep_releases:
+        description: 'Number of releases to keep'
+        required: true
+        default: '5'
+        type: string
+      dry_run:
+        description: 'Dry run - show what would be deleted without actually deleting'
+        required: true
+        default: false
+        type: boolean
+
+  # Automatic trigger - runs weekly on Sundays at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * 0'
+
+permissions:
+  contents: write  # Required for deleting releases
+
+jobs:
+  cleanup:
+    name: Cleanup Old Releases
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set variables
+      id: vars
+      run: |
+        # Set keep count - use input if manual trigger, otherwise default to 5
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          KEEP_RELEASES="${{ github.event.inputs.keep_releases }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+        else
+          KEEP_RELEASES="5"
+          DRY_RUN="false"
+        fi
+
+        echo "keep_releases=$KEEP_RELEASES" >> $GITHUB_OUTPUT
+        echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+
+        echo "🔧 Configuration:"
+        echo "   Keep releases: $KEEP_RELEASES"
+        echo "   Dry run: $DRY_RUN"
+        echo "   Trigger: ${{ github.event_name }}"
+
+    - name: Cleanup old releases
+      run: |
+        KEEP_RELEASES="${{ steps.vars.outputs.keep_releases }}"
+        DRY_RUN="${{ steps.vars.outputs.dry_run }}"
+
+        echo "🧹 Cleaning up old Canvas Browser Extension releases (keeping last $KEEP_RELEASES)..."
+
+        # Get all releases sorted by creation date (newest first)
+        gh release list --limit 100 --json tagName,createdAt,name,isDraft,isPrerelease \
+          --jq "sort_by(.createdAt) | reverse" > all_releases.json
+
+        # Show current releases
+        echo "📊 Current releases:"
+        jq -r '.[] | "\(.tagName) - \(.name) (created: \(.createdAt[:10]))"' all_releases.json
+        echo ""
+
+        # Get releases to delete (skip the first N releases)
+        jq -r ".[$KEEP_RELEASES:] | .[].tagName" all_releases.json > old_releases.txt
+
+        # Count releases to delete
+        RELEASES_TO_DELETE=$(wc -l < old_releases.txt)
+
+        if [ "$RELEASES_TO_DELETE" -gt 0 ]; then
+          echo "🗑️  Found $RELEASES_TO_DELETE old releases to delete:"
+
+          # Show what will be deleted
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              RELEASE_INFO=$(jq -r ".[] | select(.tagName == \"$tag\") | \"\(.name) (\(.createdAt[:10]))\"" all_releases.json)
+              echo "   - $tag - $RELEASE_INFO"
+            fi
+          done < old_releases.txt
+          echo ""
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🔍 DRY RUN: Would delete the above releases (use dry_run=false to actually delete)"
+          else
+            echo "🗑️  Deleting old releases..."
+
+            # Delete old releases
+            DELETED_COUNT=0
+            FAILED_COUNT=0
+
+            while IFS= read -r tag; do
+              if [ -n "$tag" ]; then
+                echo "   Deleting: $tag"
+                if gh release delete "$tag" --yes --cleanup-tag; then
+                  DELETED_COUNT=$((DELETED_COUNT + 1))
+                  echo "   ✅ Successfully deleted: $tag"
+                else
+                  FAILED_COUNT=$((FAILED_COUNT + 1))
+                  echo "   ❌ Failed to delete: $tag"
+                fi
+              fi
+            done < old_releases.txt
+
+            echo ""
+            echo "📈 Summary:"
+            echo "   Successfully deleted: $DELETED_COUNT releases"
+            echo "   Failed to delete: $FAILED_COUNT releases"
+            echo "   Remaining releases: $KEEP_RELEASES"
+
+            if [ "$FAILED_COUNT" -gt 0 ]; then
+              echo "⚠️  Some releases failed to delete. Check the logs above for details."
+              exit 1
+            else
+              echo "✅ Cleanup completed successfully!"
+            fi
+          fi
+        else
+          echo "✅ No old releases to clean up (less than $KEEP_RELEASES total releases)"
+        fi
+
+        # Show final state
+        echo ""
+        echo "📊 Final releases list:"
+        gh release list --limit 20
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup artifacts
+      if: always()
+      run: |
+        rm -f all_releases.json old_releases.txt

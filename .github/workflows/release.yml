@@ -1,0 +1,199 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v2.0.0, v2.1.0-beta.1, etc.
+
+permissions:
+  contents: write  # Required for creating releases and uploading assets
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: src/ui/browser-extension/package-lock.json
+
+    - name: Install dependencies
+      working-directory: src/ui/browser-extension
+      run: npm ci
+
+    - name: Extract version from tag
+      id: extract_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Update version in package.json
+      working-directory: src/ui/browser-extension
+      run: |
+        npm version ${{ steps.extract_version.outputs.version }} --no-git-tag-version
+
+    - name: Update version in manifests
+      working-directory: src/ui/browser-extension
+      run: |
+        # Update Chromium manifest
+        sed -i 's/"version": "[^"]*"/"version": "${{ steps.extract_version.outputs.version }}"/' manifest-chromium.json
+
+        # Update Firefox manifest
+        sed -i 's/"version": "[^"]*"/"version": "${{ steps.extract_version.outputs.version }}"/' manifest-firefox.json
+
+    - name: Build production packages
+      working-directory: src/ui/browser-extension
+      run: |
+        echo "Building production packages..."
+        npm run build
+
+    - name: Test production packages
+      working-directory: src/ui/browser-extension
+      run: |
+        echo "Testing production builds..."
+        test -f packages/canvas-extension-chromium.zip
+        test -f packages/canvas-extension-firefox.zip
+        unzip -t packages/canvas-extension-chromium.zip
+        unzip -t packages/canvas-extension-firefox.zip
+        echo "✅ Production packages validated"
+
+    - name: Prepare release assets
+      working-directory: src/ui/browser-extension
+      run: |
+        mkdir -p release-assets
+
+        # Copy packages with versioned names
+        cp packages/canvas-extension-chromium.zip release-assets/canvas-extension-${{ steps.extract_version.outputs.version }}-chromium.zip
+        cp packages/canvas-extension-firefox.zip release-assets/canvas-extension-${{ steps.extract_version.outputs.version }}-firefox.zip
+
+        # Create checksums
+        cd release-assets
+        sha256sum *.zip > checksums.txt
+
+        ls -la
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        ## Canvas Browser Extension ${{ steps.extract_version.outputs.tag }}
+
+        ### Download
+
+        Choose the appropriate package for your browser:
+
+        | Browser | Download |
+        |---------|----------|
+        | **Chromium-based** (Chrome, Edge, Brave, Opera) | [canvas-extension-${{ steps.extract_version.outputs.version }}-chromium.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-extension-${{ steps.extract_version.outputs.version }}-chromium.zip) |
+        | **Firefox** | [canvas-extension-${{ steps.extract_version.outputs.version }}-firefox.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-extension-${{ steps.extract_version.outputs.version }}-firefox.zip) |
+
+        ### Installation
+
+        **Chromium browsers (Chrome, Edge, Brave, etc.):**
+        1. Download the Chromium package
+        2. Extract the ZIP file
+        3. Open `chrome://extensions/`
+        4. Enable "Developer mode"
+        5. Click "Load unpacked"
+        6. Select the extracted folder
+
+        **Firefox:**
+        1. Download the Firefox package
+        2. Extract the ZIP file
+        3. Open `about:debugging`
+        4. Click "This Firefox"
+        5. Click "Load Temporary Add-on"
+        6. Select the `manifest.json` file from the extracted folder
+
+        ### Features
+
+        - ✅ Real-time tab synchronization with Canvas server
+        - ✅ Configurable sync behaviors
+        - ✅ Context binding for organized workflows
+        - ✅ WebSocket integration for live updates
+        - ✅ Secure API token authentication
+        - ✅ Cross-browser support
+
+        ### Requirements
+
+        - Canvas server running (v2.0+)
+        - Valid API token from Canvas server
+        - Modern browser version:
+          - Chrome 88+, Edge 88+, Brave 1.20+, Opera 74+
+          - Firefox 109+
+
+        ### Setup
+
+        1. Install and run Canvas server
+        2. Generate API token in Canvas web interface
+        3. Install browser extension (see installation steps above)
+        4. Click extension icon → Settings
+        5. Enter server URL and API token
+        6. Test connection and bind to a context
+
+        ### Verification
+
+        Verify download integrity using the provided checksums:
+        ```bash
+        sha256sum -c checksums.txt
+        ```
+
+        ### Changelog
+
+        See [DEVELOPMENT.md](./DEVELOPMENT.md) for detailed development notes.
+        EOF
+
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.extract_version.outputs.tag }}
+        name: Canvas Browser Extension ${{ steps.extract_version.outputs.tag }}
+        body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+        draft: false
+        prerelease: ${{ contains(steps.extract_version.outputs.version, '-') }}
+        files: |
+          src/ui/browser-extension/release-assets/*.zip
+          src/ui/browser-extension/release-assets/checksums.txt
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup old releases
+      run: |
+        echo "🧹 Cleaning up old releases (keeping last 5)..."
+
+        # Get all releases sorted by creation date (newest first)
+        gh release list --limit 100 --json tagName,createdAt \
+          --jq 'sort_by(.createdAt) | reverse | .[5:] | .[].tagName' > old_releases.txt
+
+        # Count releases to delete
+        RELEASES_TO_DELETE=$(wc -l < old_releases.txt)
+
+        if [ "$RELEASES_TO_DELETE" -gt 0 ]; then
+          echo "Found $RELEASES_TO_DELETE old releases to delete:"
+          cat old_releases.txt
+
+          # Delete old releases
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "🗑️  Deleting release: $tag"
+              gh release delete "$tag" --yes --cleanup-tag || echo "⚠️  Failed to delete $tag"
+            fi
+          done < old_releases.txt
+
+          echo "✅ Cleanup completed!"
+        else
+          echo "✅ No old releases to clean up (less than 5 total releases)"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
