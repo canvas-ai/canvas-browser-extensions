@@ -139,13 +139,16 @@ export class ContextIntegration {
       // Update stored context
       const currentContext = await browserStorage.getCurrentContext();
       if (currentContext) {
+        const oldUrl = currentContext.url;
         currentContext.url = data.url;
         await browserStorage.setCurrentContext(currentContext);
+
+        console.log('ContextIntegration: Context URL changed from', oldUrl, 'to', data.url);
       }
 
-      // Notify sync engine of context change
+      // Treat context URL change as a context switch to respect user's context change behavior
       if (syncEngine.isInitialized) {
-        await syncEngine.performFullSync(this.currentContextId);
+        await syncEngine.handleContextUrlChange(this.currentContextId, data.url);
       }
     }
   }

@@ -471,15 +471,45 @@ export class SyncEngine {
 
       const syncSettings = await browserStorage.getSyncSettings();
 
-      switch (syncSettings.contextChangeBehavior) {
+      await this._executeContextChangeBehavior(syncSettings.contextChangeBehavior, oldContextId, newContextId);
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle context change:', error);
+    }
+  }
+
+  // Handle context URL change (treat as context change)
+  async handleContextUrlChange(contextId, newUrl) {
+    try {
+      console.log('SyncEngine: Handling context URL change for context:', contextId, 'to URL:', newUrl);
+
+      const syncSettings = await browserStorage.getSyncSettings();
+
+      // For URL changes, we pass the same contextId as both old and new
+      // since it's the same context but with different content
+      await this._executeContextChangeBehavior(syncSettings.contextChangeBehavior, contextId, contextId);
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle context URL change:', error);
+    }
+  }
+
+  // Execute context change behavior based on settings
+  async _executeContextChangeBehavior(behavior, oldContextId, newContextId) {
+    try {
+      console.log('SyncEngine: Executing context change behavior:', behavior);
+
+      switch (behavior) {
         case 'close-open-new':
-          await this.closeAllBrowserTabs();
+          await this.closeTabsNotInContext(newContextId);
           await this.performFullSync(newContextId);
           break;
 
         case 'save-close-open-new':
-          await this.syncAllBrowserTabs(oldContextId);
-          await this.closeAllBrowserTabs();
+          if (oldContextId) {
+            await this.syncAllBrowserTabs(oldContextId);
+          }
+          await this.closeTabsNotInContext(newContextId);
           await this.performFullSync(newContextId);
           break;
 
@@ -492,11 +522,13 @@ export class SyncEngine {
           break;
 
         default:
-          console.warn('SyncEngine: Unknown context change behavior:', syncSettings.contextChangeBehavior);
+          console.warn('SyncEngine: Unknown context change behavior:', behavior);
+          // Fallback to keep-open-new
+          await this.performFullSync(newContextId);
       }
 
     } catch (error) {
-      console.error('SyncEngine: Failed to handle context change:', error);
+      console.error('SyncEngine: Failed to execute context change behavior:', error);
     }
   }
 
@@ -505,6 +537,66 @@ export class SyncEngine {
     const browserTabs = await tabManager.getSyncableTabs();
     for (const tab of browserTabs) {
       await tabManager.closeTab(tab.id);
+    }
+  }
+
+  // Helper: Close tabs that are not in the specified context
+  async closeTabsNotInContext(contextId) {
+    try {
+      console.log('SyncEngine: Closing tabs not in context:', contextId);
+
+      // Get current browser tabs
+      const browserTabs = await tabManager.getSyncableTabs();
+      console.log('SyncEngine: Found browser tabs:', browserTabs.length);
+
+      if (browserTabs.length === 0) {
+        console.log('SyncEngine: No browser tabs to check');
+        return;
+      }
+
+      // Get Canvas documents for the new context
+      const syncSettings = await browserStorage.getSyncSettings();
+      let featureArray = ['data/abstraction/tab'];
+
+      // Filter by browser identity if enabled
+      if (syncSettings.syncOnlyThisBrowser) {
+        const browserIdentity = await browserStorage.getBrowserIdentity();
+        featureArray.push(`tag/${browserIdentity}`);
+      }
+
+      const response = await apiClient.getContextDocuments(contextId, featureArray);
+      const canvasDocuments = response.success ? response.payload : [];
+      console.log('SyncEngine: Found Canvas documents in new context:', canvasDocuments.length);
+
+      // Create a set of URLs that exist in the new context for fast lookup
+      const contextUrls = new Set();
+      canvasDocuments.forEach(doc => {
+        if (doc.data && doc.data.url) {
+          contextUrls.add(doc.data.url);
+        }
+      });
+
+      console.log('SyncEngine: Context URLs:', Array.from(contextUrls));
+
+      // Close tabs that are not in the new context
+      let closedCount = 0;
+      for (const tab of browserTabs) {
+        if (!contextUrls.has(tab.url)) {
+          console.log('SyncEngine: Closing tab not in context:', tab.title, tab.url);
+          await tabManager.closeTab(tab.id);
+          closedCount++;
+        } else {
+          console.log('SyncEngine: Keeping tab in context:', tab.title, tab.url);
+        }
+      }
+
+      console.log('SyncEngine: Closed', closedCount, 'tabs not in context');
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to close tabs not in context:', error);
+      // Fallback to closing all tabs if we can't determine which ones to keep
+      console.log('SyncEngine: Falling back to closing all tabs');
+      await this.closeAllBrowserTabs();
     }
   }
 
