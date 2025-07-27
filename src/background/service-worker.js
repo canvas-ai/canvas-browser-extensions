@@ -308,120 +308,16 @@ function refreshTabLists() {
 
 // Tab event listeners for synchronization
 chrome.tabs.onCreated.addListener(async (tab) => {
-  // IMMEDIATE synchronous logging to test if event fires at all
-  console.log('🆕 TAB EVENT: IMMEDIATE - Tab created detected!', tab.id, tab.url);
-
   console.log('🆕 TAB EVENT: Tab created detected!', tab.id, tab.url);
-  console.log('🆕 AUTO-SYNC: Tab created:', tab.id, tab.url);
-
-  try {
-    // Check if auto-sync is enabled and we're connected
-    const syncSettings = await browserStorage.getSyncSettings();
-    const connectionSettings = await browserStorage.getConnectionSettings();
-
-    console.log('🆕 AUTO-SYNC: Loaded settings:', {
-      autoSyncNewTabs: syncSettings?.autoSyncNewTabs,
-      connected: connectionSettings?.connected,
-      serverUrl: connectionSettings?.serverUrl,
-      hasApiToken: !!connectionSettings?.apiToken
-    });
-
-    if (!syncSettings?.autoSyncNewTabs) {
-      console.log('🆕 AUTO-SYNC: Auto-sync is disabled, skipping');
-      return;
-    }
-
-    if (!connectionSettings?.connected) {
-      console.log('🆕 AUTO-SYNC: Not connected to Canvas, skipping');
-      return;
-    }
-
-    console.log('🆕 AUTO-SYNC: Prerequisites met, waiting for tab to load...');
-
-    // Wait a bit for tab to load, then check if it should be synced
-    setTimeout(async () => {
-      try {
-        console.log('🆕 AUTO-SYNC: Timeout reached, checking tab for sync...');
-
-        const updatedTab = await tabManager.getTab(tab.id);
-        if (!updatedTab) {
-          console.log('🆕 AUTO-SYNC: Tab not found after timeout, may have been closed');
-          return;
-        }
-
-        console.log('🆕 AUTO-SYNC: Updated tab details:', {
-          id: updatedTab.id,
-          url: updatedTab.url,
-          title: updatedTab.title,
-          status: updatedTab.status,
-          discarded: updatedTab.discarded
-        });
-
-        const shouldSync = tabManager.shouldSyncTab(updatedTab);
-        console.log('🆕 AUTO-SYNC: Should sync tab?', shouldSync);
-
-        if (!shouldSync) {
-          console.log('🆕 AUTO-SYNC: Tab is not syncable (internal page, etc.), skipping');
-          return;
-        }
-
-        // CRITICAL: Check if tab is already synced to prevent cascading sync loops
-        if (tabManager.isTabSynced(updatedTab.id)) {
-          console.log('🆕 AUTO-SYNC: Tab already synced (opened from Canvas), skipping auto-sync:', updatedTab.title);
-          return;
-        }
-
-        // CRITICAL: Check if URL is pending from Canvas to prevent race conditions
-        if (tabManager.isUrlPendingFromCanvas(updatedTab.url)) {
-          console.log('🆕 AUTO-SYNC: Tab URL is pending from Canvas document, skipping auto-sync:', updatedTab.title);
-          return;
-        }
-
-        const currentContext = await browserStorage.getCurrentContext();
-        const browserIdentity = await browserStorage.getBrowserIdentity();
-
-        console.log('🆕 AUTO-SYNC: Context and identity:', {
-          contextId: currentContext?.id,
-          contextUrl: currentContext?.url,
-          browserIdentity: browserIdentity
-        });
-
-        if (!currentContext?.id) {
-          console.log('🆕 AUTO-SYNC: No context bound, cannot sync tab');
-          return;
-        }
-
-        if (!browserIdentity) {
-          console.log('🆕 AUTO-SYNC: No browser identity set, cannot sync tab');
-          return;
-        }
-
-        console.log('🆕 AUTO-SYNC: Starting sync for tab:', updatedTab.title, updatedTab.url);
-
-        const syncResult = await tabManager.syncTabToCanvas(updatedTab, apiClient, currentContext.id, browserIdentity);
-
-        console.log('🆕 AUTO-SYNC: Sync result:', syncResult);
-
-        if (syncResult.success) {
-          console.log('✅ AUTO-SYNC: Successfully synced new tab:', updatedTab.title);
-        } else {
-          console.error('❌ AUTO-SYNC: Failed to sync tab:', syncResult.error || 'Unknown error');
-        }
-
-      } catch (error) {
-        console.error('❌ AUTO-SYNC: Exception during tab sync:', error);
-      }
-    }, 2000); // Wait 2 seconds for tab to load
-
-  } catch (error) {
-    console.error('❌ AUTO-SYNC: Exception loading settings:', error);
-  }
+  // Note: Auto-sync logic moved to onUpdated listener for reliable page load detection
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   console.log('🔄 TAB EVENT: Tab updated detected!', tabId, changeInfo);
+
+  // Handle auto-sync when page is fully loaded OR when URL changes
   if (changeInfo.status === 'complete' && tab.url) {
-    console.log('🔄 AUTO-SYNC: Tab updated:', tabId, tab.url, 'changeInfo:', changeInfo);
+    console.log('🔄 AUTO-SYNC: Tab page loaded completely:', tabId, tab.url, 'changeInfo:', changeInfo);
 
     try {
       // Check if auto-sync is enabled and we're connected
@@ -431,78 +327,76 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       console.log('🔄 AUTO-SYNC: Loaded settings for updated tab:', {
         autoSyncNewTabs: syncSettings?.autoSyncNewTabs,
         connected: connectionSettings?.connected,
+        statusComplete: changeInfo.status === 'complete',
         urlChanged: !!changeInfo.url
       });
 
       if (!syncSettings?.autoSyncNewTabs) {
-        console.log('🔄 AUTO-SYNC: Auto-sync is disabled for updated tabs, skipping');
+        console.log('🔄 AUTO-SYNC: Auto-sync is disabled, skipping');
         return;
       }
 
       if (!connectionSettings?.connected) {
-        console.log('🔄 AUTO-SYNC: Not connected to Canvas for updated tabs, skipping');
+        console.log('🔄 AUTO-SYNC: Not connected to Canvas, skipping');
         return;
       }
 
-      // Check if this is a URL change that should be synced
-      if (changeInfo.url && tabManager.shouldSyncTab(tab)) {
-        console.log('🔄 AUTO-SYNC: URL changed, checking if should sync:', tab.title, tab.url);
+      // Check if this tab should be synced
+      if (!tabManager.shouldSyncTab(tab)) {
+        console.log('🔄 AUTO-SYNC: Tab not suitable for sync (internal page, etc.):', tab.url);
+        return;
+      }
 
-        // CRITICAL: Check if tab is already synced to prevent cascading sync loops
-        if (tabManager.isTabSynced(tab.id)) {
-          console.log('🔄 AUTO-SYNC: Tab already synced (opened from Canvas), skipping auto-sync:', tab.title);
-          return;
+      console.log('🔄 AUTO-SYNC: Page loaded completely, checking if should sync:', tab.title, tab.url);
+
+      // CRITICAL: Check if tab is already synced to prevent cascading sync loops
+      if (tabManager.isTabSynced(tab.id)) {
+        console.log('🔄 AUTO-SYNC: Tab already synced (opened from Canvas), skipping auto-sync:', tab.title);
+        return;
+      }
+
+      // CRITICAL: Check if URL is pending from Canvas to prevent race conditions
+      if (tabManager.isUrlPendingFromCanvas(tab.url)) {
+        console.log('🔄 AUTO-SYNC: Tab URL is pending from Canvas document, skipping auto-sync:', tab.title);
+        return;
+      }
+
+      const currentContext = await browserStorage.getCurrentContext();
+      const browserIdentity = await browserStorage.getBrowserIdentity();
+
+      console.log('🔄 AUTO-SYNC: Context and identity for loaded tab:', {
+        contextId: currentContext?.id,
+        contextUrl: currentContext?.url,
+        browserIdentity: browserIdentity
+      });
+
+      if (!currentContext?.id) {
+        console.log('🔄 AUTO-SYNC: No context bound, cannot sync tab');
+        return;
+      }
+
+      if (!browserIdentity) {
+        console.log('🔄 AUTO-SYNC: No browser identity set, cannot sync tab');
+        return;
+      }
+
+      console.log('🔄 AUTO-SYNC: Starting sync for fully loaded tab:', tab.title, tab.url);
+
+      try {
+        const syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
+
+        console.log('🔄 AUTO-SYNC: Loaded tab sync result:', syncResult);
+
+        if (syncResult.success) {
+          console.log('✅ AUTO-SYNC: Successfully synced fully loaded tab:', tab.title);
+        } else {
+          console.error('❌ AUTO-SYNC: Failed to sync loaded tab:', syncResult.error || 'Unknown error');
         }
-
-        // CRITICAL: Check if URL is pending from Canvas to prevent race conditions
-        if (tabManager.isUrlPendingFromCanvas(tab.url)) {
-          console.log('🔄 AUTO-SYNC: Tab URL is pending from Canvas document, skipping auto-sync:', tab.title);
-          return;
-        }
-
-        const currentContext = await browserStorage.getCurrentContext();
-        const browserIdentity = await browserStorage.getBrowserIdentity();
-
-        console.log('🔄 AUTO-SYNC: Context and identity for updated tab:', {
-          contextId: currentContext?.id,
-          contextUrl: currentContext?.url,
-          browserIdentity: browserIdentity
-        });
-
-        if (!currentContext?.id) {
-          console.log('🔄 AUTO-SYNC: No context bound, cannot sync updated tab');
-          return;
-        }
-
-        if (!browserIdentity) {
-          console.log('🔄 AUTO-SYNC: No browser identity set, cannot sync updated tab');
-          return;
-        }
-
-        console.log('🔄 AUTO-SYNC: Starting sync for updated tab:', tab.title, tab.url);
-
-        try {
-          const syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
-
-          console.log('🔄 AUTO-SYNC: Updated tab sync result:', syncResult);
-
-          if (syncResult.success) {
-            console.log('✅ AUTO-SYNC: Successfully synced updated tab:', tab.title);
-          } else {
-            console.error('❌ AUTO-SYNC: Failed to sync updated tab:', syncResult.error || 'Unknown error');
-          }
-        } catch (error) {
-          console.error('❌ AUTO-SYNC: Exception syncing updated tab:', error);
-        }
-      } else {
-        console.log('🔄 AUTO-SYNC: Updated tab not suitable for sync:', {
-          hasUrlChange: !!changeInfo.url,
-          shouldSync: tabManager.shouldSyncTab(tab),
-          url: tab.url
-        });
+      } catch (error) {
+        console.error('❌ AUTO-SYNC: Exception syncing loaded tab:', error);
       }
     } catch (error) {
-      console.error('❌ AUTO-SYNC: Exception processing updated tab:', error);
+      console.error('❌ AUTO-SYNC: Exception processing loaded tab:', error);
     }
   }
 });

@@ -426,30 +426,7 @@ export class SyncEngine {
     }
   }
 
-  // Handle new tab creation
-  async handleNewTab(tab) {
-    try {
-      console.log('SyncEngine: Handling new tab:', tab.id, tab.url);
 
-      if (!this.isInitialized || !tabManager.shouldSyncTab(tab)) {
-        return;
-      }
-
-      const syncSettings = await browserStorage.getSyncSettings();
-
-      if (syncSettings.autoSyncNewTabs) {
-        const currentContext = await browserStorage.getCurrentContext();
-        const browserIdentity = await browserStorage.getBrowserIdentity();
-
-        if (currentContext?.id) {
-          console.log('SyncEngine: Auto-syncing new tab:', tab.title);
-          await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
-        }
-      }
-    } catch (error) {
-      console.error('SyncEngine: Failed to handle new tab:', error);
-    }
-  }
 
   // Handle tab removal
   async handleTabRemoved(tabId) {
