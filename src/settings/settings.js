@@ -5,7 +5,7 @@
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let connectionStatus, statusDot, statusText, statusDetails;
-let contextSection, contextSelect, newContextUrl, createContextBtn, bindContextBtn;
+let contextSection, contextSelect, bindContextBtn;
 let currentContext, boundContextId, boundContextUrl;
 let autoSyncNewTabs, autoOpenNewTabs, autoCloseRemovedTabs, syncOnlyThisBrowser, contextChangeBehavior;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
@@ -48,8 +48,6 @@ function initializeElements() {
   // Context settings
   contextSection = document.getElementById('contextSection');
   contextSelect = document.getElementById('contextSelect');
-  newContextUrl = document.getElementById('newContextUrl');
-  createContextBtn = document.getElementById('createContextBtn');
   bindContextBtn = document.getElementById('bindContextBtn');
   currentContext = document.getElementById('currentContext');
   boundContextId = document.getElementById('boundContextId');
@@ -78,7 +76,6 @@ function setupEventListeners() {
   disconnectBtn.addEventListener('click', handleDisconnect);
 
   // Context buttons
-  createContextBtn.addEventListener('click', handleCreateContext);
   bindContextBtn.addEventListener('click', handleBindContext);
 
   // Settings buttons
@@ -474,35 +471,7 @@ async function handleSaveAndClose() {
   }
 }
 
-async function handleCreateContext() {
-  try {
-    const url = newContextUrl.value.trim();
-    if (!url) {
-      showToast('Please enter a context URL', 'warning');
-      return;
-    }
 
-    setButtonLoading(createContextBtn, true);
-
-    // TODO: Create context via API
-    console.log('TODO: Create context with URL:', url);
-
-    // Simulate success
-    setTimeout(() => {
-      showToast('Context created successfully', 'success');
-      setButtonLoading(createContextBtn, false);
-      newContextUrl.value = '';
-
-      // Reload contexts
-      loadContexts();
-    }, 1000);
-
-  } catch (error) {
-    console.error('Failed to create context:', error);
-    showToast(`Failed to create context: ${error.message}`, 'error');
-    setButtonLoading(createContextBtn, false);
-  }
-}
 
 async function handleSaveSettings() {
   try {
