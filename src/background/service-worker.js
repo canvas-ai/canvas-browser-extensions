@@ -570,6 +570,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleCloseTab(message.data, sendResponse);
       return true;
 
+    case 'TOGGLE_PIN_TAB':
+      // Toggle pin state of a tab
+      handleTogglePinTab(message.data, sendResponse);
+      return true;
+
+    case 'GET_PINNED_TABS':
+      // Get list of pinned tab IDs
+      handleGetPinnedTabs(message.data, sendResponse);
+      return true;
+
+    case 'GET_CONNECTION_SETTINGS':
+      // Get connection settings
+      handleGetConnectionSettings(message.data, sendResponse);
+      return true;
+
     case 'OPEN_TAB':
       // Open a Canvas tab in browser
       handleOpenTab(message.data, sendResponse);
@@ -906,6 +921,86 @@ async function handleCloseTab(data, sendResponse) {
     sendResponse({
       success: false,
       error: error.message
+    });
+  }
+}
+
+async function handleTogglePinTab(data, sendResponse) {
+  try {
+    const { tabId } = data;
+
+    if (!tabId) {
+      throw new Error('Tab ID is required');
+    }
+
+    console.log('Toggling pin state for tab:', tabId);
+
+    // Check current pin state
+    const isPinned = await browserStorage.isTabPinned(tabId);
+
+    if (isPinned) {
+      await browserStorage.unpinTab(tabId);
+      console.log('Tab unpinned:', tabId);
+    } else {
+      await browserStorage.pinTab(tabId);
+      console.log('Tab pinned:', tabId);
+    }
+
+    sendResponse({
+      success: true,
+      isPinned: !isPinned,
+      message: `Tab ${!isPinned ? 'pinned' : 'unpinned'} successfully`
+    });
+  } catch (error) {
+    console.error('Failed to toggle pin tab:', error);
+    sendResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+async function handleGetPinnedTabs(data, sendResponse) {
+  try {
+    console.log('Getting pinned tabs');
+
+    const pinnedTabs = await browserStorage.getPinnedTabs();
+    const pinnedTabsArray = Array.from(pinnedTabs);
+
+    console.log('Retrieved pinned tabs:', pinnedTabsArray);
+
+    sendResponse({
+      success: true,
+      pinnedTabs: pinnedTabsArray
+    });
+  } catch (error) {
+    console.error('Failed to get pinned tabs:', error);
+    sendResponse({
+      success: false,
+      error: error.message,
+      pinnedTabs: []
+    });
+  }
+}
+
+async function handleGetConnectionSettings(data, sendResponse) {
+  try {
+    console.log('Getting connection settings');
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+
+    console.log('Retrieved connection settings:', connectionSettings);
+
+    sendResponse({
+      success: true,
+      settings: connectionSettings
+    });
+  } catch (error) {
+    console.error('Failed to get connection settings:', error);
+    sendResponse({
+      success: false,
+      error: error.message,
+      settings: null
     });
   }
 }

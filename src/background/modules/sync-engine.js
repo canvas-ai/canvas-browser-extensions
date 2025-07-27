@@ -555,13 +555,22 @@ export class SyncEngine {
 
       console.log('SyncEngine: Context URLs:', Array.from(contextUrls));
 
+      // Get pinned tabs to avoid closing them
+      const pinnedTabs = await browserStorage.getPinnedTabs();
+      console.log('SyncEngine: Pinned tabs:', Array.from(pinnedTabs));
+
       // Close tabs that are not in the new context
       let closedCount = 0;
       for (const tab of browserTabs) {
         if (!contextUrls.has(tab.url)) {
-          console.log('SyncEngine: Closing tab not in context:', tab.title, tab.url);
-          await tabManager.closeTab(tab.id);
-          closedCount++;
+          // Check if tab is pinned - if so, don't close it
+          if (pinnedTabs.has(tab.id)) {
+            console.log('SyncEngine: Keeping pinned tab (not closing):', tab.title, tab.url);
+          } else {
+            console.log('SyncEngine: Closing tab not in context:', tab.title, tab.url);
+            await tabManager.closeTab(tab.id);
+            closedCount++;
+          }
         } else {
           console.log('SyncEngine: Keeping tab in context:', tab.title, tab.url);
         }

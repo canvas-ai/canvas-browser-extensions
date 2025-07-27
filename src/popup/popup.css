@@ -42,6 +42,12 @@ body {
 .logo {
   width: 24px;
   height: 24px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.logo:hover {
+  opacity: 0.8;
 }
 
 .connection-info {
@@ -415,6 +421,34 @@ body {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.action-btn.pin-btn {
+  background: white;
+  color: #6c757d;
+  border: 1px solid #e1e5e9;
+}
+
+.action-btn.pin-btn:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.action-btn.pin-btn.pinned {
+  background: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
+.action-btn.pin-btn.pinned:hover {
+  background: #c82333;
+  border-color: #bd2130;
+}
+
+.action-btn.pin-btn svg {
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
 /* Scrollbar styles */
