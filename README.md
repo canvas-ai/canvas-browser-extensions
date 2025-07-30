@@ -11,6 +11,24 @@ A browser extension for seamlessly syncing browser tabs with Canvas server conte
 - **WebSocket integration** for live updates
 - **Secure API token authentication**
 
+## Screenshots
+
+### Extension Popup
+
+![Screenshot 1](assets/screenshots/screenshot1.png)
+
+### Settings Configuration
+
+![Screenshot 2](assets/screenshots/screenshot2.png)
+
+### Context Management
+
+![Screenshot 3](assets/screenshots/screenshot3.png)
+
+### Tab Synchronization
+
+![Screenshot 4](assets/screenshots/screenshot4.png)
+
 ## Installation
 
 ### Method 1: Download Release Package (Recommended)
