@@ -17,15 +17,11 @@ A browser extension for seamlessly syncing browser tabs with Canvas server conte
 
 ![Screenshot 1](assets/screenshots/screenshot1.png)
 
-### Settings Configuration
-
 ![Screenshot 2](assets/screenshots/screenshot2.png)
-
-### Context Management
 
 ![Screenshot 3](assets/screenshots/screenshot3.png)
 
-### Tab Synchronization
+### Extension Settings
 
 ![Screenshot 4](assets/screenshots/screenshot4.png)
 
