@@ -22,10 +22,8 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-        cache-dependency-path: src/ui/browser-extension/package-lock.json
 
     - name: Install dependencies
-      working-directory: src/ui/browser-extension
       run: npm ci
 
     - name: Extract version from tag
@@ -36,12 +34,10 @@ jobs:
         echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
     - name: Update version in package.json
-      working-directory: src/ui/browser-extension
       run: |
         npm version ${{ steps.extract_version.outputs.version }} --no-git-tag-version
 
     - name: Update version in manifests
-      working-directory: src/ui/browser-extension
       run: |
         # Update Chromium manifest
         sed -i 's/"version": "[^"]*"/"version": "${{ steps.extract_version.outputs.version }}"/' manifest-chromium.json
@@ -50,13 +46,11 @@ jobs:
         sed -i 's/"version": "[^"]*"/"version": "${{ steps.extract_version.outputs.version }}"/' manifest-firefox.json
 
     - name: Build production packages
-      working-directory: src/ui/browser-extension
       run: |
         echo "Building production packages..."
         npm run build
 
     - name: Test production packages
-      working-directory: src/ui/browser-extension
       run: |
         echo "Testing production builds..."
         test -f packages/canvas-extension-chromium.zip
@@ -66,7 +60,6 @@ jobs:
         echo "✅ Production packages validated"
 
     - name: Prepare release assets
-      working-directory: src/ui/browser-extension
       run: |
         mkdir -p release-assets
 
@@ -164,8 +157,8 @@ jobs:
         draft: false
         prerelease: ${{ contains(steps.extract_version.outputs.version, '-') }}
         files: |
-          src/ui/browser-extension/release-assets/*.zip
-          src/ui/browser-extension/release-assets/checksums.txt
+          release-assets/*.zip
+          release-assets/checksums.txt
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Cleanup old releases
