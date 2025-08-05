@@ -6,6 +6,7 @@ import FuzzySearch from './fuse.js';
 
 // DOM elements
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
+let contextUrlEdit, contextUrlInput, contextUrlSubmit, contextUrlCancel;
 let searchInput, autoSyncNew, autoOpenNew, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoImg;
@@ -74,6 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.data.contextId && message.data.url) {
           contextId.textContent = message.data.contextId;
           contextUrl.textContent = message.data.url;
+          contextUrl.classList.add('clickable');
         }
         break;
 
@@ -83,6 +85,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.data.contextId && message.data.url) {
           contextId.textContent = message.data.contextId;
           contextUrl.textContent = message.data.url;
+          contextUrl.classList.add('clickable');
+          // Update currentConnection context if it matches
+          if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
+            currentConnection.context.url = message.data.url;
+          }
         }
         // Refresh tabs to show updated context
         loadTabs();
@@ -111,6 +118,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.data.contextId && message.data.url) {
         contextId.textContent = message.data.contextId;
         contextUrl.textContent = message.data.url;
+        contextUrl.classList.add('clickable');
       }
       break;
 
@@ -120,6 +128,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.data.contextId && message.data.url) {
         contextId.textContent = message.data.contextId;
         contextUrl.textContent = message.data.url;
+        contextUrl.classList.add('clickable');
+        // Update currentConnection context if it matches
+        if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
+          currentConnection.context.url = message.data.url;
+        }
       }
       // Refresh tabs to show updated context
       loadTabs();
@@ -141,6 +154,10 @@ function initializeElements() {
   contextInfo = document.getElementById('contextInfo');
   contextId = document.getElementById('contextId');
   contextUrl = document.getElementById('contextUrl');
+  contextUrlEdit = document.getElementById('contextUrlEdit');
+  contextUrlInput = document.getElementById('contextUrlInput');
+  contextUrlSubmit = document.getElementById('contextUrlSubmit');
+  contextUrlCancel = document.getElementById('contextUrlCancel');
   logoImg = document.querySelector('.logo');
 
   // Search and settings
@@ -184,6 +201,12 @@ function setupEventListeners() {
 
   // Settings button
   settingsBtn.addEventListener('click', openSettingsPage);
+
+  // Context URL editing
+  contextUrl.addEventListener('click', handleContextUrlClick);
+  contextUrlSubmit.addEventListener('click', handleContextUrlSubmit);
+  contextUrlCancel.addEventListener('click', handleContextUrlCancel);
+  contextUrlInput.addEventListener('keydown', handleContextUrlKeydown);
 
   // Tab navigation
   browserToCanvasTab.addEventListener('click', () => switchTab('browser-to-canvas'));
@@ -317,10 +340,13 @@ function updateConnectionStatus(connection) {
       console.log('Popup: Setting context to:', connection.context.id);
       contextId.textContent = connection.context.id;
       contextUrl.textContent = connection.context.url;
+      // Make URL clickable if we have a valid context
+      contextUrl.classList.add('clickable');
     } else {
       console.log('Popup: No context bound');
       contextId.textContent = '-';
       contextUrl.textContent = 'No context bound';
+      contextUrl.classList.remove('clickable');
     }
   } else {
     console.log('Popup: Setting status to DISCONNECTED');
@@ -328,6 +354,7 @@ function updateConnectionStatus(connection) {
     connectionText.textContent = 'Disconnected';
     contextId.textContent = '-';
     contextUrl.textContent = 'No context';
+    contextUrl.classList.remove('clickable');
   }
 }
 
@@ -911,6 +938,80 @@ function filterTabItems(container, query, type) {
     performFuzzySearch(query, type);
   } else {
     clearSearch();
+  }
+}
+
+// Context URL editing handlers
+function handleContextUrlClick() {
+  // Only allow editing if we have a valid context
+  if (!currentConnection.connected || !currentConnection.context || !currentConnection.context.url) {
+    return;
+  }
+
+  // Don't allow editing if showing placeholder text
+  const currentText = contextUrl.textContent;
+  if (currentText === 'No context' || currentText === 'No context bound') {
+    return;
+  }
+
+  // Show editing interface
+  contextUrl.style.display = 'none';
+  contextUrlEdit.style.display = 'flex';
+  contextUrlInput.value = currentConnection.context.url || '';
+  contextUrlInput.focus();
+  contextUrlInput.select();
+}
+
+function handleContextUrlCancel() {
+  // Hide editing interface
+  contextUrlEdit.style.display = 'none';
+  contextUrl.style.display = 'inline';
+}
+
+async function handleContextUrlSubmit() {
+  if (!currentConnection.connected || !currentConnection.context) {
+    handleContextUrlCancel();
+    return;
+  }
+
+  const newUrl = contextUrlInput.value.trim();
+  if (!newUrl) {
+    handleContextUrlCancel();
+    return;
+  }
+
+  try {
+    // Send API request to update context URL
+    const response = await chrome.runtime.sendMessage({
+      type: 'context.url.update',
+      contextId: currentConnection.context.id,
+      url: newUrl
+    });
+
+    if (response.success) {
+      // Update the displayed URL
+      contextUrl.textContent = newUrl;
+      currentConnection.context.url = newUrl;
+      console.log('Context URL updated successfully');
+    } else {
+      console.error('Failed to update context URL:', response.error);
+      alert('Failed to update context URL: ' + (response.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error updating context URL:', error);
+    alert('Failed to update context URL: ' + error.message);
+  }
+
+  handleContextUrlCancel();
+}
+
+function handleContextUrlKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleContextUrlSubmit();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    handleContextUrlCancel();
   }
 }
 

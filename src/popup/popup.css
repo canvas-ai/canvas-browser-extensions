@@ -90,10 +90,81 @@ body {
   color: #6c757d;
 }
 
+.context-url-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .context-url {
   font-size: 12px;
   font-weight: 600;
   color: #0066cc;
+  transition: color 0.2s ease;
+}
+
+.context-url.clickable {
+  cursor: pointer;
+}
+
+.context-url.clickable:hover {
+  color: #0052a3;
+  text-decoration: underline;
+}
+
+.context-url-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.context-url-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  outline: none;
+}
+
+.context-url-input:focus {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 1px rgba(0, 102, 204, 0.2);
+}
+
+.context-url-submit,
+.context-url-cancel {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.context-url-submit {
+  background-color: #28a745;
+  color: white;
+}
+
+.context-url-submit:hover {
+  background-color: #218838;
+}
+
+.context-url-cancel {
+  background-color: #dc3545;
+  color: white;
+}
+
+.context-url-cancel:hover {
+  background-color: #c82333;
 }
 
 .settings-btn {
