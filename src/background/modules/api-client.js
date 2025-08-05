@@ -167,6 +167,10 @@ export class CanvasApiClient {
     return await this.put(`/contexts/${contextId}`, contextData);
   }
 
+  async updateContextUrl(contextId, url) {
+    return await this.post(`/contexts/${contextId}/url`, { url });
+  }
+
   async deleteContext(contextId) {
     return await this.delete(`/contexts/${contextId}`);
   }

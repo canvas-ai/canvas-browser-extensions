@@ -600,6 +600,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleDeleteFromDatabase(message.data, sendResponse);
       return true;
 
+    case 'context.url.update':
+      // Update context URL
+      handleUpdateContextUrl(message, sendResponse);
+      return true;
+
     default:
       console.warn('Unknown message type:', message.type);
       sendResponse({ error: 'Unknown message type' });
@@ -1451,6 +1456,46 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
     sendResponse(result);
   } catch (error) {
     console.error('Failed to remove Canvas document:', error);
+    sendResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+async function handleUpdateContextUrl(message, sendResponse) {
+  try {
+    const { contextId, url } = message;
+
+    if (!contextId || !url) {
+      throw new Error('Context ID and URL are required');
+    }
+
+    console.log('Updating context URL:', contextId, '→', url);
+
+    // Make API request to update context URL
+    const response = await apiClient.updateContextUrl(contextId, url);
+
+    // Update current context in storage if it's the same one being updated
+    const currentContext = await browserStorage.getCurrentContext();
+    if (currentContext && currentContext.id === contextId) {
+      currentContext.url = url;
+      await browserStorage.setCurrentContext(currentContext);
+    }
+
+    // Notify all listeners about the URL change
+    await chrome.runtime.sendMessage({
+      type: 'BACKGROUND_EVENT',
+      eventType: 'context.url.set',
+      data: { contextId, url }
+    });
+
+    sendResponse({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error('Failed to update context URL:', error);
     sendResponse({
       success: false,
       error: error.message
