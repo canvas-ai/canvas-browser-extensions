@@ -6,9 +6,10 @@ import FuzzySearch from './fuse.js';
 
 // DOM elements
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
+let contextUrlEdit, contextUrlInput, contextUrlSubmit, contextUrlCancel;
 let searchInput, autoSyncNew, autoOpenNew, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
-let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn;
+let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoImg;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 
@@ -74,6 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.data.contextId && message.data.url) {
           contextId.textContent = message.data.contextId;
           contextUrl.textContent = message.data.url;
+          contextUrl.classList.add('clickable');
         }
         break;
 
@@ -83,6 +85,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.data.contextId && message.data.url) {
           contextId.textContent = message.data.contextId;
           contextUrl.textContent = message.data.url;
+          contextUrl.classList.add('clickable');
+          // Update currentConnection context if it matches
+          if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
+            currentConnection.context.url = message.data.url;
+          }
         }
         // Refresh tabs to show updated context
         loadTabs();
@@ -111,6 +118,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.data.contextId && message.data.url) {
         contextId.textContent = message.data.contextId;
         contextUrl.textContent = message.data.url;
+        contextUrl.classList.add('clickable');
       }
       break;
 
@@ -120,6 +128,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.data.contextId && message.data.url) {
         contextId.textContent = message.data.contextId;
         contextUrl.textContent = message.data.url;
+        contextUrl.classList.add('clickable');
+        // Update currentConnection context if it matches
+        if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
+          currentConnection.context.url = message.data.url;
+        }
       }
       // Refresh tabs to show updated context
       loadTabs();
@@ -141,6 +154,11 @@ function initializeElements() {
   contextInfo = document.getElementById('contextInfo');
   contextId = document.getElementById('contextId');
   contextUrl = document.getElementById('contextUrl');
+  contextUrlEdit = document.getElementById('contextUrlEdit');
+  contextUrlInput = document.getElementById('contextUrlInput');
+  contextUrlSubmit = document.getElementById('contextUrlSubmit');
+  contextUrlCancel = document.getElementById('contextUrlCancel');
+  logoImg = document.querySelector('.logo');
 
   // Search and settings
   searchInput = document.getElementById('searchInput');
@@ -178,8 +196,17 @@ function initializeElements() {
 }
 
 function setupEventListeners() {
+  // Logo click - open Canvas server webui
+  logoImg.addEventListener('click', openCanvasWebUI);
+
   // Settings button
   settingsBtn.addEventListener('click', openSettingsPage);
+
+  // Context URL editing
+  contextUrl.addEventListener('click', handleContextUrlClick);
+  contextUrlSubmit.addEventListener('click', handleContextUrlSubmit);
+  contextUrlCancel.addEventListener('click', handleContextUrlCancel);
+  contextUrlInput.addEventListener('keydown', handleContextUrlKeydown);
 
   // Tab navigation
   browserToCanvasTab.addEventListener('click', () => switchTab('browser-to-canvas'));
@@ -313,10 +340,13 @@ function updateConnectionStatus(connection) {
       console.log('Popup: Setting context to:', connection.context.id);
       contextId.textContent = connection.context.id;
       contextUrl.textContent = connection.context.url;
+      // Make URL clickable if we have a valid context
+      contextUrl.classList.add('clickable');
     } else {
       console.log('Popup: No context bound');
       contextId.textContent = '-';
       contextUrl.textContent = 'No context bound';
+      contextUrl.classList.remove('clickable');
     }
   } else {
     console.log('Popup: Setting status to DISCONNECTED');
@@ -324,6 +354,7 @@ function updateConnectionStatus(connection) {
     connectionText.textContent = 'Disconnected';
     contextId.textContent = '-';
     contextUrl.textContent = 'No context';
+    contextUrl.classList.remove('clickable');
   }
 }
 
@@ -417,6 +448,9 @@ async function loadTabs() {
         }
       }
 
+      // Load pin state for all tabs
+      await loadPinStates();
+
       // Filter tabs based on showSyncedTabs setting
       updateBrowserTabsFilter();
       renderBrowserTabs();
@@ -454,6 +488,35 @@ async function loadTabs() {
     }
   } catch (error) {
     console.error('Failed to load tabs:', error);
+  }
+}
+
+async function loadPinStates() {
+  try {
+    console.log('Loading pin states for tabs...');
+    const pinResponse = await sendMessageToBackground('GET_PINNED_TABS');
+
+    if (pinResponse.success) {
+      const pinnedTabIds = new Set(pinResponse.pinnedTabs || []);
+      console.log('Pinned tab IDs:', Array.from(pinnedTabIds));
+
+      // Add pin state to each tab
+      allBrowserTabs.forEach(tab => {
+        tab.isPinned = pinnedTabIds.has(tab.id);
+      });
+    } else {
+      console.error('Failed to get pinned tabs:', pinResponse.error);
+      // Default to not pinned for all tabs
+      allBrowserTabs.forEach(tab => {
+        tab.isPinned = false;
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load pin states:', error);
+    // Default to not pinned for all tabs
+    allBrowserTabs.forEach(tab => {
+      tab.isPinned = false;
+    });
   }
 }
 
@@ -535,6 +598,12 @@ function renderBrowserTabs() {
     const syncButtonDisabled = isSynced ? 'disabled' : '';
     const syncButtonTitle = isSynced ? 'Already synced to Canvas' : 'Sync to Canvas';
     const tabClass = isSynced ? 'tab-item synced' : 'tab-item';
+    const isPinned = tab.isPinned || false; // Will be populated when we load tab data
+    const pinButtonClass = isPinned ? 'action-btn small pin-btn pinned' : 'action-btn small pin-btn';
+    const pinButtonTitle = isPinned ? 'Unpin tab (will close on context change)' : 'Pin tab (keep open on context change)';
+    const pinIcon = isPinned ?
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin-fill" viewBox="0 0 16 16"><path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354"/></svg>' :
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin-angle-fill" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/></svg>';
 
     return `
       <div class="${tabClass}" data-tab-id="${tab.id}">
@@ -548,6 +617,7 @@ function renderBrowserTabs() {
           <div class="tab-url">${escapeHtml(tab.url)}</div>
         </div>
         <div class="tab-actions">
+          <button class="${pinButtonClass}" data-action="pin" data-tab-id="${tab.id}" title="${pinButtonTitle}">${pinIcon}</button>
           <button class="action-btn small primary" data-action="sync" data-tab-id="${tab.id}" title="${syncButtonTitle}" ${syncButtonDisabled}>↗</button>
           <button class="action-btn small danger" data-action="close" data-tab-id="${tab.id}" title="Close tab">✕</button>
         </div>
@@ -601,6 +671,32 @@ async function openSettingsPage() {
     window.close();
   } catch (error) {
     console.error('Failed to open settings page:', error);
+  }
+}
+
+async function openCanvasWebUI() {
+  try {
+    console.log('Opening Canvas server webui...');
+
+    // Get connection settings to build the webui URL
+    const response = await sendMessageToBackground('GET_CONNECTION_SETTINGS');
+
+    if (response.success && response.settings) {
+      const { serverUrl } = response.settings;
+
+      if (serverUrl) {
+        console.log('Opening Canvas webui at:', serverUrl);
+        await chrome.tabs.create({ url: serverUrl });
+        window.close();
+      } else {
+        console.error('No server URL configured');
+        // Could show a toast message here
+      }
+    } else {
+      console.error('Failed to get connection settings:', response.error);
+    }
+  } catch (error) {
+    console.error('Failed to open Canvas webui:', error);
   }
 }
 
@@ -845,6 +941,80 @@ function filterTabItems(container, query, type) {
   }
 }
 
+// Context URL editing handlers
+function handleContextUrlClick() {
+  // Only allow editing if we have a valid context
+  if (!currentConnection.connected || !currentConnection.context || !currentConnection.context.url) {
+    return;
+  }
+
+  // Don't allow editing if showing placeholder text
+  const currentText = contextUrl.textContent;
+  if (currentText === 'No context' || currentText === 'No context bound') {
+    return;
+  }
+
+  // Show editing interface
+  contextUrl.style.display = 'none';
+  contextUrlEdit.style.display = 'flex';
+  contextUrlInput.value = currentConnection.context.url || '';
+  contextUrlInput.focus();
+  contextUrlInput.select();
+}
+
+function handleContextUrlCancel() {
+  // Hide editing interface
+  contextUrlEdit.style.display = 'none';
+  contextUrl.style.display = 'inline';
+}
+
+async function handleContextUrlSubmit() {
+  if (!currentConnection.connected || !currentConnection.context) {
+    handleContextUrlCancel();
+    return;
+  }
+
+  const newUrl = contextUrlInput.value.trim();
+  if (!newUrl) {
+    handleContextUrlCancel();
+    return;
+  }
+
+  try {
+    // Send API request to update context URL
+    const response = await chrome.runtime.sendMessage({
+      type: 'context.url.update',
+      contextId: currentConnection.context.id,
+      url: newUrl
+    });
+
+    if (response.success) {
+      // Update the displayed URL
+      contextUrl.textContent = newUrl;
+      currentConnection.context.url = newUrl;
+      console.log('Context URL updated successfully');
+    } else {
+      console.error('Failed to update context URL:', response.error);
+      alert('Failed to update context URL: ' + (response.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error updating context URL:', error);
+    alert('Failed to update context URL: ' + error.message);
+  }
+
+  handleContextUrlCancel();
+}
+
+function handleContextUrlKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleContextUrlSubmit();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    handleContextUrlCancel();
+  }
+}
+
 async function handleSyncSettingChange(event) {
   try {
     const settingName = event.target.id;
@@ -990,6 +1160,21 @@ async function handleCloseTab(tabId) {
   }
 }
 
+async function handlePinTab(tabId) {
+  try {
+    console.log('Toggling pin for tab:', tabId);
+
+    const response = await sendMessageToBackground('TOGGLE_PIN_TAB', { tabId });
+    console.log('Pin tab response:', response);
+
+    if (response.success) {
+      await loadTabs(); // Refresh lists to update pin state
+    }
+  } catch (error) {
+    console.error('Failed to toggle pin tab:', error);
+  }
+}
+
 async function handleOpenCanvasTab(documentId) {
   try {
     console.log('Opening Canvas document:', documentId);
@@ -1099,6 +1284,10 @@ function handleBrowserTabAction(event) {
     case 'close':
       console.log('Calling handleCloseTab with tabId:', tabId);
       handleCloseTab(tabId);
+      break;
+    case 'pin':
+      console.log('Calling handlePinTab with tabId:', tabId);
+      handlePinTab(tabId);
       break;
     default:
       console.warn('Unknown browser tab action:', action);

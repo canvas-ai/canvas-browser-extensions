@@ -22,7 +22,8 @@ export class BrowserStorage {
       CONNECTION_SETTINGS: 'canvasConnectionSettings',
       CURRENT_CONTEXT: 'canvasCurrentContext',
       SYNC_SETTINGS: 'canvasSyncSettings',
-      BROWSER_IDENTITY: 'canvasBrowserIdentity'
+      BROWSER_IDENTITY: 'canvasBrowserIdentity',
+      PINNED_TABS: 'canvasPinnedTabs'
     };
 
     // Default values
@@ -41,7 +42,8 @@ export class BrowserStorage {
         contextChangeBehavior: 'keep-open-new'
       },
       [this.KEYS.CURRENT_CONTEXT]: null,
-      [this.KEYS.BROWSER_IDENTITY]: ''
+      [this.KEYS.BROWSER_IDENTITY]: '',
+      [this.KEYS.PINNED_TABS]: new Set()
     };
   }
 
@@ -177,6 +179,38 @@ export class BrowserStorage {
     }
 
     return identity;
+  }
+
+  // Pinned Tabs Management
+  async getPinnedTabs() {
+    const pinnedTabsData = await this.get(this.KEYS.PINNED_TABS);
+    // Convert array back to Set if needed
+    return pinnedTabsData instanceof Set ? pinnedTabsData : new Set(pinnedTabsData || []);
+  }
+
+  async setPinnedTabs(pinnedTabIds) {
+    // Convert Set to array for storage
+    const pinnedTabsArray = pinnedTabIds instanceof Set ? Array.from(pinnedTabIds) : pinnedTabIds;
+    return await this.set(this.KEYS.PINNED_TABS, pinnedTabsArray);
+  }
+
+  async pinTab(tabId) {
+    const pinnedTabs = await this.getPinnedTabs();
+    pinnedTabs.add(tabId);
+    console.log('Pinning tab:', tabId);
+    return await this.setPinnedTabs(pinnedTabs);
+  }
+
+  async unpinTab(tabId) {
+    const pinnedTabs = await this.getPinnedTabs();
+    pinnedTabs.delete(tabId);
+    console.log('Unpinning tab:', tabId);
+    return await this.setPinnedTabs(pinnedTabs);
+  }
+
+  async isTabPinned(tabId) {
+    const pinnedTabs = await this.getPinnedTabs();
+    return pinnedTabs.has(tabId);
   }
 
   // Clear all extension data

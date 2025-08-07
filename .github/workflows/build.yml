@@ -20,14 +20,11 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-        cache-dependency-path: src/ui/browser-extension/package-lock.json
 
     - name: Install dependencies
-      working-directory: src/ui/browser-extension
       run: npm ci
 
     - name: Validate manifests
-      working-directory: src/ui/browser-extension
       run: |
         echo "Validating manifest files..."
         # Check if manifests exist and are valid JSON
@@ -36,7 +33,6 @@ jobs:
         echo "✅ Manifests are valid"
 
     - name: Test build functionality
-      working-directory: src/ui/browser-extension
       run: |
         echo "Testing development build..."
         npm run build:dev
@@ -66,18 +62,14 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-        cache-dependency-path: src/ui/browser-extension/package-lock.json
 
     - name: Install dependencies
-      working-directory: src/ui/browser-extension
       run: npm ci
 
     - name: Build development packages
-      working-directory: src/ui/browser-extension
       run: npm run build:dev
 
     - name: Test packages
-      working-directory: src/ui/browser-extension
       run: |
         echo "Testing Chromium package..."
         test -f packages/canvas-extension-chromium.zip
@@ -102,26 +94,26 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: canvas-extension-chromium-dev
-        path: src/ui/browser-extension/packages/canvas-extension-chromium.zip
+        path: packages/canvas-extension-chromium.zip
         retention-days: 7
 
     - name: Upload Firefox development package
       uses: actions/upload-artifact@v4
       with:
         name: canvas-extension-firefox-dev
-        path: src/ui/browser-extension/packages/canvas-extension-firefox.zip
+        path: packages/canvas-extension-firefox.zip
         retention-days: 7
 
     - name: Upload unpackaged Chromium folder
       uses: actions/upload-artifact@v4
       with:
         name: canvas-extension-chromium-folder-dev
-        path: src/ui/browser-extension/packages/chromium/
+        path: packages/chromium/
         retention-days: 7
 
     - name: Upload unpackaged Firefox folder
       uses: actions/upload-artifact@v4
       with:
         name: canvas-extension-firefox-folder-dev
-        path: src/ui/browser-extension/packages/firefox/
+        path: packages/firefox/
         retention-days: 7

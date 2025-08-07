@@ -1,6 +1,8 @@
 // API Client module for Canvas Extension
 // Handles REST API communication with Canvas server
 
+import { browserStorage } from './browser-storage.js';
+
 export class CanvasApiClient {
   constructor() {
     this.baseUrl = null;
@@ -159,12 +161,14 @@ export class CanvasApiClient {
     return await this.get(`/contexts/${contextId}`);
   }
 
-  async createContext(contextData) {
-    return await this.post('/contexts', contextData);
-  }
+
 
   async updateContext(contextId, contextData) {
     return await this.put(`/contexts/${contextId}`, contextData);
+  }
+
+  async updateContextUrl(contextId, url) {
+    return await this.post(`/contexts/${contextId}/url`, { url });
   }
 
   async deleteContext(contextId) {
@@ -173,12 +177,30 @@ export class CanvasApiClient {
 
   // Document methods (tabs)
   async getContextDocuments(contextId, featureArray = []) {
+    // Always ensure we're looking for tab documents
+    const enhancedFeatureArray = [...featureArray];
+    if (!enhancedFeatureArray.includes('data/abstraction/tab')) {
+      enhancedFeatureArray.unshift('data/abstraction/tab');
+    }
+
+    // Get sync settings to check if we should filter by browser instance
+    const syncSettings = await browserStorage.getSyncSettings();
+    if (syncSettings.syncOnlyThisBrowser) {
+      const browserIdentity = await browserStorage.getBrowserIdentity();
+      if (browserIdentity) {
+        const browserTag = `tag/${browserIdentity}`;
+        if (!enhancedFeatureArray.includes(browserTag)) {
+          enhancedFeatureArray.push(browserTag);
+        }
+      }
+    }
+
     let endpoint = `/contexts/${contextId}/documents`;
 
     // Add feature array as query parameters if provided
-    if (featureArray.length > 0) {
+    if (enhancedFeatureArray.length > 0) {
       const params = new URLSearchParams();
-      featureArray.forEach(feature => params.append('feature', feature));
+      enhancedFeatureArray.forEach(feature => params.append('featureArray', feature));
       endpoint += `?${params.toString()}`;
     }
 
@@ -186,25 +208,55 @@ export class CanvasApiClient {
   }
 
   async insertDocument(contextId, document, featureArray = []) {
+    // Always add browser identity for POST operations
+    const enhancedFeatureArray = [...featureArray];
+    const browserIdentity = await browserStorage.getBrowserIdentity();
+    if (browserIdentity) {
+      const browserTag = `tag/${browserIdentity}`;
+      if (!enhancedFeatureArray.includes(browserTag)) {
+        enhancedFeatureArray.push(browserTag);
+      }
+    }
+
     const data = {
       documents: document,  // Server expects "documents" (can be single object)
-      featureArray
+      featureArray: enhancedFeatureArray
     };
     return await this.post(`/contexts/${contextId}/documents`, data);
   }
 
   async insertDocuments(contextId, documents, featureArray = []) {
+    // Always add browser identity for POST operations
+    const enhancedFeatureArray = [...featureArray];
+    const browserIdentity = await browserStorage.getBrowserIdentity();
+    if (browserIdentity) {
+      const browserTag = `tag/${browserIdentity}`;
+      if (!enhancedFeatureArray.includes(browserTag)) {
+        enhancedFeatureArray.push(browserTag);
+      }
+    }
+
     const data = {
       documents,
-      featureArray
+      featureArray: enhancedFeatureArray
     };
     return await this.post(`/contexts/${contextId}/documents/batch`, data);
   }
 
   async updateDocument(contextId, documentId, document, featureArray = []) {
+    // Always add browser identity for PUT operations
+    const enhancedFeatureArray = [...featureArray];
+    const browserIdentity = await browserStorage.getBrowserIdentity();
+    if (browserIdentity) {
+      const browserTag = `tag/${browserIdentity}`;
+      if (!enhancedFeatureArray.includes(browserTag)) {
+        enhancedFeatureArray.push(browserTag);
+      }
+    }
+
     const data = {
       document,
-      featureArray
+      featureArray: enhancedFeatureArray
     };
     return await this.put(`/contexts/${contextId}/documents/${documentId}`, data);
   }

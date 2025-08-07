@@ -18,7 +18,14 @@
         </div>
         <div class="context-info" id="contextInfo">
           <span class="context-id" id="contextId">-</span>
-          <span class="context-url" id="contextUrl">No context</span>
+          <div class="context-url-container">
+            <span class="context-url" id="contextUrl">No context</span>
+            <div class="context-url-edit" id="contextUrlEdit" style="display: none;">
+              <input type="text" class="context-url-input" id="contextUrlInput" placeholder="Enter context URL">
+              <button class="context-url-submit" id="contextUrlSubmit">✓</button>
+              <button class="context-url-cancel" id="contextUrlCancel">✕</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -52,7 +59,7 @@
       <!-- Sync Settings for Browser to Canvas -->
       <div class="sync-settings">
         <label class="checkbox-label">
-          <input type="checkbox" id="autoSyncNew"> Auto-sync new tabs
+          <input type="checkbox" id="autoSyncNew"> Auto-sync new tabs(on tab open only)
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="showSyncedTabs"> Show already synced tabs
