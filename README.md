@@ -1,4 +1,4 @@
-# Canvas Browser Extension v2.0
+# Canvas Browser Extension
 
 A browser extension for seamlessly syncing browser tabs with Canvas server contexts. Extension allows you to connect several users / browsers / applications to a single shared context and working with tabs collaboratively.
 
@@ -27,9 +27,26 @@ A browser extension for seamlessly syncing browser tabs with Canvas server conte
 
 ## Installation
 
-### Method 1: Download Release Package (Recommended)
+### Method 1: Browser Store Installation (Recommended)
 
-**No build tools required!** Download the latest release for your browser:
+🚀 **Canvas Browser Extension is now available on official browser stores:**
+
+| Browser | Store Link |
+|---------|------------|
+| **Chrome/Chromium** | [Chrome Web Store](https://chromewebstore.google.com/detail/nddefgjgkhcpmgpipifjacmoinoncdgl) |
+| **Firefox** | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/canvas-browser-extension) |
+
+**Benefits of store installation:**
+- ✅ **Automatic updates** - always have the latest version
+- ✅ **Simplified installation** - one-click install
+- ✅ **Verified security** - reviewed by browser vendors
+- ✅ **Easy management** - manage through browser extension settings
+
+### Method 2: Download Release Package
+
+**For users who prefer manual installation or need specific versions:**
+
+Download the latest release for your browser:
 
 | Browser | Download |
 |---------|----------|
@@ -54,16 +71,6 @@ A browser extension for seamlessly syncing browser tabs with Canvas server conte
 5. Click "Load Temporary Add-on"
 6. Select the `manifest.json` file from the extracted folder
 
-### Method 2: Browser Store Installation (Coming Soon)
-
-🚀 **Canvas Browser Extension will be available on official browser stores soon:**
-
-- **Chrome Web Store** - *Coming soon*
-- **Firefox Add-ons (AMO)** - *Coming soon*
-- **Edge Add-ons** - *Coming soon*
-
-Store versions will offer automatic updates and simplified installation.
-
 ### Method 3: Development Installation
 
 For developers and testing:
@@ -83,7 +90,7 @@ For developers and testing:
    npm run build
    ```
 
-3. **Load in browser** (same steps as Method 1, but use `packages/chromium/` or `packages/firefox/` directories)
+3. **Load in browser** (same steps as Method 2, but use `packages/chromium/` or `packages/firefox/` directories)
 
 ## Setup
 
