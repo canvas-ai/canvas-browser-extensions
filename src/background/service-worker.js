@@ -570,6 +570,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleCloseTab(message.data, sendResponse);
       return true;
 
+    case 'FOCUS_TAB':
+      // Focus browser tab
+      handleFocusTab(message.data, sendResponse);
+      return true;
+
     case 'TOGGLE_PIN_TAB':
       // Toggle pin state of a tab
       handleTogglePinTab(message.data, sendResponse);
@@ -923,6 +928,37 @@ async function handleCloseTab(data, sendResponse) {
     }
   } catch (error) {
     console.error('Failed to close tab:', error);
+    sendResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+async function handleFocusTab(data, sendResponse) {
+  try {
+    const { tabId } = data;
+
+    if (!tabId) {
+      throw new Error('Tab ID is required');
+    }
+
+    console.log('Focusing tab:', tabId);
+
+    // Focus the tab using Chrome API
+    const result = await tabManager.focusTab(tabId);
+
+    if (result) {
+      console.log('Tab focused successfully:', tabId);
+      sendResponse({
+        success: true,
+        message: 'Tab focused successfully'
+      });
+    } else {
+      throw new Error('Failed to focus tab');
+    }
+  } catch (error) {
+    console.error('Failed to focus tab:', error);
     sendResponse({
       success: false,
       error: error.message

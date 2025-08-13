@@ -393,6 +393,12 @@ body {
 .tab-info {
   flex: 1;
   min-width: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.tab-info:hover {
+  opacity: 0.8;
 }
 
 .tab-title {

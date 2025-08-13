@@ -289,6 +289,19 @@ export class TabManager {
     }
   }
 
+  // Focus tab
+  async focusTab(tabId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      await chrome.tabs.update(tabId, { active: true });
+      await chrome.windows.update(tab.windowId, { focused: true });
+      return true;
+    } catch (error) {
+      console.error('Failed to focus tab:', error);
+      return false;
+    }
+  }
+
   // Close multiple tabs
   async closeTabs(tabIds) {
     try {
