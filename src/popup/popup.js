@@ -1175,6 +1175,21 @@ async function handlePinTab(tabId) {
   }
 }
 
+async function handleFocusTab(tabId) {
+  try {
+    console.log('Focusing tab:', tabId);
+
+    const response = await sendMessageToBackground('FOCUS_TAB', { tabId });
+    console.log('Focus tab response:', response);
+
+    if (!response.success) {
+      console.error('Failed to focus tab:', response.error);
+    }
+  } catch (error) {
+    console.error('Failed to focus tab:', error);
+  }
+}
+
 async function handleOpenCanvasTab(documentId) {
   try {
     console.log('Opening Canvas document:', documentId);
@@ -1261,36 +1276,54 @@ function handleBrowserTabAction(event) {
   const button = event.target.closest('button[data-action]');
   console.log('Found button:', button);
 
-  if (!button) return;
+  // Check if it's a button action
+  if (button) {
+    event.preventDefault();
+    event.stopPropagation();
 
-  event.preventDefault();
-  event.stopPropagation();
+    const action = button.dataset.action;
+    const tabId = parseInt(button.dataset.tabId);
 
-  const action = button.dataset.action;
-  const tabId = parseInt(button.dataset.tabId);
+    console.log('Action:', action, 'TabId:', tabId);
 
-  console.log('Action:', action, 'TabId:', tabId);
+    if (!tabId) {
+      console.error('No tabId found for action:', action);
+      return;
+    }
 
-  if (!tabId) {
-    console.error('No tabId found for action:', action);
+    switch (action) {
+      case 'sync':
+        console.log('Calling handleSyncTab with tabId:', tabId);
+        handleSyncTab(tabId);
+        break;
+      case 'close':
+        console.log('Calling handleCloseTab with tabId:', tabId);
+        handleCloseTab(tabId);
+        break;
+      case 'pin':
+        console.log('Calling handlePinTab with tabId:', tabId);
+        handlePinTab(tabId);
+        break;
+      default:
+        console.warn('Unknown browser tab action:', action);
+    }
     return;
   }
 
-  switch (action) {
-    case 'sync':
-      console.log('Calling handleSyncTab with tabId:', tabId);
-      handleSyncTab(tabId);
-      break;
-    case 'close':
-      console.log('Calling handleCloseTab with tabId:', tabId);
-      handleCloseTab(tabId);
-      break;
-    case 'pin':
-      console.log('Calling handlePinTab with tabId:', tabId);
-      handlePinTab(tabId);
-      break;
-    default:
-      console.warn('Unknown browser tab action:', action);
+  // Check if it's a click on the tab info area (for focusing)
+  const tabInfo = event.target.closest('.tab-info');
+  const tabItem = event.target.closest('.tab-item');
+  
+  if (tabInfo && tabItem) {
+    const tabId = parseInt(tabItem.dataset.tabId);
+    
+    console.log('Tab info clicked, focusing tab:', tabId);
+    
+    if (tabId) {
+      event.preventDefault();
+      event.stopPropagation();
+      handleFocusTab(tabId);
+    }
   }
 }
 
