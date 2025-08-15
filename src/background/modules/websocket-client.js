@@ -241,6 +241,29 @@ export class WebSocketClient {
     return false;
   }
 
+  // Join workspace channel
+  async joinWorkspace(workspaceId) {
+    console.log('WebSocketClient: Joining workspace:', workspaceId);
+
+    if (this.authenticated) {
+      // Subscribe to workspace events using socket.io
+      const success = this.send('subscribe', {
+        channel: `workspace:${workspaceId}`,
+        workspaceId: workspaceId
+      });
+
+      if (success) {
+        console.log('WebSocketClient: Successfully joined workspace:', workspaceId);
+        this.emit('workspace.joined', { workspaceId });
+        return true;
+      }
+    } else {
+      console.log('WebSocketClient: Not authenticated yet, workspace will be joined after auth');
+    }
+
+    return false;
+  }
+
   // Leave context channel
   async leaveContext() {
     console.log('WebSocketClient: Leaving context:', this.contextId);
@@ -258,6 +281,26 @@ export class WebSocketClient {
       if (success) {
         console.log('WebSocketClient: Successfully left context:', oldContextId);
         this.emit('context.left', { contextId: oldContextId });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Leave workspace channel
+  async leaveWorkspace(workspaceId) {
+    console.log('WebSocketClient: Leaving workspace:', workspaceId);
+
+    if (this.authenticated && workspaceId) {
+      const success = this.send('unsubscribe', {
+        channel: `workspace:${workspaceId}`,
+        workspaceId: workspaceId
+      });
+
+      if (success) {
+        console.log('WebSocketClient: Successfully left workspace:', workspaceId);
+        this.emit('workspace.left', { workspaceId });
         return true;
       }
     }

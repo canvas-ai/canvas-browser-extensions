@@ -74,9 +74,39 @@ export class SyncEngine {
       await this.handleWebSocketEvent(eventData);
     });
 
+    // Listen for all workspace and context document events
+    webSocketClient.on('document.inserted', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.inserted', ...eventData });
+    });
+
+    webSocketClient.on('document.updated', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.updated', ...eventData });
+    });
+
+    webSocketClient.on('document.removed', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.removed', ...eventData });
+    });
+
+    webSocketClient.on('document.deleted', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.deleted', ...eventData });
+    });
+
+    webSocketClient.on('document.removed.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.removed.batch', ...eventData });
+    });
+
+    webSocketClient.on('document.deleted.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'document.deleted.batch', ...eventData });
+    });
+
+    // Context path change (when URL changes)
+    webSocketClient.on('context.url.set', async (eventData) => {
+      await this.handleContextUrlChanged(eventData);
+    });
+
+    // Context change (when switched to different context)
     webSocketClient.on('context.changed', async (eventData) => {
-      // Re-sync when context changes
-      await this.performFullSync(eventData.contextId);
+      await this.handleContextSwitched(eventData);
     });
   }
 
@@ -86,10 +116,25 @@ export class SyncEngine {
       console.log('SyncEngine: Handling WebSocket event:', eventData.type);
 
       const syncSettings = await browserStorage.getSyncSettings();
+      const mode = await browserStorage.getSyncMode();
+      const currentContext = await browserStorage.getCurrentContext();
+      const currentWorkspace = await browserStorage.getCurrentWorkspace();
+      const workspacePath = await browserStorage.getWorkspacePath();
+
+      // Check if this event is relevant to our current context/workspace
+      const isRelevant = await this.isEventRelevant(eventData, mode, currentContext, currentWorkspace, workspacePath);
+      if (!isRelevant) {
+        console.log('SyncEngine: Event not relevant to current context/workspace, skipping');
+        return;
+      }
 
       switch (eventData.type) {
         case 'document.inserted':
           await this.handleRemoteDocumentInserted(eventData, syncSettings);
+          break;
+
+        case 'document.updated':
+          await this.handleRemoteDocumentUpdated(eventData, syncSettings);
           break;
 
         case 'document.removed':
@@ -152,10 +197,78 @@ export class SyncEngine {
     console.log('SyncEngine: Would close tabs for removed documents:', eventData.documentIds || [eventData.documentId]);
   }
 
+  // Handle remote document updated
+  async handleRemoteDocumentUpdated(eventData, syncSettings) {
+    console.log('SyncEngine: Document updated:', eventData);
+    // For now, just log - we could update tab titles/URLs in the future
+  }
+
   // Handle remote document deletion
   async handleRemoteDocumentDeleted(eventData, syncSettings) {
     // Same as removal for now
     await this.handleRemoteDocumentRemoved(eventData, syncSettings);
+  }
+
+  // Check if an event is relevant to our current context/workspace
+  async isEventRelevant(eventData, mode, currentContext, currentWorkspace, workspacePath) {
+    try {
+      if (mode === 'context') {
+        // Context mode: check if event relates to our current context
+        const eventContextId = eventData.contextId || eventData.id;
+        return eventContextId === currentContext?.id;
+      } else {
+        // Workspace mode: check if event relates to our current workspace and path
+        const eventWorkspaceId = eventData.workspaceId || eventData.id;
+        const eventContextSpec = eventData.contextSpec || '/';
+
+        // Check workspace match
+        const workspaceMatch = eventWorkspaceId === (currentWorkspace?.id || currentWorkspace?.name);
+
+        // Check path match (document events should include contextSpec)
+        const pathMatch = workspacePath ? eventContextSpec === workspacePath : true;
+
+        return workspaceMatch && pathMatch;
+      }
+    } catch (error) {
+      console.error('SyncEngine: Error checking event relevance:', error);
+      return false;
+    }
+  }
+
+  // Handle context URL change
+  async handleContextUrlChanged(eventData) {
+    try {
+      console.log('SyncEngine: Context URL changed:', eventData);
+
+      const currentContext = await browserStorage.getCurrentContext();
+      if (currentContext?.id === eventData.id) {
+        console.log('SyncEngine: Our context URL changed from', currentContext.url, 'to', eventData.url);
+
+        // Update stored context
+        currentContext.url = eventData.url;
+        await browserStorage.setCurrentContext(currentContext);
+
+        // Handle as context path change
+        await this.handleContextUrlChange(eventData.id, eventData.url);
+      }
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle context URL change:', error);
+    }
+  }
+
+  // Handle context switch
+  async handleContextSwitched(eventData) {
+    try {
+      console.log('SyncEngine: Context switched:', eventData);
+
+      const currentContext = await browserStorage.getCurrentContext();
+      if (currentContext?.id !== eventData.contextId) {
+        // This is a new context, handle the switch
+        await this.handleContextChange(currentContext?.id, eventData.contextId);
+      }
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle context switch:', error);
+    }
   }
 
   // Start automatic synchronization
@@ -476,32 +589,40 @@ export class SyncEngine {
     try {
       console.log('SyncEngine: Executing context change behavior:', behavior);
 
+      const mode = await browserStorage.getSyncMode();
+      const currentWorkspace = await browserStorage.getCurrentWorkspace();
+      const workspacePath = await browserStorage.getWorkspacePath();
+
       switch (behavior) {
         case 'close-open-new':
-          await this.closeTabsNotInContext(newContextId);
-          await this.performFullSync(newContextId);
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
           break;
 
         case 'save-close-open-new':
-          if (oldContextId) {
+          if (oldContextId && mode === 'context') {
             await this.syncAllBrowserTabs(oldContextId);
+          } else if (mode === 'explorer' && currentWorkspace) {
+            await this.syncAllBrowserTabsToWorkspace(currentWorkspace, workspacePath);
           }
-          await this.closeTabsNotInContext(newContextId);
-          await this.performFullSync(newContextId);
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
           break;
 
         case 'keep-open-new':
-          await this.performFullSync(newContextId);
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
           break;
 
         case 'keep-only':
           // Do nothing - keep current tabs, don't open new ones
+          // But still update our internal indexes
+          await this.updateInternalIndexes(mode, newContextId, currentWorkspace, workspacePath);
           break;
 
         default:
           console.warn('SyncEngine: Unknown context change behavior:', behavior);
           // Fallback to keep-open-new
-          await this.performFullSync(newContextId);
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
       }
 
     } catch (error) {
@@ -586,12 +707,153 @@ export class SyncEngine {
     }
   }
 
-  // Helper: Sync all browser tabs
+  // Helper: Sync all browser tabs to context
   async syncAllBrowserTabs(contextId) {
     const browserTabs = await tabManager.getSyncableTabs();
     if (browserTabs.length > 0) {
       const browserIdentity = await browserStorage.getBrowserIdentity();
       await tabManager.syncMultipleTabs(browserTabs, apiClient, contextId, browserIdentity);
+    }
+  }
+
+  // Helper: Sync all browser tabs to workspace
+  async syncAllBrowserTabsToWorkspace(workspace, workspacePath) {
+    const browserTabs = await tabManager.getSyncableTabs();
+    if (browserTabs.length > 0) {
+      const browserIdentity = await browserStorage.getBrowserIdentity();
+      const wsId = workspace?.name || workspace?.id;
+      if (wsId) {
+        const docs = browserTabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity));
+        await apiClient.insertWorkspaceDocuments(wsId, docs, workspacePath || '/', docs[0]?.featureArray || []);
+      }
+    }
+  }
+
+  // Helper: Close current tabs
+  async closeCurrentTabs() {
+    const browserTabs = await tabManager.getSyncableTabs();
+    const pinnedTabs = await browserStorage.getPinnedTabs();
+
+    for (const tab of browserTabs) {
+      // Don't close pinned tabs
+      if (!pinnedTabs.has(tab.id)) {
+        console.log('SyncEngine: Closing tab:', tab.title, tab.url);
+        await tabManager.closeTab(tab.id);
+      }
+    }
+  }
+
+  // Helper: Fetch and open new tabs based on mode
+  async fetchAndOpenNewTabs(mode, contextId, workspace, workspacePath) {
+    try {
+      let documents = [];
+
+      if (mode === 'context' && contextId) {
+        console.log('SyncEngine: Fetching documents from context:', contextId);
+
+        const syncSettings = await browserStorage.getSyncSettings();
+        let featureArray = ['data/abstraction/tab'];
+
+        if (syncSettings.syncOnlyThisBrowser) {
+          const browserIdentity = await browserStorage.getBrowserIdentity();
+          featureArray.push(`tag/${browserIdentity}`);
+        }
+
+        const response = await apiClient.getContextDocuments(contextId, featureArray);
+        documents = response.success ? response.payload : [];
+
+      } else if (mode === 'explorer' && workspace) {
+        console.log('SyncEngine: Fetching documents from workspace:', workspace.name || workspace.id, 'path:', workspacePath);
+
+        const wsId = workspace.name || workspace.id;
+        const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', ['data/abstraction/tab']);
+        documents = response.success ? (response.payload?.data || response.payload) : [];
+      }
+
+      console.log('SyncEngine: Found', documents.length, 'documents to open');
+
+      // Open documents as tabs
+      const syncSettings = await browserStorage.getSyncSettings();
+      if (syncSettings.autoOpenNewTabs) {
+        for (const document of documents) {
+          await tabManager.openCanvasDocument(document, { active: false });
+        }
+      }
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to fetch and open new tabs:', error);
+    }
+  }
+
+  // Helper: Update internal indexes without opening tabs
+  async updateInternalIndexes(mode, contextId, workspace, workspacePath) {
+    try {
+      // This would update any internal tracking without opening tabs
+      console.log('SyncEngine: Updating internal indexes for mode:', mode);
+
+      // For now, just log - in the future we might track document states
+      if (mode === 'context' && contextId) {
+        console.log('SyncEngine: Context mode, contextId:', contextId);
+      } else if (mode === 'explorer' && workspace) {
+        console.log('SyncEngine: Explorer mode, workspace:', workspace.name || workspace.id, 'path:', workspacePath);
+      }
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to update internal indexes:', error);
+    }
+  }
+
+  // Handle workspace path change (for explorer mode)
+  async handleWorkspacePathChange(workspace, oldPath, newPath) {
+    try {
+      console.log('SyncEngine: Handling workspace path change:', workspace?.name || workspace?.id, oldPath, '->', newPath);
+
+      const syncSettings = await browserStorage.getSyncSettings();
+
+      // Execute the same behavior as context changes
+      await this._executeWorkspacePathChangeBehavior(syncSettings.contextChangeBehavior, workspace, oldPath, newPath);
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle workspace path change:', error);
+    }
+  }
+
+  // Execute workspace path change behavior
+  async _executeWorkspacePathChangeBehavior(behavior, workspace, oldPath, newPath) {
+    try {
+      console.log('SyncEngine: Executing workspace path change behavior:', behavior);
+
+      const mode = await browserStorage.getSyncMode();
+      const currentContext = await browserStorage.getCurrentContext();
+
+      switch (behavior) {
+        case 'close-open-new':
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          break;
+
+        case 'save-close-open-new':
+          await this.syncAllBrowserTabsToWorkspace(workspace, oldPath);
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          break;
+
+        case 'keep-open-new':
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          break;
+
+        case 'keep-only':
+          // Do nothing - keep current tabs, don't open new ones
+          await this.updateInternalIndexes(mode, currentContext?.id, workspace, newPath);
+          break;
+
+        default:
+          console.warn('SyncEngine: Unknown workspace path change behavior:', behavior);
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+      }
+
+    } catch (error) {
+      console.error('SyncEngine: Failed to execute workspace path change behavior:', error);
     }
   }
 

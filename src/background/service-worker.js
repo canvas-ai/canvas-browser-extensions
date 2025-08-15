@@ -82,15 +82,23 @@ async function initializeWebSocket() {
     console.log('Initializing WebSocket connection...');
 
     const connectionSettings = await browserStorage.getConnectionSettings();
+    const mode = await browserStorage.getSyncMode();
     const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
 
     if (!connectionSettings.connected || !connectionSettings.apiToken) {
       console.log('Skipping WebSocket - not connected or no API token');
       return false;
     }
 
-    if (!currentContext?.id) {
-      console.log('Skipping WebSocket - no context bound');
+    // For context mode, we need a context. For explorer mode, we need a workspace.
+    if (mode === 'context' && !currentContext?.id) {
+      console.log('Skipping WebSocket - context mode requires a bound context');
+      return false;
+    }
+
+    if (mode === 'explorer' && !currentWorkspace?.id && !currentWorkspace?.name) {
+      console.log('Skipping WebSocket - explorer mode requires a selected workspace');
       return false;
     }
 
@@ -100,15 +108,27 @@ async function initializeWebSocket() {
     // Initialize context integration
     await contextIntegration.initialize();
 
+    // Initialize sync engine
+    await syncEngine.initialize();
+
     // Connect to WebSocket
     const success = await webSocketClient.connect(
       connectionSettings.serverUrl,
       connectionSettings.apiToken,
-      currentContext.id
+      currentContext?.id
     );
 
     if (success) {
       console.log('WebSocket connection established successfully');
+
+      // Subscribe to appropriate channels based on mode
+      if (mode === 'context' && currentContext?.id) {
+        await webSocketClient.joinContext(currentContext.id);
+      } else if (mode === 'explorer' && currentWorkspace) {
+        const wsId = currentWorkspace.id || currentWorkspace.name;
+        await webSocketClient.joinWorkspace(wsId);
+      }
+
       return true;
     } else {
       console.warn('WebSocket connection failed');
@@ -159,12 +179,6 @@ function setupWebSocketEventHandlers() {
     broadcastToPopup('context.url.set', data);
   });
 
-  // Document events (real-time tab sync)
-  webSocketClient.on('tab.event', async (data) => {
-    console.log('Received tab event via WebSocket:', data.type, data);
-    await handleRealtimeTabEvent(data);
-  });
-
   // Connection errors
   webSocketClient.on('connection.error', (data) => {
     console.error('WebSocket connection error:', data.error);
@@ -178,112 +192,7 @@ function setupWebSocketEventHandlers() {
   });
 }
 
-// Handle real-time tab events from WebSocket
-async function handleRealtimeTabEvent(eventData) {
-  try {
-    console.log('Processing real-time tab event:', eventData.type);
-
-    const syncSettings = await browserStorage.getSyncSettings();
-
-    switch (eventData.type) {
-      case 'document.inserted':
-        await handleDocumentInserted(eventData, syncSettings);
-        break;
-
-      case 'document.updated':
-        await handleDocumentUpdated(eventData, syncSettings);
-        break;
-
-      case 'document.removed':
-      case 'document.removed.batch':
-        await handleDocumentRemoved(eventData, syncSettings);
-        break;
-
-      case 'document.deleted':
-      case 'document.deleted.batch':
-        await handleDocumentDeleted(eventData, syncSettings);
-        break;
-
-      default:
-        console.log('Unknown tab event type:', eventData.type);
-    }
-
-    // Refresh popup tab lists
-    refreshTabLists();
-
-  } catch (error) {
-    console.error('Failed to handle real-time tab event:', error);
-  }
-}
-
-// Handle document inserted (new tab synced from another client)
-async function handleDocumentInserted(eventData, syncSettings) {
-  console.log('Handling document inserted:', eventData);
-
-  // Only handle if auto-open is enabled
-  if (!syncSettings.autoOpenNewTabs) {
-    console.log('Auto-open disabled, skipping document insertion');
-    return;
-  }
-
-  const documents = eventData.documents || [eventData.document];
-
-  for (const document of documents) {
-    if (document.schema === 'data/abstraction/tab' && document.data?.url) {
-      // Always check if this tab came from the same browser instance to avoid duplicates
-      const browserIdentity = await browserStorage.getBrowserIdentity();
-      const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
-
-      if (hasOurFeature) {
-        console.log('Service Worker: Skipping tab from same browser instance to avoid duplicate opening');
-        continue;
-      }
-
-      // Check if tab is already open
-      const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
-
-      if (existingTabs.length === 0) {
-        console.log('Opening new tab from Canvas:', document.data.title);
-        await tabManager.openCanvasDocument(document, { active: false });
-      } else {
-        console.log('Tab already open, skipping:', document.data.url);
-      }
-    }
-  }
-}
-
-// Handle document updated
-async function handleDocumentUpdated(eventData, syncSettings) {
-  console.log('Handling document updated:', eventData);
-  // For now, just log - we could update tab titles/URLs in the future
-}
-
-// Handle document removed from context
-async function handleDocumentRemoved(eventData, syncSettings) {
-  console.log('Handling document removed:', eventData);
-
-  // Only handle if auto-close is enabled
-  if (!syncSettings.autoCloseRemovedTabs) {
-    console.log('Auto-close disabled, skipping document removal');
-    return;
-  }
-
-  const documentIds = eventData.documentIds || [eventData.documentId];
-
-  for (const documentId of documentIds) {
-    // Find and close matching tabs (need to match by URL since we don't store document IDs in tabs)
-    // This is a limitation - we'd need to enhance tab tracking to store document IDs
-    console.log('Would close tab for removed document:', documentId);
-  }
-}
-
-// Handle document deleted from database
-async function handleDocumentDeleted(eventData, syncSettings) {
-  console.log('Handling document deleted:', eventData);
-
-  // Same as removed for now
-  await handleDocumentRemoved(eventData, syncSettings);
-}
+// Note: Real-time tab event handling has been moved to sync-engine.js to avoid duplication
 
 // Broadcast message to popup
 function broadcastToPopup(type, data) {
@@ -1056,6 +965,12 @@ async function handleGetModeAndSelection(sendResponse) {
 async function handleSetModeAndSelection(data, sendResponse) {
   try {
     const { mode, context, workspace, workspacePath } = data || {};
+
+    // Get current values to detect changes
+    const currentMode = await browserStorage.getSyncMode();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const currentWorkspacePath = await browserStorage.getWorkspacePath();
+
     if (mode) await browserStorage.setSyncMode(mode);
 
     if (mode === 'context') {
@@ -1065,6 +980,17 @@ async function handleSetModeAndSelection(data, sendResponse) {
       if (context) await browserStorage.setCurrentContext(null);
       if (workspace) await browserStorage.setCurrentWorkspace(workspace);
       if (workspacePath !== undefined) await browserStorage.setWorkspacePath(workspacePath);
+
+      // Handle workspace path change if in explorer mode and path changed
+      if (currentMode === 'explorer' &&
+          workspacePath !== undefined &&
+          workspacePath !== currentWorkspacePath &&
+          syncEngine.isInitialized) {
+        const targetWorkspace = workspace || currentWorkspace;
+        if (targetWorkspace) {
+          await syncEngine.handleWorkspacePathChange(targetWorkspace, currentWorkspacePath, workspacePath);
+        }
+      }
     }
 
     sendResponse({ success: true });

@@ -97,8 +97,9 @@ function setupEventListeners() {
       if (wsId) {
         selectedWorkspace = availableWorkspaces.find(w => w.id === wsId) || null;
       }
-      // Reset path to root when changing workspace
+      // Reset path to root when changing workspace and trigger path change behavior
       await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: selectedWorkspace, workspacePath: '/' });
+      showToast(`Switched to workspace: ${selectedWorkspace?.label || selectedWorkspace?.name || wsId}`, 'success');
     }
   });
 
