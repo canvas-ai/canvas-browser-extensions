@@ -175,6 +175,83 @@ export class CanvasApiClient {
     return await this.delete(`/contexts/${contextId}`);
   }
 
+  // Workspace methods
+  async getWorkspaces() {
+    return await this.get('/workspaces');
+  }
+
+  async getWorkspaceDocuments(workspaceNameOrId, contextSpec = '/', featureArray = []) {
+    const enhancedFeatureArray = [...featureArray];
+    if (!enhancedFeatureArray.includes('data/abstraction/tab')) {
+      enhancedFeatureArray.unshift('data/abstraction/tab');
+    }
+
+    let endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`;
+
+    const params = new URLSearchParams();
+    if (contextSpec) params.set('contextSpec', contextSpec);
+    if (enhancedFeatureArray.length > 0) {
+      enhancedFeatureArray.forEach(feature => params.append('featureArray', feature));
+    }
+
+    const query = params.toString();
+    if (query) endpoint += `?${query}`;
+
+    return await this.get(endpoint);
+  }
+
+  async insertWorkspaceDocument(workspaceNameOrId, document, contextSpec = '/', featureArray = []) {
+    const data = {
+      contextSpec,
+      featureArray,
+      documents: [document]
+    };
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`, data);
+  }
+
+  async insertWorkspaceDocuments(workspaceNameOrId, documents, contextSpec = '/', featureArray = []) {
+    const data = {
+      contextSpec,
+      featureArray,
+      documents
+    };
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`, data);
+  }
+
+  async removeWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
+    // DELETE with body supported by backend route
+    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/remove`;
+    const url = new URL(this.buildUrl(endpoint));
+    if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
+    if (Array.isArray(featureArray)) {
+      for (const f of featureArray) url.searchParams.append('featureArray', f);
+    }
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',
+      headers: this.buildHeaders(),
+      body: JSON.stringify(Array.isArray(documentIds) ? documentIds : [documentIds])
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return await response.json();
+  }
+
+  async deleteWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
+    // DELETE /workspaces/:id with body and query
+    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}`;
+    const url = new URL(this.buildUrl(endpoint));
+    if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
+    if (Array.isArray(featureArray)) {
+      for (const f of featureArray) url.searchParams.append('featureArray', f);
+    }
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',
+      headers: this.buildHeaders(),
+      body: JSON.stringify(Array.isArray(documentIds) ? documentIds : [documentIds])
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    return await response.json();
+  }
+
   // Document methods (tabs)
   async getContextDocuments(contextId, featureArray = []) {
     // Always ensure we're looking for tab documents

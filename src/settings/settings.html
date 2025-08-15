@@ -66,42 +66,76 @@
         </div>
       </section>
 
-      <!-- Context Settings -->
-      <section class="settings-section" id="contextSection" style="display: none;">
-        <h2>Context Binding</h2>
+      <!-- Sync Mode and per-mode settings -->
+      <section class="settings-section" id="syncModeSection" style="display: none;">
+        <h2>Sync Mode</h2>
 
         <div class="form-group">
-          <label for="contextSelect">Select Context</label>
-          <select id="contextSelect" class="input-field">
-            <option value="">Loading contexts...</option>
+          <label for="syncModeSelect">Select Mode</label>
+          <select id="syncModeSelect" class="input-field">
+            <option value="explorer">Explorer mode (default)</option>
+            <option value="context">Context mode</option>
           </select>
-          <small class="help-text">Choose the context to sync tabs with</small>
+          <small class="help-text">Choose how the extension synchronizes tabs</small>
         </div>
 
-        <div class="form-actions">
-          <button type="button" id="bindContextBtn" class="btn primary">Bind to Selected Context</button>
+        <!-- Explorer mode settings -->
+        <div id="explorerSettings" style="display: none;">
+          <div class="form-group">
+            <label for="workspaceSelect">Select Workspace</label>
+            <select id="workspaceSelect" class="input-field">
+              <option value="">Loading workspaces...</option>
+            </select>
+            <small class="help-text">Explorer mode: select a workspace to browse/sync</small>
+          </div>
         </div>
 
-        <div class="current-context" id="currentContext" style="display: none;">
-          <h3>
-            <span class="status-dot connected" id="contextStatusDot"></span>
-            Current Context
-          </h3>
-          <div class="context-info">
-            <div class="context-id" id="boundContextId">-</div>
-            <div class="context-url" id="boundContextUrl">-</div>
+        <!-- Context mode settings -->
+        <div id="contextSettings" style="display: none;">
+          <div class="form-group">
+            <label for="contextSelect">Select Context</label>
+            <select id="contextSelect" class="input-field">
+              <option value="">Loading contexts...</option>
+            </select>
+            <small class="help-text">Context mode: bind browser to a specific context</small>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="bindContextBtn" class="btn primary">Bind to Selected Context</button>
+          </div>
+
+          <div class="current-context" id="currentContext" style="display: none;">
+            <h3>
+              <span class="status-dot connected" id="contextStatusDot"></span>
+              Current Context
+            </h3>
+            <div class="context-info">
+              <div class="context-id" id="boundContextId">-</div>
+              <div class="context-url" id="boundContextUrl">-</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="contextChangeBehavior">On Context Change</label>
+            <select id="contextChangeBehavior" class="input-field">
+              <option value="close-open-new">Close current and open new</option>
+              <option value="save-close-open-new">Save & close current, open new</option>
+              <option value="keep-open-new">Keep current, open new</option>
+              <option value="keep-only">Keep current, don't open new</option>
+            </select>
+            <small class="help-text">What to do with tabs when switching contexts</small>
           </div>
         </div>
       </section>
 
-      <!-- Sync Settings -->
+      <!-- Common Sync Settings -->
       <section class="settings-section">
-        <h2>Sync Settings</h2>
+        <h2>Common Sync Settings</h2>
 
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="autoSyncNewTabs">
-            Auto-sync newly opened tabs
+            Auto-sync new browser tabs to Canvas (honors current context path)
           </label>
           <small class="help-text">Automatically save valid tabs to Canvas when opened</small>
         </div>
@@ -109,7 +143,7 @@
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="autoOpenNewTabs">
-            Auto-open newly added context tabs
+            Auto-open new tabs from Canvas (honors current context path)
           </label>
           <small class="help-text">Automatically open tabs when added to the context</small>
         </div>
@@ -117,7 +151,7 @@
         <div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="autoCloseRemovedTabs">
-            Auto-close removed tabs
+            Auto-close tabs removed from Canvas (honors current context path)
           </label>
           <small class="help-text">Automatically close tabs when removed from context</small>
         </div>
@@ -128,17 +162,6 @@
             Sync only tabs for this browser instance
           </label>
           <small class="help-text">Filter tabs to only those from this browser identity</small>
-        </div>
-
-        <div class="form-group">
-          <label for="contextChangeBehavior">On Context Change</label>
-          <select id="contextChangeBehavior" class="input-field">
-            <option value="close-open-new">Close current and open new</option>
-            <option value="save-close-open-new">Save & close current, open new</option>
-            <option value="keep-open-new">Keep current, open new</option>
-            <option value="keep-only">Keep current, don't open new</option>
-          </select>
-          <small class="help-text">What to do with tabs when switching contexts</small>
         </div>
 
         <div class="form-actions">

@@ -5,7 +5,9 @@
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let connectionStatus, statusDot, statusText, statusDetails;
-let contextSection, contextSelect, bindContextBtn;
+let syncModeSection, syncModeSelect;
+let explorerSettings, workspaceSelect;
+let contextSettings, contextSelect, bindContextBtn;
 let currentContext, boundContextId, boundContextUrl;
 let autoSyncNewTabs, autoOpenNewTabs, autoCloseRemovedTabs, syncOnlyThisBrowser, contextChangeBehavior;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
@@ -15,8 +17,10 @@ let toast;
 let isConnected = false;
 let currentUser = null;
 let availableContexts = [];
+let availableWorkspaces = [];
 let settings = {};
 let isBoundToContext = false;
+let currentMode = 'explorer';
 
 // Initialize settings page
 document.addEventListener('DOMContentLoaded', async () => {
@@ -45,8 +49,12 @@ function initializeElements() {
   statusText = document.getElementById('statusText');
   statusDetails = document.getElementById('statusDetails');
 
-  // Context settings
-  contextSection = document.getElementById('contextSection');
+  // Sync mode and per-mode settings
+  syncModeSection = document.getElementById('syncModeSection');
+  syncModeSelect = document.getElementById('syncModeSelect');
+  explorerSettings = document.getElementById('explorerSettings');
+  workspaceSelect = document.getElementById('workspaceSelect');
+  contextSettings = document.getElementById('contextSettings');
   contextSelect = document.getElementById('contextSelect');
   bindContextBtn = document.getElementById('bindContextBtn');
   currentContext = document.getElementById('currentContext');
@@ -78,6 +86,22 @@ function setupEventListeners() {
   // Context buttons
   bindContextBtn.addEventListener('click', handleBindContext);
 
+  // Mode change
+  syncModeSelect.addEventListener('change', handleModeChange);
+
+  // Workspace selection change
+  workspaceSelect.addEventListener('change', async () => {
+    if (currentMode === 'explorer') {
+      const wsId = workspaceSelect.value;
+      let selectedWorkspace = null;
+      if (wsId) {
+        selectedWorkspace = availableWorkspaces.find(w => w.id === wsId) || null;
+      }
+      // Reset path to root when changing workspace
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: selectedWorkspace, workspacePath: '/' });
+    }
+  });
+
   // Settings buttons
   saveSettingsBtn.addEventListener('click', handleSaveSettings);
   saveAndCloseBtn.addEventListener('click', handleSaveAndClose);
@@ -99,6 +123,10 @@ async function loadSettings() {
     const syncResponse = await sendMessageToBackground('GET_SYNC_SETTINGS');
     console.log('Loaded sync settings response:', syncResponse);
 
+    // Get mode and selection
+    const modeSelResponse = await sendMessageToBackground('GET_MODE_AND_SELECTION');
+    console.log('Loaded mode/selection response:', modeSelResponse);
+
     // Use actual saved settings, with defaults only as fallback
     const savedConnectionSettings = response.settings || {};
     const savedSyncSettings = syncResponse.success ? syncResponse.settings : {};
@@ -118,22 +146,30 @@ async function loadSettings() {
         contextChangeBehavior: savedSyncSettings.contextChangeBehavior || 'keep-open-new'
       },
       browserIdentity: '',
-      currentContext: response.context || null
+      currentContext: (modeSelResponse.success ? modeSelResponse.context : null) || (response.context || null),
+      currentWorkspace: modeSelResponse.success ? modeSelResponse.workspace : null,
+      mode: modeSelResponse.success ? (modeSelResponse.mode || 'explorer') : 'explorer'
     };
 
     // Set connection state
     isConnected = response.connected || false;
+    currentMode = settings.mode;
 
     populateForm();
 
-    // Load contexts if connected and show current context
+    // Load contexts and workspaces if connected
     if (isConnected) {
-      await loadContexts();
+      await Promise.all([
+        loadContexts(),
+        loadWorkspaces()
+      ]);
 
-      // Set current context in dropdown if available
+      // Preselect dropdowns if values exist
       if (settings.currentContext?.id) {
         contextSelect.value = settings.currentContext.id;
-        console.log('Set current context in dropdown:', settings.currentContext.id);
+      }
+      if (settings.currentWorkspace?.id) {
+        workspaceSelect.value = settings.currentWorkspace.id;
       }
     }
 
@@ -181,11 +217,18 @@ function populateForm() {
   // Update connection status
   updateConnectionStatus(settings.connectionSettings.connected);
 
-  // Show current context if exists
-  if (settings.currentContext) {
+  // Sync mode UI
+  syncModeSection.style.display = isConnected ? 'block' : 'none';
+  syncModeSelect.value = settings.mode || 'explorer';
+  updateModeVisibility(syncModeSelect.value);
+
+  // Show current context if exists and in context mode
+  if (settings.currentContext && (settings.mode === 'context')) {
     boundContextId.textContent = settings.currentContext.id;
-    boundContextUrl.textContent = settings.currentContext.url;
+    boundContextUrl.textContent = settings.currentContext.url || '-';
     currentContext.style.display = 'block';
+  } else if (currentContext) {
+    currentContext.style.display = 'none';
   }
 }
 
@@ -225,8 +268,8 @@ async function handleTestConnection() {
           showToast(`🔐 Authenticated as: ${userInfo}`, 'info');
         }
 
-        // Load contexts if authenticated
-        await loadContexts();
+        // Load contexts and workspaces if authenticated
+        await Promise.all([loadContexts(), loadWorkspaces()]);
       } else if (response.connected) {
         showToast('⚠️ Server reachable but authentication failed - check API token', 'warning');
       } else {
@@ -284,8 +327,8 @@ async function handleConnect() {
         showToast('✅ Connected and authenticated successfully!', 'success');
       }
 
-      // Load contexts
-      await loadContexts();
+      // Load contexts and workspaces
+      await Promise.all([loadContexts(), loadWorkspaces()]);
 
       // Auto-bind to first/selected context if available (mandatory)
       if (contextSelect.value) {
@@ -332,8 +375,8 @@ async function handleDisconnect() {
       showToast('Disconnected successfully', 'success');
       setButtonLoading(disconnectBtn, false);
 
-      // Hide context section
-      contextSection.style.display = 'none';
+      // Hide UI sections
+      if (syncModeSection) syncModeSection.style.display = 'none';
       currentContext.style.display = 'none';
     }, 500);
 
@@ -348,10 +391,10 @@ async function loadContexts() {
   try {
     if (!isConnected) {
       console.log('Not connected, skipping context loading');
-      // Hide context section and clear contexts
+      // Clear contexts
       availableContexts = [];
       populateContextSelect();
-      contextSection.style.display = 'none';
+      if (syncModeSection) syncModeSection.style.display = 'none';
       return;
     }
 
@@ -366,7 +409,7 @@ async function loadContexts() {
       console.log(`Loaded ${availableContexts.length} contexts`);
 
       populateContextSelect();
-      contextSection.style.display = 'block';
+      if (syncModeSection) syncModeSection.style.display = 'block';
 
       if (availableContexts.length === 0) {
         showToast('No contexts found - you can create one by entering a context ID', 'info');
@@ -384,7 +427,6 @@ async function loadContexts() {
       showToast(`Failed to load contexts: ${response.error}`, 'error');
       availableContexts = [];
       populateContextSelect();
-      contextSection.style.display = 'none';
     }
 
   } catch (error) {
@@ -392,7 +434,6 @@ async function loadContexts() {
     showToast(`Failed to load contexts: ${error.message}`, 'error');
     availableContexts = [];
     populateContextSelect();
-    contextSection.style.display = 'none';
   }
 }
 
@@ -405,6 +446,71 @@ function populateContextSelect() {
     option.textContent = `${context.id} (${context.url})`;
     contextSelect.appendChild(option);
   });
+}
+
+async function loadWorkspaces() {
+  try {
+    if (!isConnected) {
+      availableWorkspaces = [];
+      populateWorkspaceSelect();
+      return;
+    }
+
+    console.log('Loading workspaces from Canvas server...');
+    const response = await sendMessageToBackground('GET_WORKSPACES');
+    console.log('Workspaces response:', response);
+
+    if (response.success) {
+      availableWorkspaces = response.workspaces || [];
+      populateWorkspaceSelect();
+    } else {
+      availableWorkspaces = [];
+      populateWorkspaceSelect();
+    }
+  } catch (error) {
+    console.error('Failed to load workspaces:', error);
+    availableWorkspaces = [];
+    populateWorkspaceSelect();
+  }
+}
+
+function populateWorkspaceSelect() {
+  workspaceSelect.innerHTML = '<option value="">Select a workspace...</option>';
+  availableWorkspaces.forEach(ws => {
+    const option = document.createElement('option');
+    option.value = ws.id;
+    option.textContent = ws.label || ws.name || ws.id;
+    option.dataset.name = ws.name;
+    workspaceSelect.appendChild(option);
+  });
+}
+
+function updateModeVisibility(mode) {
+  if (!contextSettings || !explorerSettings) return;
+  if (mode === 'context') {
+    contextSettings.style.display = 'block';
+    explorerSettings.style.display = 'none';
+  } else {
+    contextSettings.style.display = 'none';
+    explorerSettings.style.display = 'block';
+  }
+}
+
+async function handleModeChange() {
+  const selectedMode = syncModeSelect.value;
+  currentMode = selectedMode;
+  updateModeVisibility(selectedMode);
+
+  if (selectedMode === 'context') {
+    await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'context' });
+  } else {
+    const wsId = workspaceSelect.value;
+    let selectedWorkspace = null;
+    if (wsId) {
+      selectedWorkspace = availableWorkspaces.find(w => w.id === wsId) || null;
+    }
+    await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: selectedWorkspace });
+  }
 }
 
 async function handleBindContext() {
@@ -432,6 +538,10 @@ async function handleBindContext() {
       showToast(`Bound to context: ${selectedContext.id}`, 'success');
       settings.currentContext = selectedContext;
       isBoundToContext = true;
+      currentMode = 'context';
+
+      // Persist mode/selection in background
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'context', context: selectedContext });
 
       // Update UI to show bound context
       boundContextId.textContent = selectedContext.id;
@@ -477,17 +587,21 @@ async function handleSaveSettings() {
   try {
     setButtonLoading(saveSettingsBtn, true);
 
-    // MANDATORY: Check if connected and bound to context
+    // MANDATORY: Check if connected
     if (!isConnected) {
       throw new Error('You must connect to Canvas server before saving settings');
     }
 
-    if (!isBoundToContext && !contextSelect.value) {
+    // Mode-specific validation
+    if ((currentMode === 'context') && (!isBoundToContext && !contextSelect.value)) {
       throw new Error('You must bind to a context before saving settings');
+    }
+    if (currentMode === 'explorer' && !workspaceSelect.value) {
+      throw new Error('You must select a workspace in Explorer mode');
     }
 
     // If context is selected but not bound, bind automatically
-    if (contextSelect.value && !isBoundToContext) {
+    if (currentMode === 'context' && contextSelect.value && !isBoundToContext) {
       console.log('Auto-binding to selected context before save...');
       await handleBindContext();
 
@@ -495,6 +609,12 @@ async function handleSaveSettings() {
       if (!isBoundToContext) {
         throw new Error('Failed to bind to context. Please bind manually before saving.');
       }
+    }
+
+    // Persist mode and selection
+    if (currentMode === 'explorer') {
+      const ws = availableWorkspaces.find(w => w.id === workspaceSelect.value) || null;
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: ws });
     }
 
     // Collect all settings
@@ -629,7 +749,7 @@ function updateConnectionStatus(connected) {
     connectBtn.style.display = 'inline-block';
     disconnectBtn.style.display = 'none';
 
-    contextSection.style.display = 'none';
+    if (syncModeSection) syncModeSection.style.display = 'none';
   }
 }
 
@@ -715,6 +835,14 @@ function setupStorageListeners() {
               contextStatusDot.style.display = 'none';
             }
           }
+        }
+
+        // Handle mode changes
+        if (changes.canvasSyncMode) {
+          const newMode = changes.canvasSyncMode.newValue || 'explorer';
+          currentMode = newMode;
+          if (syncModeSelect) syncModeSelect.value = newMode;
+          updateModeVisibility(newMode);
         }
       }
     });

@@ -18,7 +18,8 @@ let browserToCanvasTab, canvasToBrowserTab;
 let browserToCanvasContent, canvasToBrowserContent;
 
 // State
-let currentConnection = { connected: false, context: null };
+let currentConnection = { connected: false, context: null, mode: 'explorer', workspace: null };
+let currentWorkspacePath = '/';
 let browserTabs = [];
 let canvasTabs = [];
 let allBrowserTabs = []; // All tabs including synced ones
@@ -302,6 +303,9 @@ async function loadInitialData() {
     console.log('Connection status response:', response);
 
     currentConnection = response;
+    if (currentConnection.mode === 'explorer' && typeof response.workspacePath === 'string') {
+      currentWorkspacePath = response.workspacePath || '/';
+    }
     updateConnectionStatus(response);
 
     // Initialize checkbox states to ensure proper defaults
@@ -336,16 +340,23 @@ function updateConnectionStatus(connection) {
     connectionStatus.className = 'status-dot connected';
     connectionText.textContent = 'Connected';
 
-    if (connection.context) {
-      console.log('Popup: Setting context to:', connection.context.id);
-      contextId.textContent = connection.context.id;
-      contextUrl.textContent = connection.context.url;
-      // Make URL clickable if we have a valid context
+    // Context mode header
+    if ((connection.mode === 'context') && connection.context) {
+      console.log('Popup: Context mode, context:', connection.context.id);
+      contextId.textContent = `Bound to context ID: ${connection.context.id}`;
+      contextUrl.textContent = connection.context.url || '-';
+      contextUrl.classList.add('clickable');
+    // Explorer mode header
+    } else if ((connection.mode === 'explorer') && connection.workspace) {
+      const wsName = connection.workspace.label || connection.workspace.name || connection.workspace.id;
+      console.log('Popup: Explorer mode, workspace:', wsName);
+      contextId.textContent = `Current workspace: ${wsName}`;
+      contextUrl.textContent = currentWorkspacePath || '/';
       contextUrl.classList.add('clickable');
     } else {
-      console.log('Popup: No context bound');
+      console.log('Popup: No context or workspace selected');
       contextId.textContent = '-';
-      contextUrl.textContent = 'No context bound';
+      contextUrl.textContent = 'Not bound';
       contextUrl.classList.remove('clickable');
     }
   } else {
@@ -428,12 +439,18 @@ async function loadTabs() {
 
       console.log(`All browser tabs loaded: ${allBrowserTabs.length} usable, ${discardedCount} discarded, ${internalCount} internal (filtered out)`);
 
-      // Get synced tab URLs from Canvas documents to identify which tabs are synced
-      if (currentConnection.connected && currentConnection.context) {
-        const canvasResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
-        if (canvasResponse.success) {
+      // Get synced tab URLs from server documents to identify which tabs are synced
+      if (currentConnection.connected) {
+        let docsResponse = null;
+        if (currentConnection.mode === 'context' && currentConnection.context) {
+          docsResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
+        } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+          docsResponse = await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', { contextSpec: currentWorkspacePath || '/' });
+        }
+
+        if (docsResponse?.success) {
           const syncedUrls = new Set(
-            (canvasResponse.documents || []).map(doc => doc.data?.url).filter(Boolean)
+            (docsResponse.documents || []).map(doc => doc.data?.url).filter(Boolean)
           );
 
           // Mark which tabs are synced
@@ -458,23 +475,43 @@ async function loadTabs() {
       console.error('Failed to get browser tabs:', allTabsResponse.error);
     }
 
-    // Get canvas tabs (documents) - only if connected
-    if (currentConnection.connected && currentConnection.context) {
-      console.log('Requesting Canvas documents...');
-      const canvasResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
-      console.log('Canvas documents response:', canvasResponse);
+    // Get documents for current mode - only if connected
+    if (currentConnection.connected) {
+      if (currentConnection.mode === 'context' && currentConnection.context) {
+        console.log('Requesting Context documents...');
+        const canvasResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
+        console.log('Context documents response:', canvasResponse);
 
-      if (canvasResponse.success) {
-        canvasTabs = canvasResponse.documents || [];
-        console.log('Canvas documents loaded:', canvasTabs.length);
-        renderCanvasTabs();
+        if (canvasResponse.success) {
+          canvasTabs = canvasResponse.documents || [];
+          console.log('Context documents loaded:', canvasTabs.length);
+          renderCanvasTabs();
+        } else {
+          console.error('Failed to get context documents:', canvasResponse.error);
+          canvasTabs = [];
+          renderCanvasTabs();
+        }
+      } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+        console.log('Requesting Workspace documents...');
+        const wsResponse = await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', { contextSpec: currentWorkspacePath || '/' });
+        console.log('Workspace documents response:', wsResponse);
+
+        if (wsResponse.success) {
+          canvasTabs = wsResponse.documents || [];
+          console.log('Workspace documents loaded:', canvasTabs.length);
+          renderCanvasTabs();
+        } else {
+          console.error('Failed to get workspace documents:', wsResponse.error);
+          canvasTabs = [];
+          renderCanvasTabs();
+        }
       } else {
-        console.error('Failed to get Canvas documents:', canvasResponse.error);
+        console.log('No selection for current mode - skipping documents');
         canvasTabs = [];
         renderCanvasTabs();
       }
     } else {
-      console.log('Not connected or no context - skipping Canvas documents');
+      console.log('Not connected - skipping documents');
       canvasTabs = [];
       renderCanvasTabs();
     }
@@ -943,21 +980,22 @@ function filterTabItems(container, query, type) {
 
 // Context URL editing handlers
 function handleContextUrlClick() {
-  // Only allow editing if we have a valid context
-  if (!currentConnection.connected || !currentConnection.context || !currentConnection.context.url) {
-    return;
-  }
+  // Only allow editing if connected and (in context mode have context) or (in explorer mode have workspace)
+  if (!currentConnection.connected) return;
+  if (currentConnection.mode === 'context' && (!currentConnection.context || !currentConnection.context.url)) return;
+  if (currentConnection.mode === 'explorer' && !currentConnection.workspace) return;
 
   // Don't allow editing if showing placeholder text
   const currentText = contextUrl.textContent;
-  if (currentText === 'No context' || currentText === 'No context bound') {
+  if (currentText === 'No context' || currentText === 'No context bound' || currentText === 'Not bound') {
     return;
   }
 
   // Show editing interface
   contextUrl.style.display = 'none';
   contextUrlEdit.style.display = 'flex';
-  contextUrlInput.value = currentConnection.context.url || '';
+  const initialValue = currentConnection.mode === 'context' ? (currentConnection.context.url || '') : (currentWorkspacePath || '/');
+  contextUrlInput.value = initialValue;
   contextUrlInput.focus();
   contextUrlInput.select();
 }
@@ -969,7 +1007,7 @@ function handleContextUrlCancel() {
 }
 
 async function handleContextUrlSubmit() {
-  if (!currentConnection.connected || !currentConnection.context) {
+  if (!currentConnection.connected) {
     handleContextUrlCancel();
     return;
   }
@@ -981,25 +1019,33 @@ async function handleContextUrlSubmit() {
   }
 
   try {
-    // Send API request to update context URL
-    const response = await chrome.runtime.sendMessage({
-      type: 'context.url.update',
-      contextId: currentConnection.context.id,
-      url: newUrl
-    });
-
-    if (response.success) {
-      // Update the displayed URL
-      contextUrl.textContent = newUrl;
-      currentConnection.context.url = newUrl;
-      console.log('Context URL updated successfully');
-    } else {
-      console.error('Failed to update context URL:', response.error);
-      alert('Failed to update context URL: ' + (response.error || 'Unknown error'));
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      // Send API request to update context URL
+      const response = await chrome.runtime.sendMessage({
+        type: 'context.url.update',
+        contextId: currentConnection.context.id,
+        url: newUrl
+      });
+      if (response.success) {
+        // Update the displayed URL
+        contextUrl.textContent = newUrl;
+        currentConnection.context.url = newUrl;
+        console.log('Context URL updated successfully');
+      } else {
+        console.error('Failed to update context URL:', response.error);
+        alert('Failed to update context URL: ' + (response.error || 'Unknown error'));
+      }
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      // Use this field as the current workspace path
+      currentWorkspacePath = newUrl || '/';
+      contextUrl.textContent = currentWorkspacePath;
+      // Persist for restart
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: currentConnection.workspace, workspacePath: currentWorkspacePath });
+      await loadTabs();
     }
   } catch (error) {
-    console.error('Error updating context URL:', error);
-    alert('Failed to update context URL: ' + error.message);
+    console.error('Error updating URL:', error);
+    alert('Failed to update: ' + error.message);
   }
 
   handleContextUrlCancel();
@@ -1313,12 +1359,12 @@ function handleBrowserTabAction(event) {
   // Check if it's a click on the tab info area (for focusing)
   const tabInfo = event.target.closest('.tab-info');
   const tabItem = event.target.closest('.tab-item');
-  
+
   if (tabInfo && tabItem) {
     const tabId = parseInt(tabItem.dataset.tabId);
-    
+
     console.log('Tab info clicked, focusing tab:', tabId);
-    
+
     if (tabId) {
       event.preventDefault();
       event.stopPropagation();

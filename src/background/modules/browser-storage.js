@@ -21,6 +21,9 @@ export class BrowserStorage {
     this.KEYS = {
       CONNECTION_SETTINGS: 'canvasConnectionSettings',
       CURRENT_CONTEXT: 'canvasCurrentContext',
+      CURRENT_WORKSPACE: 'canvasCurrentWorkspace',
+      SYNC_MODE: 'canvasSyncMode',
+      WORKSPACE_PATH: 'canvasWorkspacePath',
       SYNC_SETTINGS: 'canvasSyncSettings',
       BROWSER_IDENTITY: 'canvasBrowserIdentity',
       PINNED_TABS: 'canvasPinnedTabs'
@@ -34,6 +37,8 @@ export class BrowserStorage {
         apiToken: '',
         connected: false
       },
+      [this.KEYS.SYNC_MODE]: 'explorer', // 'explorer' | 'context'
+      [this.KEYS.WORKSPACE_PATH]: '/',
       [this.KEYS.SYNC_SETTINGS]: {
         autoSyncNewTabs: false,
         autoOpenNewTabs: false,
@@ -42,6 +47,7 @@ export class BrowserStorage {
         contextChangeBehavior: 'keep-open-new'
       },
       [this.KEYS.CURRENT_CONTEXT]: null,
+      [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
       [this.KEYS.BROWSER_IDENTITY]: '',
       [this.KEYS.PINNED_TABS]: new Set()
     };
@@ -144,6 +150,33 @@ export class BrowserStorage {
 
   async setCurrentContext(context) {
     return await this.set(this.KEYS.CURRENT_CONTEXT, context);
+  }
+
+  // Current Workspace (Explorer mode)
+  async getCurrentWorkspace() {
+    return await this.get(this.KEYS.CURRENT_WORKSPACE);
+  }
+
+  async setCurrentWorkspace(workspace) {
+    return await this.set(this.KEYS.CURRENT_WORKSPACE, workspace);
+  }
+
+  // Sync Mode
+  async getSyncMode() {
+    return await this.get(this.KEYS.SYNC_MODE);
+  }
+
+  async setSyncMode(mode) {
+    return await this.set(this.KEYS.SYNC_MODE, mode);
+  }
+
+  // Explorer path
+  async getWorkspacePath() {
+    return await this.get(this.KEYS.WORKSPACE_PATH);
+  }
+
+  async setWorkspacePath(path) {
+    return await this.set(this.KEYS.WORKSPACE_PATH, path || '/');
   }
 
   // Sync Settings

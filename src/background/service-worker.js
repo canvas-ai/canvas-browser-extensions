@@ -361,18 +361,30 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         return;
       }
 
+      const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
+      const currentWorkspace = await browserStorage.getCurrentWorkspace();
+      const workspacePath = await browserStorage.getWorkspacePath();
       const browserIdentity = await browserStorage.getBrowserIdentity();
 
-      console.log('🔄 AUTO-SYNC: Context and identity for loaded tab:', {
+      console.log('🔄 AUTO-SYNC: Mode and selection for loaded tab:', {
+        mode,
         contextId: currentContext?.id,
-        contextUrl: currentContext?.url,
-        browserIdentity: browserIdentity
+        workspace: currentWorkspace?.id || currentWorkspace?.name,
+        workspacePath,
+        browserIdentity
       });
 
-      if (!currentContext?.id) {
-        console.log('🔄 AUTO-SYNC: No context bound, cannot sync tab');
-        return;
+      if (mode === 'context') {
+        if (!currentContext?.id) {
+          console.log('🔄 AUTO-SYNC: No context bound, cannot sync tab');
+          return;
+        }
+      } else {
+        if (!currentWorkspace?.id && !currentWorkspace?.name) {
+          console.log('🔄 AUTO-SYNC: No workspace selected, cannot sync tab');
+          return;
+        }
       }
 
       if (!browserIdentity) {
@@ -383,7 +395,22 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       console.log('🔄 AUTO-SYNC: Starting sync for fully loaded tab:', tab.title, tab.url);
 
       try {
-        const syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
+        let syncResult;
+        if (mode === 'context') {
+          syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
+        } else {
+          // Workspace mode: insert document into workspace with contextSpec
+          const document = tabManager.convertTabToDocument(tab, browserIdentity);
+          const wsId = currentWorkspace.name || currentWorkspace.id;
+          const response = await apiClient.insertWorkspaceDocument(wsId, document, workspacePath || '/', document.featureArray);
+          if (response.status === 'success') {
+            const docId = Array.isArray(response.payload) ? response.payload[0]?.id : response.payload?.id;
+            tabManager.markTabAsSynced(tab.id, docId);
+            syncResult = { success: true, documentId: docId };
+          } else {
+            syncResult = { success: false, error: response.message || 'Failed to sync tab' };
+          }
+        }
 
         console.log('🔄 AUTO-SYNC: Loaded tab sync result:', syncResult);
 
@@ -510,6 +537,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleGetContexts(sendResponse);
       return true;
 
+    case 'GET_WORKSPACES':
+      // Get available workspaces from Canvas server
+      handleGetWorkspaces(sendResponse);
+      return true;
+
     case 'BIND_CONTEXT':
       // Bind to a specific context
       handleBindContext(message.data, sendResponse);
@@ -543,6 +575,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'GET_CANVAS_DOCUMENTS':
       // Get Canvas documents for current context
       handleGetCanvasDocuments(message.data, sendResponse);
+      return true;
+
+    case 'GET_WORKSPACE_DOCUMENTS':
+      // Get documents for current workspace (explorer mode)
+      handleGetWorkspaceDocuments(message.data, sendResponse);
       return true;
 
     case 'SYNC_TAB':
@@ -590,6 +627,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleGetConnectionSettings(message.data, sendResponse);
       return true;
 
+    case 'GET_MODE_AND_SELECTION':
+      // Get current sync mode and selection (context/workspace)
+      handleGetModeAndSelection(sendResponse);
+      return true;
+
+    case 'SET_MODE_AND_SELECTION':
+      // Set current sync mode and selection
+      handleSetModeAndSelection(message.data, sendResponse);
+      return true;
+
     case 'OPEN_TAB':
       // Open a Canvas tab in browser
       handleOpenTab(message.data, sendResponse);
@@ -630,6 +677,9 @@ async function handleGetConnectionStatus(sendResponse) {
     // Get connection settings and current context
     const connectionSettings = await browserStorage.getConnectionSettings();
     const currentContext = await browserStorage.getCurrentContext();
+    const mode = await browserStorage.getSyncMode();
+    const workspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
 
     console.log('Connection settings:', connectionSettings);
     console.log('Current context:', currentContext);
@@ -637,7 +687,10 @@ async function handleGetConnectionStatus(sendResponse) {
     sendResponse({
       connected: connectionSettings.connected || false,
       context: currentContext,
-      settings: connectionSettings
+      settings: connectionSettings,
+      mode: mode || 'explorer',
+      workspace,
+      workspacePath
     });
   } catch (error) {
     console.error('Failed to get connection status:', error);
@@ -833,6 +886,71 @@ async function handleGetContexts(sendResponse) {
       contexts: [],
       error: error.message
     });
+  }
+}
+
+async function handleGetWorkspaces(sendResponse) {
+  try {
+    console.log('Getting available workspaces from Canvas server...');
+
+    // Ensure API client is initialized
+    if (!apiClient.apiToken) {
+      const connectionSettings = await browserStorage.getConnectionSettings();
+      if (!connectionSettings.apiToken) {
+        throw new Error('No API token available - please connect first');
+      }
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const response = await apiClient.getWorkspaces();
+    console.log('Workspaces response:', response);
+
+    if (response.status === 'success') {
+      sendResponse({ success: true, workspaces: response.payload || [], count: response.count || 0 });
+    } else {
+      throw new Error(response.message || 'Failed to fetch workspaces');
+    }
+  } catch (error) {
+    console.error('Failed to get workspaces:', error);
+    sendResponse({ success: false, workspaces: [], error: error.message });
+  }
+}
+
+async function handleGetModeAndSelection(sendResponse) {
+  try {
+    const mode = await browserStorage.getSyncMode();
+    const context = await browserStorage.getCurrentContext();
+    const workspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
+    sendResponse({ success: true, mode, context, workspace, workspacePath });
+  } catch (error) {
+    console.error('Failed to get mode/selection:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+async function handleSetModeAndSelection(data, sendResponse) {
+  try {
+    const { mode, context, workspace, workspacePath } = data || {};
+    if (mode) await browserStorage.setSyncMode(mode);
+
+    if (mode === 'context') {
+      if (workspace) await browserStorage.setCurrentWorkspace(null);
+      if (context) await browserStorage.setCurrentContext(context);
+    } else if (mode === 'explorer') {
+      if (context) await browserStorage.setCurrentContext(null);
+      if (workspace) await browserStorage.setCurrentWorkspace(workspace);
+      if (workspacePath !== undefined) await browserStorage.setWorkspacePath(workspacePath);
+    }
+
+    sendResponse({ success: true });
+  } catch (error) {
+    console.error('Failed to set mode/selection:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
@@ -1278,9 +1396,52 @@ async function handleGetCanvasDocuments(data, sendResponse) {
   }
 }
 
+async function handleGetWorkspaceDocuments(data, sendResponse) {
+  try {
+    const { workspaceIdOrName, contextSpec = '/' } = data || {};
+
+    // Resolve workspace from storage if not provided
+    let wsIdOrName = workspaceIdOrName;
+    if (!wsIdOrName) {
+      const storedWs = await browserStorage.getCurrentWorkspace();
+      if (!storedWs?.id && !storedWs?.name) {
+        throw new Error('No workspace selected');
+      }
+      wsIdOrName = storedWs.name || storedWs.id;
+    }
+
+    // Get connection settings
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+
+    // Initialize API client if needed
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    // Fetch documents for workspace path
+    const response = await apiClient.getWorkspaceDocuments(wsIdOrName, contextSpec, ['data/abstraction/tab']);
+
+    if (response.status === 'success') {
+      sendResponse({ success: true, documents: response.payload?.data || [], count: response.payload?.count || response.count || 0 });
+    } else {
+      throw new Error(response.message || 'Failed to fetch workspace documents');
+    }
+  } catch (error) {
+    console.error('Failed to get workspace documents:', error);
+    sendResponse({ success: false, documents: [], error: error.message });
+  }
+}
+
 async function handleSyncTab(data, sendResponse) {
   try {
-    const { tab, contextId } = data;
+    const { tab, contextId, contextSpec } = data;
 
     if (!tab) {
       throw new Error('Tab object is required');
@@ -1288,15 +1449,10 @@ async function handleSyncTab(data, sendResponse) {
 
     console.log('Syncing tab to Canvas:', tab);
 
-    // Get current context if not provided
-    let targetContextId = contextId;
-    if (!targetContextId) {
-      const currentContext = await browserStorage.getCurrentContext();
-      if (!currentContext?.id) {
-        throw new Error('No context selected');
-      }
-      targetContextId = currentContext.id;
-    }
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
 
     // Get connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
@@ -1325,7 +1481,25 @@ async function handleSyncTab(data, sendResponse) {
     }
 
     // Sync the tab
-    const result = await tabManager.syncTabToCanvas(tab, apiClient, targetContextId, browserIdentity);
+    let result;
+    if (mode === 'context') {
+      const targetContextId = contextId || currentContext?.id;
+      if (!targetContextId) throw new Error('No context selected');
+      result = await tabManager.syncTabToCanvas(tab, apiClient, targetContextId, browserIdentity);
+    } else {
+      // Workspace mode
+      const wsId = currentWorkspace?.name || currentWorkspace?.id;
+      if (!wsId) throw new Error('No workspace selected');
+      const document = tabManager.convertTabToDocument(tab, browserIdentity);
+      const resp = await apiClient.insertWorkspaceDocument(wsId, document, contextSpec || workspacePath || '/', document.featureArray);
+      if (resp.status === 'success') {
+        const docId = Array.isArray(resp.payload) ? resp.payload[0]?.id : resp.payload?.id;
+        tabManager.markTabAsSynced(tab.id, docId);
+        result = { success: true, documentId: docId };
+      } else {
+        result = { success: false, error: resp.message || 'Failed to sync tab' };
+      }
+    }
 
     console.log('Tab sync result:', result);
     sendResponse(result);
@@ -1342,7 +1516,7 @@ async function handleSyncMultipleTabs(data, sendResponse) {
   try {
     console.log('🔧 handleSyncMultipleTabs called with data:', data);
 
-    const { tabIds, contextId } = data;
+    const { tabIds, contextId, contextSpec } = data;
 
     if (!tabIds || !Array.isArray(tabIds)) {
       console.error('❌ Tab IDs validation failed:', { tabIds, isArray: Array.isArray(tabIds) });
@@ -1377,18 +1551,16 @@ async function handleSyncMultipleTabs(data, sendResponse) {
 
     console.log(`🔧 Found ${tabs.length} valid tabs to sync`);
 
-    // Get current context if not provided
-    let targetContextId = contextId;
-    if (!targetContextId) {
-      const currentContext = await browserStorage.getCurrentContext();
-      if (!currentContext?.id) {
-        console.error('❌ No context selected');
-        throw new Error('No context selected');
-      }
-      targetContextId = currentContext.id;
-    }
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
 
-    console.log(`🔧 Target context ID: ${targetContextId}`);
+    if (mode === 'context') {
+      console.log(`🔧 Target context ID: ${contextId || currentContext?.id}`);
+    } else {
+      console.log(`🔧 Target workspace: ${currentWorkspace?.name || currentWorkspace?.id}, path: ${contextSpec || workspacePath || '/'}`);
+    }
 
     // Get connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
@@ -1416,10 +1588,24 @@ async function handleSyncMultipleTabs(data, sendResponse) {
       );
     }
 
-    console.log('🔧 Calling tabManager.syncMultipleTabs...');
-
-    // Sync multiple tabs
-    const result = await tabManager.syncMultipleTabs(tabs, apiClient, targetContextId, browserIdentity);
+    let result;
+    if (mode === 'context') {
+      console.log('🔧 Calling tabManager.syncMultipleTabs (context mode)...');
+      const targetContextId = contextId || currentContext?.id;
+      if (!targetContextId) throw new Error('No context selected');
+      result = await tabManager.syncMultipleTabs(tabs, apiClient, targetContextId, browserIdentity);
+    } else {
+      console.log('🔧 Syncing multiple tabs to workspace (explorer mode)...');
+      const wsId = currentWorkspace?.name || currentWorkspace?.id;
+      if (!wsId) throw new Error('No workspace selected');
+      const docs = tabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity));
+      const resp = await apiClient.insertWorkspaceDocuments(wsId, docs, contextSpec || workspacePath || '/', docs[0]?.featureArray || []);
+      if (resp.status === 'success') {
+        result = { success: true, total: tabs.length, successful: tabs.length, failed: 0 };
+      } else {
+        result = { success: false, error: resp.message || 'Batch sync failed' };
+      }
+    }
 
     console.log('✅ tabManager.syncMultipleTabs completed with result:', result);
     sendResponse(result);
