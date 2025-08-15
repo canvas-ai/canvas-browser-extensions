@@ -115,16 +115,7 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="contextChangeBehavior">On Context Change</label>
-            <select id="contextChangeBehavior" class="input-field">
-              <option value="close-open-new">Close current and open new</option>
-              <option value="save-close-open-new">Save & close current, open new</option>
-              <option value="keep-open-new">Keep current, open new</option>
-              <option value="keep-only">Keep current, don't open new</option>
-            </select>
-            <small class="help-text">What to do with tabs when switching contexts</small>
-          </div>
+
         </div>
       </section>
 
@@ -162,6 +153,17 @@
             Sync only tabs for this browser instance
           </label>
           <small class="help-text">Filter tabs to only those from this browser identity</small>
+        </div>
+
+        <div class="form-group">
+          <label for="contextChangeBehavior">On Context/Path Change</label>
+          <select id="contextChangeBehavior" class="input-field">
+            <option value="close-open-new">Close current and open new</option>
+            <option value="save-close-open-new">Save & close current, open new</option>
+            <option value="keep-open-new">Keep current, open new</option>
+            <option value="keep-only">Keep current, don't open new</option>
+          </select>
+          <small class="help-text">What to do with tabs when switching contexts or workspace paths</small>
         </div>
 
         <div class="form-actions">
