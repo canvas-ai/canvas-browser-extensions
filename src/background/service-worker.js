@@ -542,6 +542,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleGetWorkspaces(sendResponse);
       return true;
 
+    case 'GET_CONTEXT_TREE':
+      // Get context tree
+      handleGetContextTree(message.data, sendResponse);
+      return true;
+
+    case 'GET_WORKSPACE_TREE':
+      // Get workspace tree
+      handleGetWorkspaceTree(message.data, sendResponse);
+      return true;
+
+    case 'OPEN_WORKSPACE':
+      // Open a workspace by id/name
+      handleOpenWorkspace(message.data, sendResponse);
+      return true;
+
     case 'BIND_CONTEXT':
       // Bind to a specific context
       handleBindContext(message.data, sendResponse);
@@ -917,6 +932,111 @@ async function handleGetWorkspaces(sendResponse) {
   } catch (error) {
     console.error('Failed to get workspaces:', error);
     sendResponse({ success: false, workspaces: [], error: error.message });
+  }
+}
+
+async function handleGetContextTree(data, sendResponse) {
+  try {
+    let contextId = data?.contextId;
+    if (!contextId) {
+      const currentContext = await browserStorage.getCurrentContext();
+      contextId = currentContext?.id;
+    }
+    if (!contextId) throw new Error('No context selected');
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const response = await apiClient.getContextTree(contextId);
+    if (response.status === 'success') {
+      sendResponse({ success: true, tree: response.payload });
+    } else {
+      throw new Error(response.message || 'Failed to fetch context tree');
+    }
+  } catch (error) {
+    console.error('Failed to get context tree:', error);
+    sendResponse({ success: false, error: error.message, tree: null });
+  }
+}
+
+async function handleGetWorkspaceTree(data, sendResponse) {
+  try {
+    let wsIdOrName = data?.workspaceIdOrName;
+    if (!wsIdOrName) {
+      const ws = await browserStorage.getCurrentWorkspace();
+      wsIdOrName = ws?.name || ws?.id;
+    }
+    if (!wsIdOrName) throw new Error('No workspace selected');
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const response = await apiClient.getWorkspaceTree(wsIdOrName);
+    if (response.status === 'success') {
+      sendResponse({ success: true, tree: response.payload });
+    } else {
+      throw new Error(response.message || 'Failed to fetch workspace tree');
+    }
+  } catch (error) {
+    console.error('Failed to get workspace tree:', error);
+    sendResponse({ success: false, error: error.message, tree: null });
+  }
+}
+
+async function handleOpenWorkspace(data, sendResponse) {
+  try {
+    const { workspace } = data || {};
+    if (!workspace || (!workspace.id && !workspace.name)) {
+      throw new Error('Workspace id or name is required');
+    }
+
+    const wsIdOrName = workspace.name || workspace.id;
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const resp = await apiClient.openWorkspace(wsIdOrName);
+    if (resp.status !== 'success') {
+      throw new Error(resp.message || 'Failed to open workspace');
+    }
+
+    await browserStorage.setSyncMode('explorer');
+    await browserStorage.setCurrentWorkspace(workspace);
+    await browserStorage.setWorkspacePath('/');
+
+    refreshTabLists();
+
+    sendResponse({ success: true, workspace: workspace });
+  } catch (error) {
+    console.error('Failed to open workspace:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 

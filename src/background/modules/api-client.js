@@ -171,6 +171,11 @@ export class CanvasApiClient {
     return await this.post(`/contexts/${contextId}/url`, { url });
   }
 
+  // Context tree
+  async getContextTree(contextId) {
+    return await this.get(`/contexts/${contextId}/tree`);
+  }
+
   async deleteContext(contextId) {
     return await this.delete(`/contexts/${contextId}`);
   }
@@ -178,6 +183,16 @@ export class CanvasApiClient {
   // Workspace methods
   async getWorkspaces() {
     return await this.get('/workspaces');
+  }
+
+  // Workspace lifecycle
+  async openWorkspace(workspaceNameOrId) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/open`, {});
+  }
+
+  // Workspace tree
+  async getWorkspaceTree(workspaceNameOrId) {
+    return await this.get(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree`);
   }
 
   async getWorkspaceDocuments(workspaceNameOrId, contextSpec = '/', featureArray = []) {
