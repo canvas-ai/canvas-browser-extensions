@@ -15,8 +15,36 @@ body {
   color: #333;
   background: #fff;
   overflow: hidden;
+}
+
+/* View Container for sliding animations */
+.view-container {
+  display: flex;
+  width: 300%; /* 3 views side by side */
+  height: 100vh;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0%); /* Start with main view */
+}
+
+.view-container[data-current-view="main"] {
+  transform: translateX(0%);
+}
+
+.view-container[data-current-view="tree"] {
+  transform: translateX(-33.333%); /* Show second view */
+}
+
+.view-container[data-current-view="selection"] {
+  transform: translateX(-66.666%); /* Show third view */
+}
+
+.view {
+  width: 33.333%; /* Each view takes 1/3 of container */
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 /* Header */
@@ -579,4 +607,351 @@ body {
 .empty-state.search-empty::before {
   content: "🔍 ";
   margin-right: 4px;
+}
+
+/* =================================== */
+/* NEW VIEW STYLING */
+/* =================================== */
+
+/* Back Button */
+.back-btn {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-btn:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+/* Tree View Styling */
+.tree-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e5e9;
+  padding: 12px 16px;
+}
+
+.tree-path-input-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  margin-left: 12px;
+}
+
+.tree-path-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+.tree-path-input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.path-submit-btn,
+.path-cancel-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.path-submit-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+.path-submit-btn:hover {
+  background-color: #218838;
+}
+
+.path-cancel-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+.path-cancel-btn:hover {
+  background-color: #c82333;
+}
+
+.tree-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-title {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.tree-title h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.tree-title p {
+  font-size: 12px;
+  color: #6c757d;
+  margin: 0;
+}
+
+.tree-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Tree Node Styling */
+.tree-node {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.tree-node:hover {
+  background-color: #f8f9fa;
+}
+
+.tree-node.selected {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.tree-node .expand-btn {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  border-radius: 2px;
+}
+
+.tree-node .expand-btn:hover {
+  background-color: #e9ecef;
+}
+
+.tree-node .expand-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tree-node .folder-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  color: #007bff;
+}
+
+.tree-node .node-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-node .color-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.tree-children {
+  margin-left: 20px;
+}
+
+/* Selection View Styling */
+.selection-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e5e9;
+  padding: 12px 16px;
+}
+
+.selection-title h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.selection-tab-nav {
+  display: flex;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e5e9;
+  flex-shrink: 0;
+}
+
+.selection-tab-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6c757d;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.selection-tab-btn:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.selection-tab-btn.active {
+  color: #0066cc;
+  border-bottom-color: #0066cc;
+  background: #fff;
+}
+
+.selection-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.selection-tab-content {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.selection-tab-content.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.selection-item:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+}
+
+.selection-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.selection-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-item-id {
+  font-size: 11px;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-item-url {
+  font-size: 11px;
+  color: #007bff;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-item-actions {
+  margin-left: 12px;
+}
+
+.selection-action-btn {
+  padding: 6px 12px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background: #007bff;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.selection-action-btn:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+/* Loading states */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Make logo clickable */
+.logo {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.logo:hover {
+  opacity: 0.8;
 }

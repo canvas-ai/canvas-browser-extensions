@@ -6,16 +6,27 @@ import FuzzySearch from './fuse.js';
 
 // DOM elements
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
-let contextUrlEdit, contextUrlInput, contextUrlSubmit, contextUrlCancel;
 let searchInput, autoSyncNew, autoOpenNew, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
-let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoImg;
+let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 
 // Tab elements
 let browserToCanvasTab, canvasToBrowserTab;
 let browserToCanvasContent, canvasToBrowserContent;
+
+// View containers and navigation
+let viewContainer;
+let mainView, treeView, selectionView;
+
+// Tree view elements
+let treeBackBtn, treePathInput, pathSubmitBtn, pathCancelBtn;
+let treeTitle, treeSubtitle, treeContainer;
+
+// Selection view elements
+let selectionBackBtn, contextsSelectionTab, workspacesSelectionTab;
+let contextsList, workspacesList;
 
 // State
 let currentConnection = { connected: false, context: null, mode: 'explorer', workspace: null };
@@ -29,6 +40,12 @@ let showingAllCanvasTabs = false; // Track show all Canvas tabs checkbox state
 let selectedBrowserTabs = new Set();
 let selectedCanvasTabs = new Set();
 let currentTab = 'browser-to-canvas';
+
+// View state
+let currentView = 'main'; // 'main', 'tree', 'selection'
+let treeData = null; // Store tree data from API
+let selectedPath = '/'; // Currently selected tree path
+let currentSelectionTab = 'contexts'; // 'contexts' or 'workspaces'
 
 // Fuzzy search instances
 let browserTabsFuse = null;
@@ -58,8 +75,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadInitialData();
 });
 
-// Listen for messages from service worker
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+// Listen for messages from service worker (cross-browser compatible)
+const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
+runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Popup received message:', message);
 
   // Handle background events from service worker
@@ -149,17 +167,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function initializeElements() {
+  // View containers
+  viewContainer = document.getElementById('viewContainer');
+  mainView = document.getElementById('mainView');
+  treeView = document.getElementById('treeView');
+  selectionView = document.getElementById('selectionView');
+
   // Header elements
   connectionStatus = document.getElementById('connectionStatus');
   connectionText = document.getElementById('connectionText');
   contextInfo = document.getElementById('contextInfo');
   contextId = document.getElementById('contextId');
   contextUrl = document.getElementById('contextUrl');
-  contextUrlEdit = document.getElementById('contextUrlEdit');
-  contextUrlInput = document.getElementById('contextUrlInput');
-  contextUrlSubmit = document.getElementById('contextUrlSubmit');
-  contextUrlCancel = document.getElementById('contextUrlCancel');
-  logoImg = document.querySelector('.logo');
+  logoBtn = document.getElementById('logoBtn');
 
   // Search and settings
   searchInput = document.getElementById('searchInput');
@@ -194,20 +214,44 @@ function initializeElements() {
   openSelectedBtn = document.getElementById('openSelectedBtn');
   removeSelectedBtn = document.getElementById('removeSelectedBtn');
   deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+
+  // Tree view elements
+  treeBackBtn = document.getElementById('treeBackBtn');
+  treePathInput = document.getElementById('treePathInput');
+  pathSubmitBtn = document.getElementById('pathSubmitBtn');
+  pathCancelBtn = document.getElementById('pathCancelBtn');
+  treeTitle = document.getElementById('treeTitle');
+  treeSubtitle = document.getElementById('treeSubtitle');
+  treeContainer = document.getElementById('treeContainer');
+
+  // Selection view elements
+  selectionBackBtn = document.getElementById('selectionBackBtn');
+  contextsSelectionTab = document.getElementById('contextsSelectionTab');
+  workspacesSelectionTab = document.getElementById('workspacesSelectionTab');
+  contextsList = document.getElementById('contextsList');
+  workspacesList = document.getElementById('workspacesList');
 }
 
 function setupEventListeners() {
-  // Logo click - open Canvas server webui
-  logoImg.addEventListener('click', openCanvasWebUI);
+  // Logo click - navigate to selection view
+  logoBtn.addEventListener('click', () => navigateToView('selection'));
 
   // Settings button
   settingsBtn.addEventListener('click', openSettingsPage);
 
-  // Context URL editing
+  // Context URL click - navigate to tree view
   contextUrl.addEventListener('click', handleContextUrlClick);
-  contextUrlSubmit.addEventListener('click', handleContextUrlSubmit);
-  contextUrlCancel.addEventListener('click', handleContextUrlCancel);
-  contextUrlInput.addEventListener('keydown', handleContextUrlKeydown);
+
+  // Tree view navigation
+  treeBackBtn.addEventListener('click', () => navigateToView('main'));
+  pathSubmitBtn.addEventListener('click', handlePathSubmit);
+  pathCancelBtn.addEventListener('click', () => navigateToView('main'));
+  treePathInput.addEventListener('keydown', handleTreePathKeydown);
+
+  // Selection view navigation
+  selectionBackBtn.addEventListener('click', handleSelectionBackClick);
+  contextsSelectionTab.addEventListener('click', () => switchSelectionTab('contexts'));
+  workspacesSelectionTab.addEventListener('click', () => switchSelectionTab('workspaces'));
 
   // Tab navigation
   browserToCanvasTab.addEventListener('click', () => switchTab('browser-to-canvas'));
@@ -704,7 +748,9 @@ function renderCanvasTabs() {
 // Event handlers
 async function openSettingsPage() {
   try {
-    await chrome.tabs.create({ url: chrome.runtime.getURL('settings/settings.html') });
+    const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
+    const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
+    await tabs.create({ url: runtime.getURL('settings/settings.html') });
     window.close();
   } catch (error) {
     console.error('Failed to open settings page:', error);
@@ -723,7 +769,8 @@ async function openCanvasWebUI() {
 
       if (serverUrl) {
         console.log('Opening Canvas webui at:', serverUrl);
-        await chrome.tabs.create({ url: serverUrl });
+        const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
+        await tabs.create({ url: serverUrl });
         window.close();
       } else {
         console.error('No server URL configured');
@@ -980,9 +1027,9 @@ function filterTabItems(container, query, type) {
 
 // Context URL editing handlers
 function handleContextUrlClick() {
-  // Only allow editing if connected and (in context mode have context) or (in explorer mode have workspace)
+  // Only allow editing if connected and we have a context or workspace
   if (!currentConnection.connected) return;
-  if (currentConnection.mode === 'context' && (!currentConnection.context || !currentConnection.context.url)) return;
+  if (currentConnection.mode === 'context' && !currentConnection.context) return;
   if (currentConnection.mode === 'explorer' && !currentConnection.workspace) return;
 
   // Don't allow editing if showing placeholder text
@@ -991,73 +1038,462 @@ function handleContextUrlClick() {
     return;
   }
 
-  // Show editing interface
-  contextUrl.style.display = 'none';
-  contextUrlEdit.style.display = 'flex';
-  const initialValue = currentConnection.mode === 'context' ? (currentConnection.context.url || '') : (currentWorkspacePath || '/');
-  contextUrlInput.value = initialValue;
-  contextUrlInput.focus();
-  contextUrlInput.select();
+  // Navigate to tree view for path selection
+  navigateToTreeView();
 }
 
-function handleContextUrlCancel() {
-  // Hide editing interface
-  contextUrlEdit.style.display = 'none';
-  contextUrl.style.display = 'inline';
+// ===================================
+// VIEW NAVIGATION FUNCTIONS
+// ===================================
+
+function navigateToView(viewName) {
+  console.log('Navigating to view:', viewName);
+  currentView = viewName;
+  viewContainer.setAttribute('data-current-view', viewName);
+
+  // Initialize view-specific data when navigating
+  if (viewName === 'tree') {
+    initializeTreeView();
+  } else if (viewName === 'selection') {
+    initializeSelectionView();
+  }
 }
 
-async function handleContextUrlSubmit() {
-  if (!currentConnection.connected) {
-    handleContextUrlCancel();
+async function navigateToTreeView() {
+  // Set up initial path based on current mode
+  if (currentConnection.mode === 'context' && currentConnection.context) {
+    selectedPath = currentConnection.context.url || '/';
+    const workspaceName = currentConnection.context.workspaceName || currentConnection.context.workspace || 'unknown';
+    treeTitle.textContent = `Bound context: ${currentConnection.context.id}@${workspaceName}`;
+    treeSubtitle.textContent = 'Select a path in the context tree';
+  } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+    selectedPath = currentWorkspacePath || '/';
+    const wsName = currentConnection.workspace.label || currentConnection.workspace.name || currentConnection.workspace.id;
+    treeTitle.textContent = `Workspace Tree: ${wsName}`;
+    treeSubtitle.textContent = 'Select a path in the workspace tree';
+  }
+
+  treePathInput.value = selectedPath;
+
+  // Navigate to tree view
+  navigateToView('tree');
+}
+
+async function initializeTreeView() {
+  console.log('Initializing tree view...');
+
+  try {
+    // Load tree data from API
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      const response = await sendMessageToBackground('GET_CONTEXT_TREE', { contextId: currentConnection.context.id });
+      if (response.success) {
+        treeData = response.tree;
+        renderTreeView();
+      } else {
+        throw new Error(response.error || 'Failed to load context tree');
+      }
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+      const response = await sendMessageToBackground('GET_WORKSPACE_TREE', { workspaceIdOrName: wsId });
+      if (response.success) {
+        treeData = response.tree;
+        renderTreeView();
+      } else {
+        throw new Error(response.error || 'Failed to load workspace tree');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to initialize tree view:', error);
+    treeContainer.innerHTML = `<div class="empty-state">Failed to load tree: ${error.message}</div>`;
+  }
+}
+
+function renderTreeView() {
+  if (!treeData) {
+    treeContainer.innerHTML = '<div class="empty-state">No tree data available</div>';
     return;
   }
 
-  const newUrl = contextUrlInput.value.trim();
-  if (!newUrl) {
-    handleContextUrlCancel();
-    return;
+  console.log('Rendering tree view with data:', treeData);
+  console.log('Tree data structure:', JSON.stringify(treeData, null, 2));
+
+  const treeHtml = renderTreeNode(treeData, '', 0);
+  treeContainer.innerHTML = treeHtml;
+
+  // Add event listeners to tree nodes
+  setupTreeEventListeners();
+}
+
+function renderTreeNode(node, parentPath, level) {
+  // Build the correct path for this node
+  const currentPath = level === 0 ? '/' : (parentPath === '/' ? `/${node.name}` : `${parentPath}/${node.name}`);
+  const isSelected = selectedPath === currentPath;
+  const hasChildren = node.children && node.children.length > 0;
+  const isRoot = level === 0;
+
+  console.log(`Rendering node: ${node.name || 'root'}, level: ${level}, parentPath: "${parentPath}", currentPath: "${currentPath}"`);
+
+  let html = '';
+
+  if (isRoot) {
+    // Render root node - always represents '/'
+    html += `
+      <div class="tree-node ${isSelected ? 'selected' : ''}" data-path="/" data-level="0" data-node-id="${node.id || 'root'}">
+        <div class="expand-btn"></div>
+        <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        ${node.color && node.color !== '#fff' ? `<div class="color-indicator" style="background-color: ${node.color}"></div>` : ''}
+        <span class="node-label">/</span>
+      </div>
+    `;
   }
+
+  if (hasChildren) {
+    if (isRoot) {
+      html += '<div class="tree-children">';
+    }
+
+    for (const child of node.children) {
+      // FIXED: Pass the currentPath as parentPath for children (not building path again)
+      const childPath = currentPath === '/' ? `/${child.name}` : `${currentPath}/${child.name}`;
+      const childSelected = selectedPath === childPath;
+      const childHasChildren = child.children && child.children.length > 0;
+
+      console.log(`Child: ${child.name}, parentPath: "${currentPath}", childPath: "${childPath}"`);
+
+      html += `
+        <div class="tree-node ${childSelected ? 'selected' : ''}" data-path="${childPath}" data-level="${level + 1}" data-node-id="${child.id || child.name}" style="padding-left: ${(level + 1) * 20}px">
+          <button class="expand-btn" ${!childHasChildren ? 'style="visibility: hidden;"' : ''}>
+            ${childHasChildren ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' : ''}
+          </button>
+          <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          ${child.color && child.color !== '#fff' ? `<div class="color-indicator" style="background-color: ${child.color}"></div>` : ''}
+          <span class="node-label">${child.label || child.name}</span>
+        </div>
+      `;
+
+      if (childHasChildren) {
+        html += `<div class="tree-children" style="display: none;">`;
+        // FIXED: Pass currentPath as the parentPath for recursive call, not childPath
+        html += renderTreeNode(child, currentPath, level + 1);
+        html += '</div>';
+      }
+    }
+
+    if (isRoot) {
+      html += '</div>';
+    }
+  }
+
+  return html;
+}
+
+function setupTreeEventListeners() {
+  // Add click listeners to tree nodes
+  treeContainer.addEventListener('click', (event) => {
+    const treeNode = event.target.closest('.tree-node');
+    if (treeNode) {
+      const path = treeNode.dataset.path;
+      selectTreePath(path);
+    }
+
+    // Handle expand/collapse
+    const expandBtn = event.target.closest('.expand-btn');
+    if (expandBtn && expandBtn.querySelector('svg')) {
+      event.stopPropagation();
+      const treeNode = expandBtn.closest('.tree-node');
+      const children = treeNode.nextElementSibling;
+      if (children && children.classList.contains('tree-children')) {
+        const isExpanded = children.style.display !== 'none';
+        children.style.display = isExpanded ? 'none' : 'block';
+        const svg = expandBtn.querySelector('svg');
+        svg.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+      }
+    }
+  });
+}
+
+function selectTreePath(path) {
+  console.log('Selected tree path:', path);
+  console.log('Tree node that was clicked:', document.querySelector(`[data-path="${path}"]`));
+  selectedPath = path;
+  treePathInput.value = path;
+
+  // Update selected state in UI
+  document.querySelectorAll('.tree-node').forEach(node => {
+    node.classList.remove('selected');
+  });
+
+  const selectedNode = document.querySelector(`[data-path="${path}"]`);
+  if (selectedNode) {
+    selectedNode.classList.add('selected');
+    console.log('Selected node data:', {
+      path: selectedNode.dataset.path,
+      nodeId: selectedNode.dataset.nodeId,
+      level: selectedNode.dataset.level
+    });
+  }
+}
+
+async function handlePathSubmit() {
+  const newPath = treePathInput.value.trim() || '/';
+  console.log('Submitting path:', newPath);
 
   try {
     if (currentConnection.mode === 'context' && currentConnection.context) {
-      // Send API request to update context URL
-      const response = await chrome.runtime.sendMessage({
+      // Update context URL - use direct message format for cross-browser compatibility
+      const response = await sendDirectMessageToBackground({
         type: 'context.url.update',
         contextId: currentConnection.context.id,
-        url: newUrl
+        url: newPath
       });
+
       if (response.success) {
-        // Update the displayed URL
-        contextUrl.textContent = newUrl;
-        currentConnection.context.url = newUrl;
+        currentConnection.context.url = newPath;
+        contextUrl.textContent = newPath;
+        currentWorkspacePath = newPath; // Update for display consistency
         console.log('Context URL updated successfully');
       } else {
-        console.error('Failed to update context URL:', response.error);
-        alert('Failed to update context URL: ' + (response.error || 'Unknown error'));
+        throw new Error(response.error || 'Failed to update context URL');
       }
     } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-      // Use this field as the current workspace path
-      currentWorkspacePath = newUrl || '/';
-      contextUrl.textContent = currentWorkspacePath;
-      // Persist for restart
-      await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: currentConnection.workspace, workspacePath: currentWorkspacePath });
-      await loadTabs();
-    }
-  } catch (error) {
-    console.error('Error updating URL:', error);
-    alert('Failed to update: ' + error.message);
-  }
+      // Update workspace path
+      currentWorkspacePath = newPath;
+      contextUrl.textContent = newPath;
 
-  handleContextUrlCancel();
+      // Persist the workspace path
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', {
+        mode: 'explorer',
+        workspace: currentConnection.workspace,
+        workspacePath: currentWorkspacePath
+      });
+
+      console.log('Workspace path updated successfully');
+    }
+
+    // Refresh tabs with new path and navigate back to main view
+    await loadTabs();
+    navigateToView('main');
+
+  } catch (error) {
+    console.error('Failed to submit path:', error);
+    alert('Failed to update path: ' + error.message);
+  }
 }
 
-function handleContextUrlKeydown(event) {
+function handleTreePathKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault();
-    handleContextUrlSubmit();
+    handlePathSubmit();
   } else if (event.key === 'Escape') {
     event.preventDefault();
-    handleContextUrlCancel();
+    navigateToView('main');
+  }
+}
+
+// ===================================
+// SELECTION VIEW FUNCTIONS
+// ===================================
+
+async function initializeSelectionView() {
+  console.log('Initializing selection view...');
+
+  // Load contexts and workspaces
+  await loadContextsAndWorkspaces();
+
+  // Render the current tab
+  renderSelectionTab();
+}
+
+function switchSelectionTab(tabName) {
+  currentSelectionTab = tabName;
+
+  // Update tab buttons
+  document.querySelectorAll('.selection-tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  document.querySelectorAll('.selection-tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+
+  // Activate selected tab
+  const targetTab = document.querySelector(`[data-selection-tab="${tabName}"]`);
+  const targetContent = document.getElementById(`${tabName}-selection`);
+
+  if (targetTab && targetContent) {
+    targetTab.classList.add('active');
+    targetContent.classList.add('active');
+  }
+
+  renderSelectionTab();
+}
+
+async function loadContextsAndWorkspaces() {
+  try {
+    // Load contexts
+    const contextsResponse = await sendMessageToBackground('GET_CONTEXTS');
+    if (contextsResponse.success) {
+      console.log('Loaded contexts:', contextsResponse.contexts);
+      renderContextsList(contextsResponse.contexts || []);
+    } else {
+      console.error('Failed to load contexts:', contextsResponse.error);
+      contextsList.innerHTML = `<div class="empty-state">Failed to load contexts: ${contextsResponse.error}</div>`;
+    }
+
+    // Load workspaces
+    const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
+    if (workspacesResponse.success) {
+      console.log('Loaded workspaces:', workspacesResponse.workspaces);
+      renderWorkspacesList(workspacesResponse.workspaces || []);
+    } else {
+      console.error('Failed to load workspaces:', workspacesResponse.error);
+      workspacesList.innerHTML = `<div class="empty-state">Failed to load workspaces: ${workspacesResponse.error}</div>`;
+    }
+  } catch (error) {
+    console.error('Failed to load contexts and workspaces:', error);
+    contextsList.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+    workspacesList.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+  }
+}
+
+function renderContextsList(contexts) {
+  if (!contexts || contexts.length === 0) {
+    contextsList.innerHTML = '<div class="empty-state">No contexts available</div>';
+    return;
+  }
+
+  const contextsHtml = contexts.map(context => `
+    <div class="selection-item" data-context-id="${context.id}">
+      <div class="selection-item-info">
+        <div class="selection-item-name">${context.name || context.id}</div>
+        <div class="selection-item-id">${context.id}</div>
+        ${context.url ? `<div class="selection-item-url">${context.url}</div>` : ''}
+      </div>
+      <div class="selection-item-actions">
+        <button class="selection-action-btn" onclick="bindToContext('${context.id}', '${escapeHtml(context.name || context.id)}', '${escapeHtml(context.url || '')}')">
+          Context Mode
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  contextsList.innerHTML = contextsHtml;
+}
+
+function renderWorkspacesList(workspaces) {
+  if (!workspaces || workspaces.length === 0) {
+    workspacesList.innerHTML = '<div class="empty-state">No workspaces available</div>';
+    return;
+  }
+
+  const workspacesHtml = workspaces.map(workspace => `
+    <div class="selection-item" data-workspace-id="${workspace.id || workspace.name}">
+      <div class="selection-item-info">
+        <div class="selection-item-name">${workspace.label || workspace.name || workspace.id}</div>
+        <div class="selection-item-id">${workspace.id || workspace.name}</div>
+        ${workspace.description ? `<div class="selection-item-url">${workspace.description}</div>` : ''}
+      </div>
+      <div class="selection-item-actions">
+        <button class="selection-action-btn" onclick="openWorkspace('${workspace.id || workspace.name}', '${escapeHtml(workspace.label || workspace.name || workspace.id)}')">
+          Explorer Mode
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  workspacesList.innerHTML = workspacesHtml;
+}
+
+function renderSelectionTab() {
+  // Tab content is already rendered, just ensure current tab is visible
+  console.log('Selection tab rendered:', currentSelectionTab);
+}
+
+async function bindToContext(contextId, contextName, contextUrl) {
+  try {
+    console.log('Binding to context:', contextId);
+
+    const contextData = {
+      id: contextId,
+      name: contextName,
+      url: contextUrl || '/'
+    };
+
+    const response = await sendMessageToBackground('BIND_CONTEXT', { context: contextData });
+
+    if (response.success) {
+      console.log('Bound to context successfully');
+
+      // Update current connection
+      currentConnection.mode = 'context';
+      currentConnection.context = contextData;
+      currentConnection.workspace = null;
+
+      // Update connection status display
+      updateConnectionStatus(currentConnection);
+
+      // Navigate to tree view to show the context tree
+      await navigateToTreeView();
+    } else {
+      throw new Error(response.error || 'Failed to bind to context');
+    }
+  } catch (error) {
+    console.error('Failed to bind to context:', error);
+    alert('Failed to bind to context: ' + error.message);
+  }
+}
+
+async function openWorkspace(workspaceId, workspaceName) {
+  try {
+    console.log('Opening workspace:', workspaceId);
+
+    const workspaceData = {
+      id: workspaceId,
+      name: workspaceId,
+      label: workspaceName
+    };
+
+    const response = await sendMessageToBackground('OPEN_WORKSPACE', { workspace: workspaceData });
+
+    if (response.success) {
+      console.log('Opened workspace successfully');
+
+      // Update current connection
+      currentConnection.mode = 'explorer';
+      currentConnection.workspace = workspaceData;
+      currentConnection.context = null;
+      currentWorkspacePath = '/'; // Default to root
+
+      // Update connection status display
+      updateConnectionStatus(currentConnection);
+
+      // Navigate to tree view to show the workspace tree
+      await navigateToTreeView();
+    } else {
+      throw new Error(response.error || 'Failed to open workspace');
+    }
+  } catch (error) {
+    console.error('Failed to open workspace:', error);
+    alert('Failed to open workspace: ' + error.message);
+  }
+}
+
+// Make functions globally available for HTML onclick handlers
+window.bindToContext = bindToContext;
+window.openWorkspace = openWorkspace;
+
+function handleSelectionBackClick() {
+  // Determine where to go back based on current connection state
+  if (currentConnection.context || currentConnection.workspace) {
+    // If we have a context or workspace, go to tree view
+    navigateToTreeView();
+  } else {
+    // Otherwise go back to main view
+    navigateToView('main');
   }
 }
 
@@ -1459,9 +1895,30 @@ function handleImageError(event) {
 // Utility functions
 async function sendMessageToBackground(type, data = null) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, data }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
+    // Cross-browser compatibility: Firefox uses 'browser', Chrome uses 'chrome'
+    const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
+
+    runtime.sendMessage({ type, data }, (response) => {
+      const lastError = (typeof browser !== 'undefined') ? browser.runtime.lastError : chrome.runtime.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+// Special function for direct message sending (for messages that need specific format)
+async function sendDirectMessageToBackground(message) {
+  return new Promise((resolve, reject) => {
+    // Cross-browser compatibility: Firefox uses 'browser', Chrome uses 'chrome'
+    const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
+
+    runtime.sendMessage(message, (response) => {
+      const lastError = (typeof browser !== 'undefined') ? browser.runtime.lastError : chrome.runtime.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
       } else {
         resolve(response);
       }
