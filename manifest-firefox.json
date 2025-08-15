@@ -7,8 +7,7 @@
   "permissions": [
     "tabs",
     "storage",
-    "activeTab",
-    "background"
+    "activeTab"
   ],
 
   "host_permissions": [
@@ -17,9 +16,8 @@
     "https://*/*"
   ],
 
-    "background": {
-    "scripts": ["service-worker.js"],
-    "type": "module"
+  "background": {
+    "scripts": ["service-worker.js"]
   },
 
   "action": {
