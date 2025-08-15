@@ -44,7 +44,9 @@ export class BrowserStorage {
         autoOpenNewTabs: false,
         autoCloseRemovedTabs: false,
         syncOnlyThisBrowser: false,
-        contextChangeBehavior: 'keep-open-new'
+        contextChangeBehavior: 'keep-open-new',
+        tabOpeningMaxConcurrent: 3, // Max tabs to open concurrently
+        tabOpeningDelayMs: 200 // Delay between batches in milliseconds
       },
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
