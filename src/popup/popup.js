@@ -8,7 +8,7 @@ import FuzzySearch from './fuse.js';
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
 let searchInput, autoSyncNew, autoOpenNew, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
-let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn;
+let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 
@@ -92,9 +92,13 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('Context changed:', message.data);
         // Update context display
         if (message.data.contextId && message.data.url) {
-          contextId.textContent = message.data.contextId;
-          contextUrl.textContent = message.data.url;
-          contextUrl.classList.add('clickable');
+          // Update current connection and refresh display properly
+          if (currentConnection.context) {
+            currentConnection.context.id = message.data.contextId;
+            currentConnection.context.url = message.data.url;
+          }
+          // Refresh the entire status display to ensure proper formatting
+          updateConnectionStatus(currentConnection);
         }
         break;
 
@@ -102,13 +106,12 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('Context URL set:', message.data);
         // Update context display when URL changes via CLI
         if (message.data.contextId && message.data.url) {
-          contextId.textContent = message.data.contextId;
-          contextUrl.textContent = message.data.url;
-          contextUrl.classList.add('clickable');
-          // Update currentConnection context if it matches
+          // Update current connection and refresh display properly
           if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
             currentConnection.context.url = message.data.url;
           }
+          // Refresh the entire status display to ensure proper formatting
+          updateConnectionStatus(currentConnection);
         }
         // Refresh tabs to show updated context
         loadTabs();
@@ -135,9 +138,13 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('Context changed:', message.data);
       // Update context display
       if (message.data.contextId && message.data.url) {
-        contextId.textContent = message.data.contextId;
-        contextUrl.textContent = message.data.url;
-        contextUrl.classList.add('clickable');
+        // Update current connection and refresh display properly
+        if (currentConnection.context) {
+          currentConnection.context.id = message.data.contextId;
+          currentConnection.context.url = message.data.url;
+        }
+        // Refresh the entire status display to ensure proper formatting
+        updateConnectionStatus(currentConnection);
       }
       break;
 
@@ -145,13 +152,12 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('Context URL set:', message.data);
       // Update context display when URL changes via CLI
       if (message.data.contextId && message.data.url) {
-        contextId.textContent = message.data.contextId;
-        contextUrl.textContent = message.data.url;
-        contextUrl.classList.add('clickable');
-        // Update currentConnection context if it matches
+        // Update current connection and refresh display properly
         if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
           currentConnection.context.url = message.data.url;
         }
+        // Refresh the entire status display to ensure proper formatting
+        updateConnectionStatus(currentConnection);
       }
       // Refresh tabs to show updated context
       loadTabs();
@@ -187,6 +193,7 @@ function initializeElements() {
   autoOpenNew = document.getElementById('autoOpenNew');
   showSyncedTabs = document.getElementById('showSyncedTabs');
   showAllCanvasTabs = document.getElementById('showAllCanvasTabs');
+  selectorBtn = document.getElementById('selectorBtn');
   settingsBtn = document.getElementById('settingsBtn');
 
   // Tab navigation
@@ -233,8 +240,11 @@ function initializeElements() {
 }
 
 function setupEventListeners() {
-  // Logo click - navigate to selection view
-  logoBtn.addEventListener('click', () => navigateToView('selection'));
+  // Logo click - open Canvas server webui
+  logoBtn.addEventListener('click', openCanvasWebUI);
+
+  // Selector button - navigate to selection view
+  selectorBtn.addEventListener('click', () => navigateToView('selection'));
 
   // Settings button
   settingsBtn.addEventListener('click', openSettingsPage);
@@ -283,6 +293,10 @@ function setupEventListeners() {
 
   // Event delegation for Canvas tab actions
   canvasToBrowserList.addEventListener('click', handleCanvasTabAction);
+
+  // Event delegation for selection actions
+  contextsList.addEventListener('click', handleSelectionActionClick);
+  workspacesList.addEventListener('click', handleSelectionActionClick);
 
   // Event delegation for checkboxes
   browserToCanvasList.addEventListener('change', handleBrowserTabCheckbox);
@@ -350,7 +364,29 @@ async function loadInitialData() {
     if (currentConnection.mode === 'explorer' && typeof response.workspacePath === 'string') {
       currentWorkspacePath = response.workspacePath || '/';
     }
-    updateConnectionStatus(response);
+
+    // If in context mode but missing workspace info, try to load it
+    if (currentConnection.mode === 'context' && currentConnection.context &&
+        !currentConnection.context.workspaceName && !currentConnection.context.workspace &&
+        !currentConnection.workspace) {
+      console.log('Context mode detected but missing workspace info, attempting to load...');
+      try {
+        const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
+        if (workspacesResponse.success && workspacesResponse.workspaces && workspacesResponse.workspaces.length > 0) {
+          // Prefer "universe" workspace if available, otherwise use first workspace
+          let workspace = workspacesResponse.workspaces.find(ws => ws.name === 'universe');
+          if (!workspace) {
+            workspace = workspacesResponse.workspaces[0];
+          }
+          currentConnection.workspace = workspace;
+          console.log('Added workspace info to current connection (preferred universe):', currentConnection.workspace);
+        }
+      } catch (error) {
+        console.warn('Could not load workspace information on popup init:', error);
+      }
+    }
+
+    updateConnectionStatus(currentConnection);
 
     // Initialize checkbox states to ensure proper defaults
     showSyncedTabs.checked = false; // Default to showing only unsynced tabs
@@ -384,18 +420,35 @@ function updateConnectionStatus(connection) {
     connectionStatus.className = 'status-dot connected';
     connectionText.textContent = 'Connected';
 
-    // Context mode header
+        // Context mode header
     if ((connection.mode === 'context') && connection.context) {
-      console.log('Popup: Context mode, context:', connection.context.id);
+      console.log('Popup: Context mode, context:', connection.context);
+      console.log('Popup: Context mode, workspace info:', connection.workspace);
       contextId.textContent = `Bound to context ID: ${connection.context.id}`;
-      contextUrl.textContent = connection.context.url || '-';
+
+      // Get workspace name from context or use fallback
+      const workspaceName = connection.context.workspaceName || connection.context.workspace ||
+                           (connection.workspace ? getWorkspaceName(connection.workspace) : null);
+      const contextPath = connection.context.url || '/';
+
+      console.log('Popup: Resolved workspace name:', workspaceName, 'context path:', contextPath);
+
+      // Format URL as workspace.name://path
+      if (workspaceName) {
+        contextUrl.textContent = formatContextUrl(workspaceName, contextPath);
+      } else {
+        contextUrl.textContent = contextPath;
+      }
       contextUrl.classList.add('clickable');
     // Explorer mode header
     } else if ((connection.mode === 'explorer') && connection.workspace) {
-      const wsName = connection.workspace.label || connection.workspace.name || connection.workspace.id;
+      const wsName = getWorkspaceName(connection.workspace);
       console.log('Popup: Explorer mode, workspace:', wsName);
       contextId.textContent = `Current workspace: ${wsName}`;
-      contextUrl.textContent = currentWorkspacePath || '/';
+
+      // Format URL as workspace.name://path
+      const workspacePath = currentWorkspacePath || '/';
+      contextUrl.textContent = formatContextUrl(wsName, workspacePath);
       contextUrl.classList.add('clickable');
     } else {
       console.log('Popup: No context or workspace selected');
@@ -1068,12 +1121,26 @@ async function navigateToTreeView() {
     treeSubtitle.textContent = 'Select a path in the context tree';
   } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
     selectedPath = currentWorkspacePath || '/';
-    const wsName = currentConnection.workspace.label || currentConnection.workspace.name || currentConnection.workspace.id;
+    const wsName = getWorkspaceName(currentConnection.workspace);
     treeTitle.textContent = `Workspace Tree: ${wsName}`;
     treeSubtitle.textContent = 'Select a path in the workspace tree';
   }
 
-  treePathInput.value = selectedPath;
+  // Set input value to show formatted URL for consistency
+  if (currentConnection.mode === 'context' && currentConnection.context) {
+    const workspaceName = currentConnection.context.workspaceName || currentConnection.context.workspace ||
+                         (currentConnection.workspace ? getWorkspaceName(currentConnection.workspace) : null);
+    if (workspaceName) {
+      treePathInput.value = formatContextUrl(workspaceName, selectedPath);
+    } else {
+      treePathInput.value = selectedPath;
+    }
+  } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+    const wsName = getWorkspaceName(currentConnection.workspace);
+    treePathInput.value = formatContextUrl(wsName, selectedPath);
+  } else {
+    treePathInput.value = selectedPath;
+  }
 
   // Navigate to tree view
   navigateToView('tree');
@@ -1220,7 +1287,21 @@ function selectTreePath(path) {
   console.log('Selected tree path:', path);
   console.log('Tree node that was clicked:', document.querySelector(`[data-path="${path}"]`));
   selectedPath = path;
-  treePathInput.value = path;
+
+  // Always format as absolute URL for display consistency
+  let formattedPath = path;
+  if (currentConnection.mode === 'context' && currentConnection.context) {
+    const workspaceName = currentConnection.context.workspaceName || currentConnection.context.workspace ||
+                         (currentConnection.workspace ? getWorkspaceName(currentConnection.workspace) : null);
+    if (workspaceName) {
+      formattedPath = formatContextUrl(workspaceName, path);
+    }
+  } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+    const wsName = getWorkspaceName(currentConnection.workspace);
+    formattedPath = formatContextUrl(wsName, path);
+  }
+
+  treePathInput.value = formattedPath;
 
   // Update selected state in UI
   document.querySelectorAll('.tree-node').forEach(node => {
@@ -1244,25 +1325,55 @@ async function handlePathSubmit() {
 
   try {
     if (currentConnection.mode === 'context' && currentConnection.context) {
+      // For context mode: extract relative path if full URL is provided
+      let pathToSend = newPath;
+      const parsed = parseContextUrl(newPath);
+      if (parsed.workspaceName) {
+        // Full URL provided, send relative path to backend
+        pathToSend = parsed.path;
+      }
+
       // Update context URL - use direct message format for cross-browser compatibility
       const response = await sendDirectMessageToBackground({
         type: 'context.url.update',
         contextId: currentConnection.context.id,
-        url: newPath
+        url: pathToSend
       });
 
       if (response.success) {
-        currentConnection.context.url = newPath;
-        contextUrl.textContent = newPath;
-        currentWorkspacePath = newPath; // Update for display consistency
+        currentConnection.context.url = pathToSend;
+
+        // Update display with properly formatted URL
+        const workspaceName = currentConnection.context.workspaceName ||
+                             currentConnection.context.workspace ||
+                             (currentConnection.workspace ? getWorkspaceName(currentConnection.workspace) : null);
+
+        if (workspaceName) {
+          contextUrl.textContent = formatContextUrl(workspaceName, pathToSend);
+        } else {
+          contextUrl.textContent = pathToSend;
+        }
+
+        currentWorkspacePath = pathToSend; // Update for display consistency
         console.log('Context URL updated successfully');
       } else {
         throw new Error(response.error || 'Failed to update context URL');
       }
     } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-      // Update workspace path
-      currentWorkspacePath = newPath;
-      contextUrl.textContent = newPath;
+      // For workspace mode: extract relative path if full URL is provided
+      let pathToSend = newPath;
+      const parsed = parseContextUrl(newPath);
+      if (parsed.workspaceName) {
+        // Full URL provided, use relative path only
+        pathToSend = parsed.path;
+      }
+
+      // Update workspace path (must be relative)
+      currentWorkspacePath = pathToSend;
+
+      // Update display with properly formatted URL
+      const wsName = getWorkspaceName(currentConnection.workspace);
+      contextUrl.textContent = formatContextUrl(wsName, pathToSend);
 
       // Persist the workspace path
       await sendMessageToBackground('SET_MODE_AND_SELECTION', {
@@ -1374,8 +1485,8 @@ function renderContextsList(contexts) {
         ${context.url ? `<div class="selection-item-url">${context.url}</div>` : ''}
       </div>
       <div class="selection-item-actions">
-        <button class="selection-action-btn" onclick="bindToContext('${context.id}', '${escapeHtml(context.name || context.id)}', '${escapeHtml(context.url || '')}')">
-          Context Mode
+        <button class="selection-action-btn bind-context-btn" data-context-id="${context.id}" data-context-name="${escapeHtml(context.name || context.id)}" data-context-url="${escapeHtml(context.url || '')}">
+          Bind
         </button>
       </div>
     </div>
@@ -1391,15 +1502,18 @@ function renderWorkspacesList(workspaces) {
   }
 
   const workspacesHtml = workspaces.map(workspace => `
-    <div class="selection-item" data-workspace-id="${workspace.id || workspace.name}">
+    <div class="selection-item" data-workspace-id="${workspace.id}">
       <div class="selection-item-info">
         <div class="selection-item-name">${workspace.label || workspace.name || workspace.id}</div>
-        <div class="selection-item-id">${workspace.id || workspace.name}</div>
+        <div class="selection-item-id">${workspace.id}</div>
         ${workspace.description ? `<div class="selection-item-url">${workspace.description}</div>` : ''}
       </div>
       <div class="selection-item-actions">
-        <button class="selection-action-btn" onclick="openWorkspace('${workspace.id || workspace.name}', '${escapeHtml(workspace.label || workspace.name || workspace.id)}')">
-          Explorer Mode
+        <button class="selection-action-btn open-workspace-btn"
+                data-workspace-id="${workspace.id}"
+                data-workspace-name="${escapeHtml(workspace.name || workspace.label)}"
+                data-workspace-label="${escapeHtml(workspace.label || workspace.name)}">
+          Open Workspace
         </button>
       </div>
     </div>
@@ -1417,11 +1531,41 @@ async function bindToContext(contextId, contextName, contextUrl) {
   try {
     console.log('Binding to context:', contextId);
 
+    // Preserve workspace information if available
+    let workspaceInfo = null;
+    let workspaceName = null;
+
+    if (currentConnection.workspace) {
+      workspaceInfo = currentConnection.workspace;
+      workspaceName = getWorkspaceName(workspaceInfo);
+    } else {
+      // Try to get workspace info from available workspaces if not in current connection
+      try {
+        const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
+        if (workspacesResponse.success && workspacesResponse.workspaces && workspacesResponse.workspaces.length > 0) {
+          // Prefer "universe" workspace if available, otherwise use first workspace
+          workspaceInfo = workspacesResponse.workspaces.find(ws => ws.name === 'universe');
+          if (!workspaceInfo) {
+            workspaceInfo = workspacesResponse.workspaces[0];
+          }
+          workspaceName = getWorkspaceName(workspaceInfo);
+          console.log('Using fallback workspace for context binding (preferred universe):', workspaceName);
+        }
+      } catch (error) {
+        console.warn('Could not load workspace information for context binding:', error);
+      }
+    }
+
     const contextData = {
       id: contextId,
       name: contextName,
-      url: contextUrl || '/'
+      url: contextUrl || '/',
+      // Preserve workspace information for proper URL formatting
+      workspaceName: workspaceName,
+      workspace: workspaceName
     };
+
+    console.log('Context data for binding:', contextData);
 
     const response = await sendMessageToBackground('BIND_CONTEXT', { context: contextData });
 
@@ -1431,7 +1575,12 @@ async function bindToContext(contextId, contextName, contextUrl) {
       // Update current connection
       currentConnection.mode = 'context';
       currentConnection.context = contextData;
-      currentConnection.workspace = null;
+      // Keep workspace info for reference, but context takes precedence
+      if (workspaceInfo) {
+        currentConnection.workspace = workspaceInfo;
+      }
+
+      console.log('Updated currentConnection:', currentConnection);
 
       // Update connection status display
       updateConnectionStatus(currentConnection);
@@ -1447,14 +1596,14 @@ async function bindToContext(contextId, contextName, contextUrl) {
   }
 }
 
-async function openWorkspace(workspaceId, workspaceName) {
+async function openWorkspace(workspaceId, workspaceName, workspaceLabel) {
   try {
-    console.log('Opening workspace:', workspaceId);
+    console.log('Opening workspace:', workspaceId, 'name:', workspaceName);
 
     const workspaceData = {
       id: workspaceId,
-      name: workspaceId,
-      label: workspaceName
+      name: workspaceName, // Now correctly using the actual workspace name
+      label: workspaceLabel || workspaceName
     };
 
     const response = await sendMessageToBackground('OPEN_WORKSPACE', { workspace: workspaceData });
@@ -1482,9 +1631,22 @@ async function openWorkspace(workspaceId, workspaceName) {
   }
 }
 
-// Make functions globally available for HTML onclick handlers
-window.bindToContext = bindToContext;
-window.openWorkspace = openWorkspace;
+// Event delegation handlers
+function handleSelectionActionClick(event) {
+  const button = event.target;
+
+  if (button.classList.contains('bind-context-btn')) {
+    const contextId = button.dataset.contextId;
+    const contextName = button.dataset.contextName;
+    const contextUrl = button.dataset.contextUrl;
+    bindToContext(contextId, contextName, contextUrl);
+  } else if (button.classList.contains('open-workspace-btn')) {
+    const workspaceId = button.dataset.workspaceId;
+    const workspaceName = button.dataset.workspaceName;
+    const workspaceLabel = button.dataset.workspaceLabel;
+    openWorkspace(workspaceId, workspaceName, workspaceLabel);
+  }
+}
 
 function handleSelectionBackClick() {
   // Determine where to go back based on current connection state
@@ -1890,6 +2052,83 @@ function handleImageError(event) {
       img.src = fallback;
     }
   }
+}
+
+// URL formatting utilities
+function formatContextUrl(workspaceName, contextPath) {
+  if (!workspaceName || !contextPath) {
+    return contextPath || '-';
+  }
+
+  // If contextPath already contains '://', extract the path part
+  if (contextPath.includes('://')) {
+    const pathPart = contextPath.split('://')[1] || '/';
+    return `${workspaceName}://${pathPart}`;
+  }
+
+  // Ensure path starts with '/' then remove it for the final URL format
+  const normalizedPath = contextPath.startsWith('/') ? contextPath : `/${contextPath}`;
+  const pathWithoutLeadingSlash = normalizedPath.substring(1);
+  // If path is just "/", pathWithoutLeadingSlash will be empty, which is correct for "workspace://"
+  return `${workspaceName}://${pathWithoutLeadingSlash}`;
+}
+
+function parseContextUrl(contextUrl) {
+  if (!contextUrl || !contextUrl.includes('://')) {
+    return { workspaceName: null, path: contextUrl || '/' };
+  }
+
+  const [workspaceName, path] = contextUrl.split('://');
+  return {
+    workspaceName: workspaceName || null,
+    path: path ? `/${path}` : '/' // Ensure path always starts with '/' for internal use
+  };
+}
+
+function getWorkspaceName(workspace) {
+  // Prioritize workspace.name specifically, only fall back to label, never use ID for URL
+  if (!workspace) return 'unknown';
+
+  // Ensure we're using the actual name, not ID
+  const name = workspace.name || workspace.label;
+
+  // Validate that name is not a UUID (in case there are still issues)
+  if (name && !isUUID(name)) {
+    return name;
+  }
+
+  return workspace.label || 'unknown';
+}
+
+function isUUID(str) {
+  if (!str) return false;
+  // UUID pattern: 8-4-4-4-12 hex chars with dashes
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(str);
+}
+
+// Utility to ensure workspace information is available
+async function ensureWorkspaceInfo() {
+  if (!currentConnection.workspace &&
+      (!currentConnection.context || (!currentConnection.context.workspaceName && !currentConnection.context.workspace))) {
+    console.log('No workspace info available, attempting to load...');
+    try {
+      const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
+      if (workspacesResponse.success && workspacesResponse.workspaces && workspacesResponse.workspaces.length > 0) {
+        // Prefer "universe" workspace if available, otherwise use first workspace
+        let workspace = workspacesResponse.workspaces.find(ws => ws.name === 'universe');
+        if (!workspace) {
+          workspace = workspacesResponse.workspaces[0];
+        }
+        currentConnection.workspace = workspace;
+        console.log('Loaded workspace info (preferred universe):', workspace);
+        return workspace;
+      }
+    } catch (error) {
+      console.warn('Could not load workspace information:', error);
+    }
+  }
+  return currentConnection.workspace;
 }
 
 // Utility functions
