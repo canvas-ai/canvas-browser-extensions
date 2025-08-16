@@ -1788,6 +1788,12 @@ async function handleUpdateContextUrl(message, sendResponse) {
     if (currentContext && currentContext.id === contextId) {
       currentContext.url = url;
       await browserStorage.setCurrentContext(currentContext);
+      
+      // Trigger sync engine to handle the URL change
+      if (syncEngine.isInitialized) {
+        console.log('Triggering sync engine for manual context URL change');
+        await syncEngine.handleContextUrlChange(contextId, url);
+      }
     }
 
     // Notify all listeners about the URL change
