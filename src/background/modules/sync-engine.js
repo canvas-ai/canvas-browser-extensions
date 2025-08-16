@@ -952,7 +952,10 @@ export class SyncEngine {
         const promises = batch.map(async (document, index) => {
           try {
             console.log(`SyncEngine: Opening tab ${i + index + 1}/${documents.length}:`, document.data?.title || document.id);
-            const result = await tabManager.openCanvasDocument(document, { active: false });
+                        const result = await tabManager.openCanvasDocument(document, {
+              active: false,
+              allowDuplicates: true  // Allow duplicates when opening from Canvas sync
+            });
             console.log('SyncEngine: ✅ Opened tab:', document.data?.title || document.id);
             return result;
           } catch (error) {

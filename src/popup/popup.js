@@ -2256,23 +2256,29 @@ async function handleOpenAll() {
 
     console.log(`Opening ${filteredCanvasTabs.length} Canvas tabs`);
 
-    // Open tabs with better error handling
+    // Open tabs with better error handling using batch operation
     let opened = 0;
     let failed = 0;
 
-    for (const document of filteredCanvasTabs) {
-      try {
-        const response = await sendMessageToBackground('OPEN_CANVAS_DOCUMENT', { document });
-        if (response.success) {
-          opened++;
-        } else {
-          failed++;
-          console.error(`Failed to open tab: ${document.data?.title}`, response.error);
-        }
-      } catch (error) {
-        failed++;
-        console.error(`Error opening tab: ${document.data?.title}`, error);
+    try {
+      console.log('Opening all Canvas tabs in batch:', filteredCanvasTabs.length);
+
+      // Use batch operation for multiple documents
+      const response = await sendMessageToBackground('OPEN_CANVAS_DOCUMENT', {
+        documents: filteredCanvasTabs
+      });
+
+      if (response.success) {
+        opened = response.successful;
+        failed = response.failed;
+        console.log(`Batch open completed: ${opened} opened, ${failed} failed`);
+      } else {
+        failed = filteredCanvasTabs.length;
+        console.error('Batch open failed:', response.error);
       }
+    } catch (error) {
+      failed = filteredCanvasTabs.length;
+      console.error('Error in batch open:', error);
     }
 
     console.log(`Opened ${opened} tabs, ${failed} failed`);
@@ -2339,10 +2345,40 @@ async function handleOpenSelected() {
       return;
     }
 
-    for (const documentId of selectedIds) {
-      const document = canvasTabs.find(doc => doc.id === documentId);
-      if (document) {
-        await sendMessageToBackground('OPEN_CANVAS_DOCUMENT', { document });
+    // Collect all selected documents
+    console.log('🔧 Selected IDs:', selectedIds);
+    console.log('🔧 Available canvasTabs:', canvasTabs.length);
+
+    const documentsToOpen = selectedIds
+      .map(documentId => {
+        const doc = canvasTabs.find(doc => doc.id === documentId);
+        if (!doc) {
+          console.warn(`🔧 Document not found for ID: ${documentId}`);
+        }
+        return doc;
+      })
+      .filter(doc => doc !== undefined);
+
+    console.log('🔧 Documents to open:', documentsToOpen.map(doc => ({
+      id: doc.id,
+      title: doc.data?.title,
+      url: doc.data?.url
+    })));
+
+    if (documentsToOpen.length > 0) {
+      console.log('Opening selected documents in batch:', documentsToOpen.length);
+
+      // Use batch operation for multiple documents
+      const response = await sendMessageToBackground('OPEN_CANVAS_DOCUMENT', {
+        documents: documentsToOpen
+      });
+
+      console.log('🔧 Batch open response:', response);
+
+      if (response.success) {
+        console.log(`Successfully opened ${response.successful}/${response.total} documents`);
+      } else {
+        console.error('Failed to open documents:', response.error);
       }
     }
 

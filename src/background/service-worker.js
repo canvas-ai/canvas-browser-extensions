@@ -1666,18 +1666,57 @@ async function handleSyncMultipleTabs(data, sendResponse) {
 
 async function handleOpenCanvasDocument(data, sendResponse) {
   try {
-    const { document, options = {} } = data;
+    const { document, documents, options = {} } = data;
 
-    if (!document) {
-      throw new Error('Canvas document is required');
+    if (!document && !documents) {
+      throw new Error('Canvas document or documents array is required');
     }
 
-    // Open the Canvas document as a browser tab
-    const result = await tabManager.openCanvasDocument(document, options);
+    // Handle multiple documents (bulk operation)
+    if (documents && Array.isArray(documents)) {
+      console.log('Opening multiple Canvas documents:', documents.length);
 
+      const results = [];
+            const bulkOptions = {
+        ...options,
+        allowDuplicates: true,  // Allow duplicates for bulk operations from popup
+        active: false  // Don't steal focus when opening multiple
+      };
+
+      for (let i = 0; i < documents.length; i++) {
+        const doc = documents[i];
+        try {
+          console.log(`🔧 Opening document ${i + 1}/${documents.length}:`, {
+            title: doc.data?.title,
+            url: doc.data?.url,
+            id: doc.id
+          });
+          const result = await tabManager.openCanvasDocument(doc, bulkOptions);
+          console.log(`🔧 Result for document ${i + 1}:`, result);
+          results.push({ document: doc, result });
+        } catch (error) {
+          console.error(`❌ Failed to open document ${i + 1}:`, error);
+          results.push({ document: doc, result: { success: false, error: error.message } });
+        }
+      }
+
+      const successful = results.filter(r => r.result.success).length;
+      sendResponse({
+        success: successful > 0,
+        total: documents.length,
+        successful,
+        failed: documents.length - successful,
+        results
+      });
+      return;
+    }
+
+    // Handle single document
+    const result = await tabManager.openCanvasDocument(document, options);
     sendResponse(result);
+
   } catch (error) {
-    console.error('Failed to open Canvas document:', error);
+    console.error('Failed to open Canvas document(s):', error);
     sendResponse({
       success: false,
       error: error.message
