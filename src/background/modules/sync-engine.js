@@ -218,9 +218,48 @@ export class SyncEngine {
       return;
     }
 
-    // Note: This is limited since we don't track document IDs in browser tabs
-    // We'd need to enhance tab tracking for full functionality
-    console.log('SyncEngine: Would close tabs for removed documents:', eventData.documentIds || [eventData.documentId]);
+    try {
+      console.log('SyncEngine: Processing document removal:', eventData);
+      
+      // Get document IDs to remove
+      const documentIds = eventData.documentIds || 
+                         (eventData.documentId ? [eventData.documentId] : []) ||
+                         (eventData.documents ? eventData.documents.map(d => d.id) : []);
+      
+      // Get documents with URLs if available
+      const documents = eventData.documents || 
+                       (eventData.document ? [eventData.document] : []);
+      
+      // Collect URLs to close
+      const urlsToClose = new Set();
+      
+      // Add URLs from document data if available
+      for (const doc of documents) {
+        if (doc.data?.url) {
+          urlsToClose.add(doc.data.url);
+        }
+      }
+      
+      // If we have URLs, close matching tabs
+      if (urlsToClose.size > 0) {
+        console.log('SyncEngine: Closing tabs for removed documents:', Array.from(urlsToClose));
+        
+        // Get all browser tabs
+        const browserTabs = await tabManager.getAllTabs();
+        
+        // Find and close tabs matching the removed document URLs
+        for (const tab of browserTabs) {
+          if (urlsToClose.has(tab.url)) {
+            console.log('SyncEngine: Closing tab:', tab.title, tab.url);
+            await tabManager.closeTab(tab.id);
+          }
+        }
+      } else {
+        console.log('SyncEngine: No URLs found in removal event, cannot close tabs');
+      }
+    } catch (error) {
+      console.error('SyncEngine: Failed to handle document removal:', error);
+    }
   }
 
   // Handle remote document updated
@@ -584,6 +623,9 @@ export class SyncEngine {
       console.log('SyncEngine: Handling context change:', oldContextId, '->', newContextId);
 
       const syncSettings = await browserStorage.getSyncSettings();
+      
+      // Always fetch documents when switching contexts
+      console.log('SyncEngine: Context switched - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
 
       await this._executeContextChangeBehavior(syncSettings.contextChangeBehavior, oldContextId, newContextId);
 
@@ -598,10 +640,16 @@ export class SyncEngine {
       console.log('SyncEngine: Handling context URL change for context:', contextId, 'to URL:', newUrl);
 
       const syncSettings = await browserStorage.getSyncSettings();
-
-      // For URL changes, we pass the same contextId as both old and new
-      // since it's the same context but with different content
-      await this._executeContextChangeBehavior(syncSettings.contextChangeBehavior, contextId, contextId);
+      const mode = await browserStorage.getSyncMode();
+      
+      // Always fetch documents when context URL changes
+      console.log('SyncEngine: Context URL changed - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
+      
+      // For URL changes in context mode, we need to fetch and handle documents
+      // according to the contextChangeBehavior setting
+      if (mode === 'context') {
+        await this._executeContextChangeBehavior(syncSettings.contextChangeBehavior, contextId, contextId, true);
+      }
 
     } catch (error) {
       console.error('SyncEngine: Failed to handle context URL change:', error);
@@ -609,18 +657,27 @@ export class SyncEngine {
   }
 
   // Execute context change behavior based on settings
-  async _executeContextChangeBehavior(behavior, oldContextId, newContextId) {
+  async _executeContextChangeBehavior(behavior, oldContextId, newContextId, isUrlChange = false) {
     try {
-      console.log('SyncEngine: Executing context change behavior:', behavior);
+      console.log('SyncEngine: Executing context change behavior:', behavior, 'isUrlChange:', isUrlChange);
 
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
       const workspacePath = await browserStorage.getWorkspacePath();
+      
+      // For URL changes or context switches, we always need to fetch documents
+      const shouldFetchDocuments = isUrlChange || (oldContextId !== newContextId);
+      
+      if (shouldFetchDocuments) {
+        console.log('SyncEngine: Will fetch documents from backend for context:', newContextId);
+      }
 
       switch (behavior) {
         case 'close-open-new':
-          await this.closeCurrentTabs();
-          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
+            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          }
           break;
 
         case 'save-close-open-new':
@@ -629,12 +686,16 @@ export class SyncEngine {
           } else if (mode === 'explorer' && currentWorkspace) {
             await this.syncAllBrowserTabsToWorkspace(currentWorkspace, workspacePath);
           }
-          await this.closeCurrentTabs();
-          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
+            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          }
           break;
 
         case 'keep-open-new':
-          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          if (shouldFetchDocuments) {
+            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          }
           break;
 
         case 'keep-only':
@@ -646,7 +707,9 @@ export class SyncEngine {
         default:
           console.warn('SyncEngine: Unknown context change behavior:', behavior);
           // Fallback to keep-open-new
-          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          if (shouldFetchDocuments) {
+            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+          }
       }
 
     } catch (error) {
@@ -819,6 +882,11 @@ export class SyncEngine {
 
         const response = await apiClient.getContextDocuments(contextId, featureArray);
         documents = response.success ? response.payload : [];
+        console.log('SyncEngine: API response for context documents:', {
+          success: response.success,
+          documentCount: documents.length,
+          urls: documents.map(d => d.data?.url).filter(Boolean)
+        });
 
       } else if (mode === 'explorer' && workspace) {
         console.log('SyncEngine: Fetching documents from workspace:', workspace.name || workspace.id, 'path:', workspacePath);
@@ -826,15 +894,29 @@ export class SyncEngine {
         const wsId = workspace.name || workspace.id;
         const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', ['data/abstraction/tab']);
         documents = response.success ? (response.payload?.data || response.payload) : [];
+        console.log('SyncEngine: API response for workspace documents:', {
+          success: response.success,
+          documentCount: documents.length,
+          urls: documents.map(d => d.data?.url).filter(Boolean)
+        });
       }
 
       console.log('SyncEngine: Found', documents.length, 'documents to open');
 
       // Open documents as tabs with rate limiting for browser security
       const syncSettings = await browserStorage.getSyncSettings();
+      console.log('SyncEngine: Sync settings:', {
+        autoOpenNewTabs: syncSettings.autoOpenNewTabs,
+        contextChangeBehavior: syncSettings.contextChangeBehavior
+      });
+      
       if (syncSettings.autoOpenNewTabs && documents.length > 0) {
         console.log('SyncEngine: Opening', documents.length, 'tabs with rate limiting');
         await this.openTabsWithRateLimit(documents);
+      } else if (!syncSettings.autoOpenNewTabs) {
+        console.log('SyncEngine: Auto-open is disabled, skipping tab opening');
+      } else {
+        console.log('SyncEngine: No documents to open');
       }
 
       return documents;
@@ -869,6 +951,9 @@ export class SyncEngine {
       console.log('SyncEngine: Handling workspace path change:', workspace?.name || workspace?.id, oldPath, '->', newPath);
 
       const syncSettings = await browserStorage.getSyncSettings();
+      
+      // Always fetch documents when workspace path changes
+      console.log('SyncEngine: Workspace path changed - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
 
       // Execute the same behavior as context changes
       await this._executeWorkspacePathChangeBehavior(syncSettings.contextChangeBehavior, workspace, oldPath, newPath);
@@ -885,21 +970,31 @@ export class SyncEngine {
 
       const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
+      
+      // Always fetch documents when path changes
+      const shouldFetchDocuments = true;
+      console.log('SyncEngine: Will fetch documents from backend for workspace:', workspace?.name || workspace?.id, 'path:', newPath);
 
       switch (behavior) {
         case 'close-open-new':
-          await this.closeCurrentTabs();
-          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
+            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          }
           break;
 
         case 'save-close-open-new':
           await this.syncAllBrowserTabsToWorkspace(workspace, oldPath);
-          await this.closeCurrentTabs();
-          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
+            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          }
           break;
 
         case 'keep-open-new':
-          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          if (shouldFetchDocuments) {
+            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          }
           break;
 
         case 'keep-only':
@@ -909,7 +1004,9 @@ export class SyncEngine {
 
         default:
           console.warn('SyncEngine: Unknown workspace path change behavior:', behavior);
-          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          if (shouldFetchDocuments) {
+            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+          }
       }
 
     } catch (error) {
