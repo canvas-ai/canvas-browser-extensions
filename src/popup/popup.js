@@ -720,44 +720,121 @@ function renderBrowserTabs() {
   console.log('Rendering browser tabs, count:', browserTabs.length);
 
   if (browserTabs.length === 0) {
-    const emptyMessage = showingSyncedTabs
-      ? 'No browser tabs found'
-      : 'All tabs are already synced!<br><small>Check "Show Synced" to see all tabs</small>';
-    browserToCanvasList.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' });
+    if (showingSyncedTabs) {
+      emptyDiv.textContent = 'No browser tabs found';
+    } else {
+      emptyDiv.appendChild(document.createTextNode('All tabs are already synced!'));
+      emptyDiv.appendChild(document.createElement('br'));
+      const smallText = createSecureElement('small', {}, 'Check "Show Synced" to see all tabs');
+      emptyDiv.appendChild(smallText);
+    }
+    browserToCanvasList.textContent = '';
+    browserToCanvasList.appendChild(emptyDiv);
     return;
   }
 
-  browserToCanvasList.innerHTML = browserTabs.map(tab => {
+  // Clear existing content
+  browserToCanvasList.textContent = '';
+
+  // Create tabs using secure DOM methods
+  browserTabs.forEach(tab => {
     const isSynced = syncedTabIds.has(tab.id);
-    const syncButtonDisabled = isSynced ? 'disabled' : '';
-    const syncButtonTitle = isSynced ? 'Already synced to Canvas' : 'Sync to Canvas';
     const tabClass = isSynced ? 'tab-item synced' : 'tab-item';
-    const isPinned = tab.isPinned || false; // Will be populated when we load tab data
+    const isPinned = tab.isPinned || false;
+
+    // Create tab element
+    const tabElement = createSecureElement('div', {
+      className: tabClass,
+      'data-tab-id': tab.id
+    });
+
+    // Create checkbox label
+    const checkboxLabel = createSecureElement('label', { className: 'tab-checkbox' });
+    const checkbox = createSecureElement('input', {
+      type: 'checkbox',
+      'data-tab-id': tab.id
+    });
+    if (isSynced) checkbox.disabled = true;
+    const checkmark = createSecureElement('span', { className: 'checkmark' });
+    checkboxLabel.appendChild(checkbox);
+    checkboxLabel.appendChild(checkmark);
+
+    // Create favicon
+    const faviconImg = createSecureElement('img', {
+      src: tab.favIconUrl || '../assets/icons/logo-br_64x64.png',
+      className: 'tab-favicon',
+      'data-fallback': '../assets/icons/logo-br_64x64.png'
+    });
+
+    // Create tab info
+    const tabInfo = createSecureElement('div', { className: 'tab-info' });
+    const tabTitle = createSecureElement('div', { className: 'tab-title' }, escapeHtml(tab.title));
+    const tabUrl = createSecureElement('div', { className: 'tab-url' }, escapeHtml(tab.url));
+    tabInfo.appendChild(tabTitle);
+    tabInfo.appendChild(tabUrl);
+
+    // Create tab actions
+    const tabActions = createSecureElement('div', { className: 'tab-actions' });
+
+    // Pin button with secure SVG creation
     const pinButtonClass = isPinned ? 'action-btn small pin-btn pinned' : 'action-btn small pin-btn';
     const pinButtonTitle = isPinned ? 'Unpin tab (will close on context change)' : 'Pin tab (keep open on context change)';
-    const pinIcon = isPinned ?
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin-fill" viewBox="0 0 16 16"><path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354"/></svg>' :
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin-angle-fill" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/></svg>';
+    const pinButton = createSecureElement('button', {
+      className: pinButtonClass,
+      'data-action': 'pin',
+      'data-tab-id': tab.id,
+      title: pinButtonTitle
+    });
 
-    return `
-      <div class="${tabClass}" data-tab-id="${tab.id}">
-        <label class="tab-checkbox">
-          <input type="checkbox" data-tab-id="${tab.id}" ${isSynced ? 'disabled' : ''}>
-          <span class="checkmark"></span>
-        </label>
-        <img src="${tab.favIconUrl || '../assets/icons/logo-br_64x64.png'}" class="tab-favicon" data-fallback="../assets/icons/logo-br_64x64.png">
-        <div class="tab-info">
-          <div class="tab-title">${escapeHtml(tab.title)}</div>
-          <div class="tab-url">${escapeHtml(tab.url)}</div>
-        </div>
-        <div class="tab-actions">
-          <button class="${pinButtonClass}" data-action="pin" data-tab-id="${tab.id}" title="${pinButtonTitle}">${pinIcon}</button>
-          <button class="action-btn small primary" data-action="sync" data-tab-id="${tab.id}" title="${syncButtonTitle}" ${syncButtonDisabled}>↗</button>
-          <button class="action-btn small danger" data-action="close" data-tab-id="${tab.id}" title="Close tab">✕</button>
-        </div>
-      </div>
-    `;
-  }).join('');
+    // Create SVG for pin button securely using DOM methods
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('fill', 'currentColor');
+    svg.setAttribute('viewBox', '0 0 16 16');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    if (isPinned) {
+      svg.setAttribute('class', 'bi bi-pin-fill');
+      path.setAttribute('d', 'M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354');
+    } else {
+      svg.setAttribute('class', 'bi bi-pin-angle-fill');
+      path.setAttribute('d', 'M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146');
+    }
+    svg.appendChild(path);
+    pinButton.appendChild(svg);
+
+    // Sync button
+    const syncButton = createSecureElement('button', {
+      className: 'action-btn small primary',
+      'data-action': 'sync',
+      'data-tab-id': tab.id,
+      title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas'
+    }, '↗');
+    if (isSynced) syncButton.disabled = true;
+
+    // Close button
+    const closeButton = createSecureElement('button', {
+      className: 'action-btn small danger',
+      'data-action': 'close',
+      'data-tab-id': tab.id,
+      title: 'Close tab'
+    }, '✕');
+
+    tabActions.appendChild(pinButton);
+    tabActions.appendChild(syncButton);
+    tabActions.appendChild(closeButton);
+
+    // Assemble tab element
+    tabElement.appendChild(checkboxLabel);
+    tabElement.appendChild(faviconImg);
+    tabElement.appendChild(tabInfo);
+    tabElement.appendChild(tabActions);
+
+    browserToCanvasList.appendChild(tabElement);
+  });
 
   // Setup checkbox listeners
   browserToCanvasList.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(checkbox => {
@@ -769,31 +846,94 @@ function renderCanvasTabs() {
   const filteredCanvasTabs = getFilteredCanvasTabs();
 
   if (filteredCanvasTabs.length === 0) {
-    const emptyMessage = showingAllCanvasTabs ?
-      'No context tabs found' :
-      'No new context tabs to open<br><small>All context tabs are already open in browser</small>';
-    canvasToBrowserList.innerHTML = `<div class="empty-state">${emptyMessage}</div>`;
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' });
+    if (showingAllCanvasTabs) {
+      emptyDiv.textContent = 'No context tabs found';
+    } else {
+      emptyDiv.appendChild(document.createTextNode('No new context tabs to open'));
+      emptyDiv.appendChild(document.createElement('br'));
+      const smallText = createSecureElement('small', {}, 'All context tabs are already open in browser');
+      emptyDiv.appendChild(smallText);
+    }
+    canvasToBrowserList.textContent = '';
+    canvasToBrowserList.appendChild(emptyDiv);
     return;
   }
 
-  canvasToBrowserList.innerHTML = filteredCanvasTabs.map(tab => `
-    <div class="tab-item" data-document-id="${tab.id}">
-      <label class="tab-checkbox">
-        <input type="checkbox" data-document-id="${tab.id}">
-        <span class="checkmark"></span>
-      </label>
-      <img src="${tab.data?.favIconUrl || '../assets/icons/logo-br_64x64.png'}" class="tab-favicon" data-fallback="../assets/icons/logo-br_64x64.png">
-      <div class="tab-info">
-        <div class="tab-title">${escapeHtml(tab.data?.title || 'Untitled')}</div>
-        <div class="tab-url">${escapeHtml(tab.data?.url || 'No URL')}</div>
-      </div>
-      <div class="tab-actions">
-        <button class="action-btn small primary" data-action="open" data-document-id="${tab.id}" title="Open in browser">↙</button>
-        <button class="action-btn small warning" data-action="remove" data-document-id="${tab.id}" title="Remove from context">⊖</button>
-        <button class="action-btn small danger" data-action="delete" data-document-id="${tab.id}" title="Delete from database">🗑</button>
-      </div>
-    </div>
-  `).join('');
+  // Clear existing content
+  canvasToBrowserList.textContent = '';
+
+  // Create tabs using secure DOM methods
+  filteredCanvasTabs.forEach(tab => {
+    // Create tab element
+    const tabElement = createSecureElement('div', {
+      className: 'tab-item',
+      'data-document-id': tab.id
+    });
+
+    // Create checkbox label
+    const checkboxLabel = createSecureElement('label', { className: 'tab-checkbox' });
+    const checkbox = createSecureElement('input', {
+      type: 'checkbox',
+      'data-document-id': tab.id
+    });
+    const checkmark = createSecureElement('span', { className: 'checkmark' });
+    checkboxLabel.appendChild(checkbox);
+    checkboxLabel.appendChild(checkmark);
+
+    // Create favicon
+    const faviconImg = createSecureElement('img', {
+      src: tab.data?.favIconUrl || '../assets/icons/logo-br_64x64.png',
+      className: 'tab-favicon',
+      'data-fallback': '../assets/icons/logo-br_64x64.png'
+    });
+
+    // Create tab info
+    const tabInfo = createSecureElement('div', { className: 'tab-info' });
+    const tabTitle = createSecureElement('div', { className: 'tab-title' }, escapeHtml(tab.data?.title || 'Untitled'));
+    const tabUrl = createSecureElement('div', { className: 'tab-url' }, escapeHtml(tab.data?.url || 'No URL'));
+    tabInfo.appendChild(tabTitle);
+    tabInfo.appendChild(tabUrl);
+
+    // Create tab actions
+    const tabActions = createSecureElement('div', { className: 'tab-actions' });
+
+    // Open button
+    const openButton = createSecureElement('button', {
+      className: 'action-btn small primary',
+      'data-action': 'open',
+      'data-document-id': tab.id,
+      title: 'Open in browser'
+    }, '↙');
+
+    // Remove button
+    const removeButton = createSecureElement('button', {
+      className: 'action-btn small warning',
+      'data-action': 'remove',
+      'data-document-id': tab.id,
+      title: 'Remove from context'
+    }, '⊖');
+
+    // Delete button
+    const deleteButton = createSecureElement('button', {
+      className: 'action-btn small danger',
+      'data-action': 'delete',
+      'data-document-id': tab.id,
+      title: 'Delete from database'
+    }, '🗑');
+
+    tabActions.appendChild(openButton);
+    tabActions.appendChild(removeButton);
+    tabActions.appendChild(deleteButton);
+
+    // Assemble tab element
+    tabElement.appendChild(checkboxLabel);
+    tabElement.appendChild(faviconImg);
+    tabElement.appendChild(tabInfo);
+    tabElement.appendChild(tabActions);
+
+    canvasToBrowserList.appendChild(tabElement);
+  });
 
   updateBulkActionVisibility();
 }
@@ -1000,26 +1140,33 @@ function highlightSearchMatches(itemElement, searchResult) {
 function highlightText(element, indices, text) {
   if (!element || !indices || !text) return;
 
-  let highlightedText = '';
+  // Clear existing content
+  element.textContent = '';
+
   let lastIndex = 0;
 
   // Sort indices by start position
   const sortedIndices = indices.sort((a, b) => a[0] - b[0]);
 
   sortedIndices.forEach(([start, end]) => {
-    // Add text before highlight
-    highlightedText += escapeHtml(text.substring(lastIndex, start));
+    // Add text before highlight as text node
+    if (start > lastIndex) {
+      const textBefore = document.createTextNode(text.substring(lastIndex, start));
+      element.appendChild(textBefore);
+    }
 
-    // Add highlighted text
-    highlightedText += `<mark class="search-highlight">${escapeHtml(text.substring(start, end + 1))}</mark>`;
+    // Add highlighted text as mark element
+    const mark = createSecureElement('mark', { className: 'search-highlight' }, text.substring(start, end + 1));
+    element.appendChild(mark);
 
     lastIndex = end + 1;
   });
 
-  // Add remaining text
-  highlightedText += escapeHtml(text.substring(lastIndex));
-
-  element.innerHTML = highlightedText;
+  // Add remaining text as text node
+  if (lastIndex < text.length) {
+    const remainingText = document.createTextNode(text.substring(lastIndex));
+    element.appendChild(remainingText);
+  }
 }
 
 function clearHighlights(element) {
@@ -1187,13 +1334,17 @@ async function initializeTreeView() {
     }
   } catch (error) {
     console.error('Failed to initialize tree view:', error);
-    treeContainer.innerHTML = `<div class="empty-state">Failed to load tree: ${error.message}</div>`;
+    const errorDiv = createSecureElement('div', { className: 'empty-state' }, `Failed to load tree: ${error.message}`);
+    treeContainer.textContent = '';
+    treeContainer.appendChild(errorDiv);
   }
 }
 
 function renderTreeView() {
   if (!treeData) {
-    treeContainer.innerHTML = '<div class="empty-state">No tree data available</div>';
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' }, 'No tree data available');
+    treeContainer.textContent = '';
+    treeContainer.appendChild(emptyDiv);
     return;
   }
 
@@ -1201,7 +1352,8 @@ function renderTreeView() {
   console.log('Tree data structure:', JSON.stringify(treeData, null, 2));
 
   const treeHtml = renderTreeNode(treeData, '', 0);
-  treeContainer.innerHTML = treeHtml;
+  treeContainer.textContent = '';
+  setSecureHtml(treeContainer, treeHtml);
 
   // Add event listeners to tree nodes
   setupTreeEventListeners();
@@ -1468,7 +1620,9 @@ async function loadContextsAndWorkspaces() {
       renderContextsList(contextsResponse.contexts || []);
     } else {
       console.error('Failed to load contexts:', contextsResponse.error);
-      contextsList.innerHTML = `<div class="empty-state">Failed to load contexts: ${contextsResponse.error}</div>`;
+      const errorDiv = createSecureElement('div', { className: 'empty-state' }, `Failed to load contexts: ${contextsResponse.error}`);
+      contextsList.textContent = '';
+      contextsList.appendChild(errorDiv);
     }
 
     // Load workspaces
@@ -1478,18 +1632,27 @@ async function loadContextsAndWorkspaces() {
       renderWorkspacesList(workspacesResponse.workspaces || []);
     } else {
       console.error('Failed to load workspaces:', workspacesResponse.error);
-      workspacesList.innerHTML = `<div class="empty-state">Failed to load workspaces: ${workspacesResponse.error}</div>`;
+      const errorDiv = createSecureElement('div', { className: 'empty-state' }, `Failed to load workspaces: ${workspacesResponse.error}`);
+      workspacesList.textContent = '';
+      workspacesList.appendChild(errorDiv);
     }
   } catch (error) {
     console.error('Failed to load contexts and workspaces:', error);
-    contextsList.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
-    workspacesList.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+    const errorDiv1 = createSecureElement('div', { className: 'empty-state' }, `Error: ${error.message}`);
+    contextsList.textContent = '';
+    contextsList.appendChild(errorDiv1);
+
+    const errorDiv2 = createSecureElement('div', { className: 'empty-state' }, `Error: ${error.message}`);
+    workspacesList.textContent = '';
+    workspacesList.appendChild(errorDiv2);
   }
 }
 
 function renderContextsList(contexts) {
   if (!contexts || contexts.length === 0) {
-    contextsList.innerHTML = '<div class="empty-state">No contexts available</div>';
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' }, 'No contexts available');
+    contextsList.textContent = '';
+    contextsList.appendChild(emptyDiv);
     return;
   }
 
@@ -1508,12 +1671,15 @@ function renderContextsList(contexts) {
     </div>
   `).join('');
 
-  contextsList.innerHTML = contextsHtml;
+  contextsList.textContent = '';
+  setSecureHtml(contextsList, contextsHtml);
 }
 
 function renderWorkspacesList(workspaces) {
   if (!workspaces || workspaces.length === 0) {
-    workspacesList.innerHTML = '<div class="empty-state">No workspaces available</div>';
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' }, 'No workspaces available');
+    workspacesList.textContent = '';
+    workspacesList.appendChild(emptyDiv);
     return;
   }
 
@@ -1535,7 +1701,8 @@ function renderWorkspacesList(workspaces) {
     </div>
   `).join('');
 
-  workspacesList.innerHTML = workspacesHtml;
+  workspacesList.textContent = '';
+  setSecureHtml(workspacesList, workspacesHtml);
 }
 
 function renderSelectionTab() {
@@ -2182,9 +2349,86 @@ async function sendDirectMessageToBackground(message) {
 }
 
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// Secure DOM helper functions to replace unsafe innerHTML usage
+function setSecureHtml(element, content) {
+  // Clear existing content
+  element.textContent = '';
+
+  if (typeof content === 'string') {
+    // Use DOMParser for secure HTML parsing - this is safe and handles complex HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${content}</div>`, 'text/html');
+    const container = doc.body.firstChild;
+
+    // Security check: Remove any script tags or event handlers
+    sanitizeHtmlContent(container);
+
+    // Move all child nodes to the target element
+    while (container.firstChild) {
+      element.appendChild(container.firstChild);
+    }
+  } else if (content instanceof Node) {
+    element.appendChild(content);
+  }
+}
+
+// Sanitize HTML content to remove dangerous elements and attributes
+function sanitizeHtmlContent(element) {
+  // Remove script tags
+  const scripts = element.querySelectorAll('script');
+  scripts.forEach(script => script.remove());
+
+  // Remove style tags
+  const styles = element.querySelectorAll('style');
+  styles.forEach(style => style.remove());
+
+  // Remove all event handler attributes
+  const allElements = element.querySelectorAll('*');
+  allElements.forEach(el => {
+    // Remove event handler attributes
+    const attributes = [...el.attributes];
+    attributes.forEach(attr => {
+      if (attr.name.toLowerCase().startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+      // Remove javascript: urls
+      if (attr.value && attr.value.toLowerCase().includes('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+}
+
+function createSecureElement(tagName, properties = {}, textContent = '') {
+  const element = document.createElement(tagName);
+
+  // Set properties safely
+  Object.entries(properties).forEach(([key, value]) => {
+    if (key === 'textContent') {
+      element.textContent = value;
+    } else if (key === 'className') {
+      element.className = value;
+    } else if (key.startsWith('data-')) {
+      element.setAttribute(key, value);
+    } else {
+      element[key] = value;
+    }
+  });
+
+  if (textContent) {
+    element.textContent = textContent;
+  }
+
+  return element;
 }
 
 // Bulk action handlers

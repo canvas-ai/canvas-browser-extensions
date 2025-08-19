@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Canvas Browser Extension",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Seamlessly sync browser tabs with Canvas server contexts",
 
   "permissions": [
@@ -11,27 +11,8 @@
   ],
 
   "host_permissions": [
-    "http://localhost/*",
-    "http://127.0.0.1/*",
-    "http://10.0.0.0/*",
-    "http://10.*/*",
-    "http://172.16.*/*",
-    "http://172.17.*/*",
-    "http://172.18.*/*",
-    "http://172.19.*/*",
-    "http://172.20.*/*",
-    "http://172.21.*/*",
-    "http://172.22.*/*",
-    "http://172.23.*/*",
-    "http://172.24.*/*",
-    "http://172.25.*/*",
-    "http://172.26.*/*",
-    "http://172.27.*/*",
-    "http://172.28.*/*",
-    "http://172.29.*/*",
-    "http://172.30.*/*",
-    "http://172.31.*/*",
-    "http://192.168.*/*",
+    "*://localhost/*",
+    "*://127.0.0.1/*",
     "https://*/*",
     "https://my.cnvs.ai/*",
     "https://canvas.idnc.sk/*"
@@ -45,18 +26,12 @@
     "default_popup": "popup/popup.html",
     "default_title": "Canvas Browser Extension",
     "default_icon": {
-      "16": "assets/icons/logo-br_64x64.png",
-      "32": "assets/icons/logo-br_64x64.png",
-      "48": "assets/icons/logo-br_64x64.png",
       "64": "assets/icons/logo-br_64x64.png",
       "128": "assets/icons/logo-br_128x128.png"
     }
   },
 
   "icons": {
-    "16": "assets/icons/logo-br_64x64.png",
-    "32": "assets/icons/logo-br_64x64.png",
-    "48": "assets/icons/logo-br_64x64.png",
     "64": "assets/icons/logo-br_64x64.png",
     "128": "assets/icons/logo-br_128x128.png"
   },

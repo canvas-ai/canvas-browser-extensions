@@ -220,33 +220,33 @@ export class SyncEngine {
 
     try {
       console.log('SyncEngine: Processing document removal:', eventData);
-      
+
       // Get document IDs to remove
-      const documentIds = eventData.documentIds || 
+      const documentIds = eventData.documentIds ||
                          (eventData.documentId ? [eventData.documentId] : []) ||
                          (eventData.documents ? eventData.documents.map(d => d.id) : []);
-      
+
       // Get documents with URLs if available
-      const documents = eventData.documents || 
+      const documents = eventData.documents ||
                        (eventData.document ? [eventData.document] : []);
-      
+
       // Collect URLs to close
       const urlsToClose = new Set();
-      
+
       // Add URLs from document data if available
       for (const doc of documents) {
         if (doc.data?.url) {
           urlsToClose.add(doc.data.url);
         }
       }
-      
+
       // If we have URLs, close matching tabs
       if (urlsToClose.size > 0) {
         console.log('SyncEngine: Closing tabs for removed documents:', Array.from(urlsToClose));
-        
+
         // Get all browser tabs
         const browserTabs = await tabManager.getAllTabs();
-        
+
         // Find and close tabs matching the removed document URLs
         for (const tab of browserTabs) {
           if (urlsToClose.has(tab.url)) {
@@ -442,7 +442,7 @@ export class SyncEngine {
 
       // Get Canvas documents to find the one we want
       const response = await apiClient.getContextDocuments(currentContext.id, ['data/abstraction/tab']);
-      if (!response.success) {
+      if (response.status !== 'success') {
         throw new Error('Failed to get Canvas documents');
       }
 
@@ -493,7 +493,7 @@ export class SyncEngine {
 
       const response = await apiClient.removeDocument(contextId, documentId);
 
-      if (response.success) {
+      if (response.status === 'success') {
         this.lastSyncTime = new Date().toISOString();
       }
 
@@ -511,7 +511,7 @@ export class SyncEngine {
 
       const response = await apiClient.deleteDocument(contextId, documentId);
 
-      if (response.success) {
+      if (response.status === 'success') {
         this.lastSyncTime = new Date().toISOString();
       }
 
@@ -544,7 +544,7 @@ export class SyncEngine {
       }
 
       const response = await apiClient.getContextDocuments(contextId, featureArray);
-      const canvasDocuments = response.success ? response.payload : [];
+      const canvasDocuments = (response.status === 'success') ? response.payload : [];
       console.log('SyncEngine: Found Canvas documents:', canvasDocuments.length);
 
       // Compare and identify sync needs
@@ -623,7 +623,7 @@ export class SyncEngine {
       console.log('SyncEngine: Handling context change:', oldContextId, '->', newContextId);
 
       const syncSettings = await browserStorage.getSyncSettings();
-      
+
       // Always fetch documents when switching contexts
       console.log('SyncEngine: Context switched - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
 
@@ -641,10 +641,10 @@ export class SyncEngine {
 
       const syncSettings = await browserStorage.getSyncSettings();
       const mode = await browserStorage.getSyncMode();
-      
+
       // Always fetch documents when context URL changes
       console.log('SyncEngine: Context URL changed - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
-      
+
       // For URL changes in context mode, we need to fetch and handle documents
       // according to the contextChangeBehavior setting
       if (mode === 'context') {
@@ -664,10 +664,10 @@ export class SyncEngine {
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
       const workspacePath = await browserStorage.getWorkspacePath();
-      
+
       // For URL changes or context switches, we always need to fetch documents
       const shouldFetchDocuments = isUrlChange || (oldContextId !== newContextId);
-      
+
       if (shouldFetchDocuments) {
         console.log('SyncEngine: Will fetch documents from backend for context:', newContextId);
       }
@@ -750,7 +750,7 @@ export class SyncEngine {
       }
 
       const response = await apiClient.getContextDocuments(contextId, featureArray);
-      const canvasDocuments = response.success ? response.payload : [];
+      const canvasDocuments = (response.status === 'success') ? response.payload : [];
       console.log('SyncEngine: Found Canvas documents in new context:', canvasDocuments.length);
 
       // Create a set of URLs that exist in the new context for fast lookup
@@ -881,9 +881,9 @@ export class SyncEngine {
         }
 
         const response = await apiClient.getContextDocuments(contextId, featureArray);
-        documents = response.success ? response.payload : [];
+        documents = (response.status === 'success') ? response.payload : [];
         console.log('SyncEngine: API response for context documents:', {
-          success: response.success,
+          success: response.status === 'success',
           documentCount: documents.length,
           urls: documents.map(d => d.data?.url).filter(Boolean)
         });
@@ -893,9 +893,9 @@ export class SyncEngine {
 
         const wsId = workspace.name || workspace.id;
         const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', ['data/abstraction/tab']);
-        documents = response.success ? (response.payload?.data || response.payload) : [];
+        documents = (response.status === 'success') ? (response.payload?.data || response.payload) : [];
         console.log('SyncEngine: API response for workspace documents:', {
-          success: response.success,
+          success: response.status === 'success',
           documentCount: documents.length,
           urls: documents.map(d => d.data?.url).filter(Boolean)
         });
@@ -909,7 +909,7 @@ export class SyncEngine {
         autoOpenNewTabs: syncSettings.autoOpenNewTabs,
         contextChangeBehavior: syncSettings.contextChangeBehavior
       });
-      
+
       if (syncSettings.autoOpenNewTabs && documents.length > 0) {
         console.log('SyncEngine: Opening', documents.length, 'tabs with rate limiting');
         await this.openTabsWithRateLimit(documents);
@@ -951,7 +951,7 @@ export class SyncEngine {
       console.log('SyncEngine: Handling workspace path change:', workspace?.name || workspace?.id, oldPath, '->', newPath);
 
       const syncSettings = await browserStorage.getSyncSettings();
-      
+
       // Always fetch documents when workspace path changes
       console.log('SyncEngine: Workspace path changed - will fetch documents and apply behavior:', syncSettings.contextChangeBehavior);
 
@@ -970,7 +970,7 @@ export class SyncEngine {
 
       const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
-      
+
       // Always fetch documents when path changes
       const shouldFetchDocuments = true;
       console.log('SyncEngine: Will fetch documents from backend for workspace:', workspace?.name || workspace?.id, 'path:', newPath);
@@ -1031,42 +1031,93 @@ export class SyncEngine {
     this.pendingTabOpens.delete(url);
   }
 
-  // Rate-limited tab opening to avoid browser security blocks
+  // Open tabs with reasonable limits to avoid browser issues
   async openTabsWithRateLimit(documents, maxConcurrent = null, delayMs = null) {
     try {
-      // Get user-configured rate limiting settings
-      const syncSettings = await browserStorage.getSyncSettings();
-      const effectiveMaxConcurrent = maxConcurrent ?? syncSettings.tabOpeningMaxConcurrent ?? 3;
-      const effectiveDelayMs = delayMs ?? syncSettings.tabOpeningDelayMs ?? 200;
+      // Safety cap - don't open more than 100 tabs at once
+      if (documents.length > 100) {
+        console.warn(`SyncEngine: Too many tabs to open (${documents.length}), limiting to 100`);
+        documents = documents.slice(0, 100);
+      }
 
-      console.log('SyncEngine: Opening', documents.length, 'tabs with rate limiting (max', effectiveMaxConcurrent, 'concurrent, delay', effectiveDelayMs, 'ms)');
+      // Filter out documents that would create duplicate tabs
+      const documentsToOpen = [];
+      const skippedDuplicates = [];
+
+      for (const document of documents) {
+        if (document.schema === 'data/abstraction/tab' && document.data?.url) {
+          // Check if tab is already open or pending
+          const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
+          const isPending = this.isPendingTabOpen(document.data.url);
+
+          if (existingTabs.length === 0 && !isPending) {
+            // Mark as pending to prevent race conditions
+            this.markPendingTabOpen(document.data.url);
+            documentsToOpen.push(document);
+          } else {
+            console.log('SyncEngine: Skipping duplicate tab:', document.data?.title || document.data.url);
+            skippedDuplicates.push(document);
+          }
+        } else {
+          // Non-tab documents or documents without URLs - include them
+          documentsToOpen.push(document);
+        }
+      }
+
+      if (skippedDuplicates.length > 0) {
+        console.log(`SyncEngine: Skipped ${skippedDuplicates.length} duplicate tabs, opening ${documentsToOpen.length} new tabs`);
+      }
+
+      if (documentsToOpen.length === 0) {
+        console.log('SyncEngine: No new tabs to open after filtering duplicates');
+        return;
+      }
+
+      // Get user-configured settings or use reasonable defaults
+      const syncSettings = await browserStorage.getSyncSettings();
+      const effectiveMaxConcurrent = maxConcurrent ?? syncSettings.tabOpeningMaxConcurrent ?? 20; // Increased from 3 to 20
+      const effectiveDelayMs = delayMs ?? syncSettings.tabOpeningDelayMs ?? 50; // Reduced from 200ms to 50ms
+
+      console.log('SyncEngine: Opening', documentsToOpen.length, 'tabs (max', effectiveMaxConcurrent, 'concurrent)');
 
       // Process documents in batches to avoid overwhelming the browser
-      for (let i = 0; i < documents.length; i += effectiveMaxConcurrent) {
-        const batch = documents.slice(i, i + effectiveMaxConcurrent);
+      for (let i = 0; i < documentsToOpen.length; i += effectiveMaxConcurrent) {
+        const batch = documentsToOpen.slice(i, i + effectiveMaxConcurrent);
 
-        // Open batch of tabs concurrently
+        // Open batch of tabs concurrently with individual error handling
         const promises = batch.map(async (document, index) => {
           try {
-            console.log(`SyncEngine: Opening tab ${i + index + 1}/${documents.length}:`, document.data?.title || document.id);
-                        const result = await tabManager.openCanvasDocument(document, {
+            console.log(`SyncEngine: Opening tab ${i + index + 1}/${documentsToOpen.length}:`, document.data?.title || document.id);
+            const result = await tabManager.openCanvasDocument(document, {
               active: false,
-              allowDuplicates: true  // Allow duplicates when opening from Canvas sync
+              allowDuplicates: false  // Prevent duplicates at tab manager level too
             });
             console.log('SyncEngine: ✅ Opened tab:', document.data?.title || document.id);
-            return result;
+            return { success: true, document, result };
           } catch (error) {
             console.error('SyncEngine: ❌ Failed to open tab:', document.data?.title || document.id, error);
-            return { success: false, error: error.message };
+            return { success: false, document, error: error.message };
           }
         });
 
-        await Promise.all(promises);
+        // Wait for all tabs in this batch to complete (don't let one failure stop others)
+        const results = await Promise.allSettled(promises);
 
-        // Add delay between batches if there are more to process
-        if (i + effectiveMaxConcurrent < documents.length) {
-          console.log('SyncEngine: Waiting', effectiveDelayMs, 'ms before next batch...');
+        // Log batch completion
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const failed = batch.length - successful;
+        console.log(`SyncEngine: Batch ${Math.floor(i/effectiveMaxConcurrent) + 1} completed: ${successful} opened, ${failed} failed`);
+
+        // Small delay between batches if there are more to process
+        if (i + effectiveMaxConcurrent < documentsToOpen.length && effectiveDelayMs > 0) {
           await new Promise(resolve => setTimeout(resolve, effectiveDelayMs));
+        }
+      }
+
+      // Clear pending flags after opening all tabs
+      for (const document of documentsToOpen) {
+        if (document.data?.url) {
+          this.clearPendingTabOpen(document.data.url);
         }
       }
 

@@ -439,7 +439,14 @@ async function loadContexts() {
 }
 
 function populateContextSelect() {
-  contextSelect.innerHTML = '<option value="">Select a context...</option>';
+  // Clear existing options securely
+  contextSelect.textContent = '';
+  
+  // Create default option securely
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select a context...';
+  contextSelect.appendChild(defaultOption);
 
   availableContexts.forEach(context => {
     const option = document.createElement('option');
@@ -476,7 +483,14 @@ async function loadWorkspaces() {
 }
 
 function populateWorkspaceSelect() {
-  workspaceSelect.innerHTML = '<option value="">Select a workspace...</option>';
+  // Clear existing options securely
+  workspaceSelect.textContent = '';
+  
+  // Create default option securely
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select a workspace...';
+  workspaceSelect.appendChild(defaultOption);
   availableWorkspaces.forEach(ws => {
     const option = document.createElement('option');
     option.value = ws.id;
