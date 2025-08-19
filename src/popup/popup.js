@@ -821,9 +821,25 @@ async function openCanvasWebUI() {
       const { serverUrl } = response.settings;
 
       if (serverUrl) {
-        console.log('Opening Canvas webui at:', serverUrl);
+        let targetUrl = serverUrl;
+
+        // Determine target URL based on current mode
+        if (currentConnection.connected) {
+          if (currentConnection.mode === 'context' && currentConnection.context) {
+            // If bound in contexts, point to canvasurl/contexts/context.id
+            targetUrl = `${serverUrl}/contexts/${currentConnection.context.id}`;
+            console.log('Opening Canvas webui for context:', currentConnection.context.id);
+          } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+            // If in Explorer mode with workspace opened, point to /workspaces/workspace.name
+            const workspaceName = getWorkspaceName(currentConnection.workspace);
+            targetUrl = `${serverUrl}/workspaces/${workspaceName}`;
+            console.log('Opening Canvas webui for workspace:', workspaceName);
+          }
+        }
+
+        console.log('Opening Canvas webui at:', targetUrl);
         const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
-        await tabs.create({ url: serverUrl });
+        await tabs.create({ url: targetUrl });
         window.close();
       } else {
         console.error('No server URL configured');
