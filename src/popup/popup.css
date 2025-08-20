@@ -256,6 +256,45 @@ body {
   min-height: 0;
 }
 
+/* Window Group Headers */
+.window-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+  margin-bottom: 4px;
+  border-radius: 4px 4px 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.window-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.window-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  margin: 0;
+}
+
+.window-stats {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.window-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .tab-item {
   display: flex;
   align-items: center;

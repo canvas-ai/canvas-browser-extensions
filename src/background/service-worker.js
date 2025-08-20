@@ -14,6 +14,9 @@ console.log('Canvas Extension Service Worker loaded');
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Extension installed/updated:', details.reason);
 
+  // Create context menu items
+  await createContextMenus();
+
   // Open settings page on first install
   if (details.reason === 'install') {
     await openSettingsPage();
@@ -72,6 +75,159 @@ async function initializeExtension() {
     console.log('Canvas Extension initialized successfully');
   } catch (error) {
     console.error('Failed to initialize Canvas Extension:', error);
+  }
+}
+
+// Create context menu items
+async function createContextMenus() {
+  try {
+    // Remove all existing context menu items to avoid duplicates
+    await chrome.contextMenus.removeAll();
+
+    // Create parent menu for Canvas actions
+    chrome.contextMenus.create({
+      id: 'canvas-root',
+      title: 'Send to Canvas',
+      contexts: ['page']
+    });
+
+    // Create submenu for current context/workspace
+    chrome.contextMenus.create({
+      id: 'canvas-sync-current',
+      parentId: 'canvas-root',
+      title: 'Sync to Current Context',
+      contexts: ['page']
+    });
+
+    // Create submenu for choosing context/workspace
+    chrome.contextMenus.create({
+      id: 'canvas-sync-choose',
+      parentId: 'canvas-root',
+      title: 'Choose Context/Workspace...',
+      contexts: ['page']
+    });
+
+    console.log('Context menus created successfully');
+  } catch (error) {
+    console.error('Failed to create context menus:', error);
+  }
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  console.log('Context menu clicked:', info.menuItemId, 'on tab:', tab.id);
+
+  try {
+    switch (info.menuItemId) {
+      case 'canvas-sync-current':
+        await handleSyncToCurrentContext(tab);
+        break;
+
+      case 'canvas-sync-choose':
+        await handleSyncWithContextChoice(tab);
+        break;
+
+      default:
+        console.warn('Unknown context menu item:', info.menuItemId);
+    }
+  } catch (error) {
+    console.error('Failed to handle context menu click:', error);
+  }
+});
+
+// Handle syncing tab to current context
+async function handleSyncToCurrentContext(tab) {
+  try {
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.connected || !connectionSettings.apiToken) {
+      await showNotification('Canvas Extension', 'Please connect to Canvas server first (click extension icon)');
+      return;
+    }
+
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
+
+    if (mode === 'context' && !currentContext?.id) {
+      await showNotification('Canvas Extension', 'Please bind to a context first (click extension icon)');
+      return;
+    }
+
+    if (mode === 'explorer' && !currentWorkspace?.id && !currentWorkspace?.name) {
+      await showNotification('Canvas Extension', 'Please select a workspace first (click extension icon)');
+      return;
+    }
+
+    // Sync the tab
+    const browserIdentity = await browserStorage.getBrowserIdentity();
+    let result;
+
+    if (mode === 'context') {
+      result = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
+    } else {
+      const wsId = currentWorkspace.name || currentWorkspace.id;
+      const document = tabManager.convertTabToDocument(tab, browserIdentity);
+      const response = await apiClient.insertWorkspaceDocuments(wsId, [document], workspacePath || '/', document.featureArray || []);
+      result = { success: response.status === 'success' };
+    }
+
+    if (result.success) {
+      await showNotification('Canvas Extension', `Tab "${tab.title}" synced successfully`);
+
+      // Mark tab as synced for UI consistency
+      tabManager.markTabAsSynced(tab.id, 'context-menu-sync');
+
+      // Notify popup if open
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'BACKGROUND_EVENT',
+          eventType: 'tabs.refresh'
+        });
+      } catch (e) {
+        // Popup not open - that's fine
+      }
+    } else {
+      await showNotification('Canvas Extension', `Failed to sync tab: ${result.error || 'Unknown error'}`);
+    }
+
+  } catch (error) {
+    console.error('Failed to sync tab via context menu:', error);
+    await showNotification('Canvas Extension', `Error syncing tab: ${error.message}`);
+  }
+}
+
+// Handle syncing with context choice (opens popup)
+async function handleSyncWithContextChoice(tab) {
+  try {
+    // Store the tab ID for the popup to access
+    await browserStorage.setContextMenuTab(tab);
+
+    // Open the extension popup
+    await chrome.action.openPopup();
+
+    // The popup will handle showing the context/workspace selection
+  } catch (error) {
+    console.error('Failed to open context choice:', error);
+    await showNotification('Canvas Extension', 'Failed to open Canvas extension');
+  }
+}
+
+// Show browser notification
+async function showNotification(title, message) {
+  try {
+    if (chrome.notifications) {
+      await chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('assets/icons/logo-br_64x64.png'),
+        title: title,
+        message: message
+      });
+    } else {
+      console.log('Notification:', title, '-', message);
+    }
+  } catch (error) {
+    console.error('Failed to show notification:', error);
   }
 }
 
