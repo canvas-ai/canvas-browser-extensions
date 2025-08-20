@@ -1,24 +1,26 @@
 {
   "manifest_version": 3,
   "name": "Canvas Browser Extension",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "Seamlessly sync browser tabs with Canvas server contexts",
 
   "permissions": [
     "tabs",
-    "storage",
-    "activeTab"
+    "storage"
   ],
 
   "host_permissions": [
     "*://localhost/*",
     "*://127.0.0.1/*",
+    "http://*/*",
     "https://*/*",
     "https://my.cnvs.ai/*",
     "https://canvas.idnc.sk/*"
   ],
 
   "background": {
+    "service_worker": "service-worker.js",
+    "type": "module",
     "scripts": ["service-worker.js"]
   },
 
@@ -37,7 +39,7 @@
   },
 
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.0.0.0:* http://10.*:* http://172.16.*:* http://172.17.*:* http://172.18.*:* http://172.19.*:* http://172.20.*:* http://172.21.*:* http://172.22.*:* http://172.23.*:* http://172.24.*:* http://172.25.*:* http://172.26.*:* http://172.27.*:* http://172.28.*:* http://172.29.*:* http://172.30.*:* http://172.31.*:* http://192.168.*:* https: ws://localhost:* ws://127.0.0.1:* ws://10.0.0.0:* ws://10.*:* ws://172.16.*:* ws://172.17.*:* ws://172.18.*:* ws://172.19.*:* ws://172.20.*:* ws://172.21.*:* ws://172.22.*:* ws://172.23.*:* ws://172.24.*:* ws://172.25.*:* ws://172.26.*:* ws://172.27.*:* ws://172.28.*:* ws://172.29.*:* ws://172.30.*:* ws://172.31.*:* ws://192.168.*:* wss:; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* http://10.0.0.0:* http://10.*:* http://172.16.*:* http://172.17.*:* http://172.18.*:* http://172.19.*:* http://172.20.*:* http://172.21.*:* http://172.22.*:* http://172.23.*:* http://172.24.*:* http://172.25.*:* http://172.26.*:* http://172.27.*:* http://172.28.*:* http://172.29.*:* http://172.30.*:* http://172.31.*:* http://192.168.*:* http: https: ws://localhost:* ws://127.0.0.1:* ws://10.0.0.0:* ws://10.*:* ws://172.16.*:* ws://172.17.*:* ws://172.18.*:* ws://172.19.*:* ws://172.20.*:* ws://172.21.*:* ws://172.22.*:* ws://172.23.*:* ws://172.24.*:* ws://172.25.*:* ws://172.26.*:* ws://172.27.*:* ws://172.28.*:* ws://172.29.*:* ws://172.30.*:* ws://172.31.*:* ws://192.168.*:* ws: wss:; style-src 'self' 'unsafe-inline';"
   },
 
   "web_accessible_resources": [

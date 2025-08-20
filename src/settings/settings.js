@@ -27,6 +27,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   initializeElements();
   setupEventListeners();
   setupStorageListeners();
+  try {
+    const extApi = (typeof browser !== 'undefined' && browser.runtime) ? browser : (typeof chrome !== 'undefined' ? chrome : null);
+    const version = extApi?.runtime?.getManifest?.().version;
+    const versionEl = document.getElementById('extVersion');
+    if (version && versionEl) {
+      versionEl.textContent = `Version ${version}`;
+    }
+  } catch (e) {
+    // ignore
+  }
   await loadSettings();
   await checkInitialConnection();
 });
@@ -441,7 +451,7 @@ async function loadContexts() {
 function populateContextSelect() {
   // Clear existing options securely
   contextSelect.textContent = '';
-  
+
   // Create default option securely
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
@@ -485,7 +495,7 @@ async function loadWorkspaces() {
 function populateWorkspaceSelect() {
   // Clear existing options securely
   workspaceSelect.textContent = '';
-  
+
   // Create default option securely
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
