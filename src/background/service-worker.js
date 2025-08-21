@@ -250,14 +250,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       const connectionSettings = await browserStorage.getConnectionSettings();
 
       console.log('🔄 AUTO-SYNC: Loaded settings for updated tab:', {
-        autoSyncNewTabs: syncSettings?.autoSyncNewTabs,
+        sendNewTabsToCanvas: syncSettings?.sendNewTabsToCanvas,
         connected: connectionSettings?.connected,
         statusComplete: changeInfo.status === 'complete',
         urlChanged: !!changeInfo.url
       });
 
-      if (!syncSettings?.autoSyncNewTabs) {
-        console.log('🔄 AUTO-SYNC: Auto-sync is disabled, skipping');
+      if (!syncSettings?.sendNewTabsToCanvas) {
+        console.log('🔄 AUTO-SYNC: Send new tabs to Canvas is disabled, skipping');
         return;
       }
 
@@ -397,7 +397,7 @@ async function debugAutoSyncStatus() {
     const browserIdentity = await browserStorage.getBrowserIdentity();
 
     const status = {
-      autoSyncNewTabs: syncSettings?.autoSyncNewTabs,
+      sendNewTabsToCanvas: syncSettings?.sendNewTabsToCanvas,
       connected: connectionSettings?.connected,
       hasApiToken: !!connectionSettings?.apiToken,
       serverUrl: connectionSettings?.serverUrl,
@@ -606,15 +606,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Helper Functions
 
 async function openSettingsPage() {
-  const url = chrome.runtime.getURL('settings/settings.html');
-  await chrome.tabs.create({ url });
+  // Browser compatibility shim
+  const runtime = (typeof chrome !== 'undefined') ? chrome.runtime : browser.runtime;
+  const tabs = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
+
+  const url = runtime.getURL('settings/settings.html');
+  await tabs.create({ url });
 }
 
 // Migrate legacy storage keys from older versions to the current key scheme
 // Legacy keys: connectionSettings, syncSettings, currentContext, browserIdentity
 // New keys: canvasConnectionSettings, canvasSyncSettings, canvasCurrentContext, canvasBrowserIdentity
 async function migrateLegacyStorageKeys() {
-  const all = await chrome.storage.local.get(null);
+  // Browser compatibility shim
+  const storageAPI = (() => {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      return chrome.storage.local;
+    }
+    if (typeof browser !== 'undefined' && browser.storage) {
+      return browser.storage.local;
+    }
+    throw new Error('Browser storage API not available');
+  })();
+
+  const all = await storageAPI.get(null);
 
   const legacyToNew = [
     ['connectionSettings', 'canvasConnectionSettings'],
@@ -629,7 +644,7 @@ async function migrateLegacyStorageKeys() {
     const hasNew = Object.prototype.hasOwnProperty.call(all, newKey);
     if (hasLegacy && !hasNew) {
       const value = all[legacyKey];
-      await chrome.storage.local.set({ [newKey]: value });
+      await storageAPI.set({ [newKey]: value });
       migrated++;
     }
   }
@@ -640,7 +655,7 @@ async function migrateLegacyStorageKeys() {
       .map(([legacyKey]) => legacyKey)
       .filter((k) => Object.prototype.hasOwnProperty.call(all, k));
     try {
-      await chrome.storage.local.remove(keysToRemove);
+      await storageAPI.remove(keysToRemove);
       console.log('Migrated legacy storage keys:', migrated, 'removed:', keysToRemove);
     } catch (e) {
       console.warn('Failed to remove legacy storage keys (safe to ignore):', e);
@@ -684,6 +699,8 @@ async function handleTestConnection(data, sendResponse) {
   try {
     console.log('Testing connection with data:', data);
 
+
+
     // Initialize API client with provided settings
     if (data.serverUrl && data.apiBasePath) {
       apiClient.initialize(data.serverUrl, data.apiBasePath, data.apiToken || '');
@@ -714,6 +731,8 @@ async function handleConnect(data, sendResponse) {
     if (!data.serverUrl || !data.apiBasePath || !data.apiToken) {
       throw new Error('Missing required connection parameters');
     }
+
+
 
     // Initialize API client
     apiClient.initialize(data.serverUrl, data.apiBasePath, data.apiToken);

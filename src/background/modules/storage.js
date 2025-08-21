@@ -1,5 +1,16 @@
 // Storage utility module for Canvas Extension
-// Handles all storage operations using chrome.storage.local
+// Handles all storage operations using cross-browser storage API
+
+// Browser compatibility shim
+const browserAPI = (() => {
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    return chrome;
+  }
+  if (typeof browser !== 'undefined' && browser.storage) {
+    return browser;
+  }
+  throw new Error('Browser storage API not available');
+})();
 
 export class StorageManager {
   constructor() {
@@ -19,11 +30,10 @@ export class StorageManager {
         connected: false
       },
       syncSettings: {
-        autoSyncNewTabs: false,
-        autoOpenNewTabs: false,
-        autoCloseRemovedTabs: false,
-        syncOnlyThisBrowser: false,
-        contextChangeBehavior: 'keep-open-new'
+        openTabsAddedToCanvas: false,
+        closeTabsRemovedFromCanvas: false,
+        sendNewTabsToCanvas: false,
+        removeClosedTabsFromCanvas: false
       },
       currentContext: null,
       tabSyncState: {},
@@ -34,7 +44,7 @@ export class StorageManager {
   // Generic storage operations
   async get(key) {
     try {
-      const result = await chrome.storage.local.get(key);
+      const result = await browserAPI.storage.local.get(key);
       const value = result[key];
 
       // Return actual value if it exists, otherwise return default
@@ -52,7 +62,7 @@ export class StorageManager {
 
   async set(key, value) {
     try {
-      await chrome.storage.local.set({ [key]: value });
+      await browserAPI.storage.local.set({ [key]: value });
       return true;
     } catch (error) {
       console.error('Storage set error:', error);
@@ -62,7 +72,7 @@ export class StorageManager {
 
   async remove(key) {
     try {
-      await chrome.storage.local.remove(key);
+      await browserAPI.storage.local.remove(key);
       return true;
     } catch (error) {
       console.error('Storage remove error:', error);
@@ -72,7 +82,7 @@ export class StorageManager {
 
   async clear() {
     try {
-      await chrome.storage.local.clear();
+      await browserAPI.storage.local.clear();
       return true;
     } catch (error) {
       console.error('Storage clear error:', error);
@@ -171,7 +181,7 @@ export class StorageManager {
   // Utility methods
   async getAllSettings() {
     try {
-      const result = await chrome.storage.local.get(null);
+      const result = await browserAPI.storage.local.get(null);
       return {
         ...this.DEFAULT_SETTINGS,
         ...result
@@ -184,8 +194,8 @@ export class StorageManager {
 
   async resetToDefaults() {
     try {
-      await chrome.storage.local.clear();
-      await chrome.storage.local.set(this.DEFAULT_SETTINGS);
+      await browserAPI.storage.local.clear();
+      await browserAPI.storage.local.set(this.DEFAULT_SETTINGS);
       return true;
     } catch (error) {
       console.error('Failed to reset to defaults:', error);

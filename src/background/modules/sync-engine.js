@@ -56,7 +56,7 @@ export class SyncEngine {
       await this.performFullSync(currentContext.id);
 
       // Start auto-sync if enabled
-      if (syncSettings.autoSyncNewTabs) {
+      if (syncSettings.sendNewTabsToCanvas) {
         this.startAutoSync();
       }
 
@@ -165,7 +165,7 @@ export class SyncEngine {
 
   // Handle remote document insertion (tab added from another client)
   async handleRemoteDocumentInserted(eventData, syncSettings) {
-    if (!syncSettings.autoOpenNewTabs) {
+    if (!syncSettings.openTabsAddedToCanvas) {
       console.log('SyncEngine: Auto-open disabled, skipping remote document');
       return;
     }
@@ -213,7 +213,7 @@ export class SyncEngine {
 
   // Handle remote document removal
   async handleRemoteDocumentRemoved(eventData, syncSettings) {
-    if (!syncSettings.autoCloseRemovedTabs) {
+    if (!syncSettings.closeTabsRemovedFromCanvas) {
       console.log('SyncEngine: Auto-close disabled, skipping remote removal');
       return;
     }
@@ -557,14 +557,14 @@ export class SyncEngine {
       });
 
       // Sync browser tabs to Canvas (if auto-sync enabled)
-      if (syncSettings.autoSyncNewTabs && comparison.browserToCanvas.length > 0) {
+      if (syncSettings.sendNewTabsToCanvas && comparison.browserToCanvas.length > 0) {
         console.log('SyncEngine: Auto-syncing browser tabs to Canvas...');
         const browserIdentity = await browserStorage.getBrowserIdentity();
         await tabManager.syncMultipleTabs(comparison.browserToCanvas, apiClient, contextId, browserIdentity);
       }
 
       // Open Canvas tabs in browser (if auto-open enabled)
-      if (syncSettings.autoOpenNewTabs && comparison.canvasToBrowser.length > 0) {
+      if (syncSettings.openTabsAddedToCanvas && comparison.canvasToBrowser.length > 0) {
         console.log('SyncEngine: Auto-opening Canvas tabs in browser...');
         await this.openTabsWithRateLimit(comparison.canvasToBrowser);
       }
@@ -906,14 +906,14 @@ export class SyncEngine {
       // Open documents as tabs with rate limiting for browser security
       const syncSettings = await browserStorage.getSyncSettings();
       console.log('SyncEngine: Sync settings:', {
-        autoOpenNewTabs: syncSettings.autoOpenNewTabs,
+        openTabsAddedToCanvas: syncSettings.openTabsAddedToCanvas,
         contextChangeBehavior: syncSettings.contextChangeBehavior
       });
 
-      if (syncSettings.autoOpenNewTabs && documents.length > 0) {
+      if (syncSettings.openTabsAddedToCanvas && documents.length > 0) {
         console.log('SyncEngine: Opening', documents.length, 'tabs with rate limiting');
         await this.openTabsWithRateLimit(documents);
-      } else if (!syncSettings.autoOpenNewTabs) {
+      } else if (!syncSettings.openTabsAddedToCanvas) {
         console.log('SyncEngine: Auto-open is disabled, skipping tab opening');
       } else {
         console.log('SyncEngine: No documents to open');

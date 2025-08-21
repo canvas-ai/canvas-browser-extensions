@@ -6,7 +6,7 @@ import FuzzySearch from './fuse.js';
 
 // DOM elements
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
-let searchInput, autoSyncNew, autoOpenNew, showSyncedTabs, showAllCanvasTabs;
+let searchInput, sendNewTabsToCanvas, openTabsAddedToCanvas, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
@@ -190,8 +190,8 @@ function initializeElements() {
 
   // Search and settings
   searchInput = document.getElementById('searchInput');
-  autoSyncNew = document.getElementById('autoSyncNew');
-  autoOpenNew = document.getElementById('autoOpenNew');
+  sendNewTabsToCanvas = document.getElementById('sendNewTabsToCanvas');
+  openTabsAddedToCanvas = document.getElementById('openTabsAddedToCanvas');
   showSyncedTabs = document.getElementById('showSyncedTabs');
   showAllCanvasTabs = document.getElementById('showAllCanvasTabs');
   selectorBtn = document.getElementById('selectorBtn');
@@ -274,8 +274,8 @@ function setupEventListeners() {
   searchInput.addEventListener('input', handleSearch);
 
   // Sync settings toggles
-  autoSyncNew.addEventListener('change', handleSyncSettingChange);
-  autoOpenNew.addEventListener('change', handleSyncSettingChange);
+  sendNewTabsToCanvas.addEventListener('change', handleSyncSettingChange);
+  openTabsAddedToCanvas.addEventListener('change', handleSyncSettingChange);
   showSyncedTabs.addEventListener('change', handleShowSyncedChange);
   showAllCanvasTabs.addEventListener('change', handleShowAllCanvasChange);
 
@@ -698,24 +698,24 @@ async function loadSyncSettings() {
       const settings = response.settings;
 
       // Update checkbox states to match saved settings
-      autoSyncNew.checked = settings.autoSyncNewTabs || false;
-      autoOpenNew.checked = settings.autoOpenNewTabs || false;
+      sendNewTabsToCanvas.checked = settings.sendNewTabsToCanvas || false;
+      openTabsAddedToCanvas.checked = settings.openTabsAddedToCanvas || false;
 
       console.log('Applied sync settings to UI:', {
-        autoSyncNewTabs: autoSyncNew.checked,
-        autoOpenNewTabs: autoOpenNew.checked
+        sendNewTabsToCanvas: sendNewTabsToCanvas.checked,
+        openTabsAddedToCanvas: openTabsAddedToCanvas.checked
       });
     } else {
       console.warn('Failed to load sync settings:', response.error);
       // Set defaults
-      autoSyncNew.checked = false;
-      autoOpenNew.checked = false;
+      sendNewTabsToCanvas.checked = false;
+      openTabsAddedToCanvas.checked = false;
     }
   } catch (error) {
     console.error('Failed to load sync settings:', error);
     // Set defaults on error
-    autoSyncNew.checked = false;
-    autoOpenNew.checked = false;
+    sendNewTabsToCanvas.checked = false;
+    openTabsAddedToCanvas.checked = false;
   }
 }
 
@@ -1848,8 +1848,8 @@ async function handleSyncSettingChange(event) {
 
     // Map checkbox IDs to setting names
     const settingMap = {
-      'autoSyncNew': 'autoSyncNewTabs',
-      'autoOpenNew': 'autoOpenNewTabs'
+      'sendNewTabsToCanvas': 'sendNewTabsToCanvas',
+      'openTabsAddedToCanvas': 'openTabsAddedToCanvas'
     };
 
     const actualSettingName = settingMap[settingName];

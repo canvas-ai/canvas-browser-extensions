@@ -40,13 +40,10 @@ export class BrowserStorage {
       [this.KEYS.SYNC_MODE]: 'explorer', // 'explorer' | 'context'
       [this.KEYS.WORKSPACE_PATH]: '/',
       [this.KEYS.SYNC_SETTINGS]: {
-        autoSyncNewTabs: false,
-        autoOpenNewTabs: false,
-        autoCloseRemovedTabs: false,
-        syncOnlyThisBrowser: false,
-        contextChangeBehavior: 'keep-open-new',
-        tabOpeningMaxConcurrent: 3, // Max tabs to open concurrently
-        tabOpeningDelayMs: 200 // Delay between batches in milliseconds
+        openTabsAddedToCanvas: false,        // Open tabs when added to Canvas Server
+        closeTabsRemovedFromCanvas: false,   // Close tabs when removed from Canvas Server
+        sendNewTabsToCanvas: false,          // Send newly opened browser tabs to Canvas Server
+        removeClosedTabsFromCanvas: false    // Remove closed browser tabs from Canvas Server
       },
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }

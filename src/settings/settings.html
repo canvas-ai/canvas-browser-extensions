@@ -120,51 +120,40 @@
         </div>
       </section>
 
-      <!-- Common Sync Settings -->
+      <!-- Sync Settings -->
       <section class="settings-section">
-        <h2>Common Sync Settings</h2>
+        <h2>Sync Settings</h2>
 
         <div class="form-group">
           <label class="checkbox-label">
-            <input type="checkbox" id="autoSyncNewTabs">
-            Auto-sync new browser tabs to Canvas (honors current context path)
+            <input type="checkbox" id="openTabsAddedToCanvas">
+            Open tabs added to Canvas Server
           </label>
-          <small class="help-text">Automatically save valid tabs to Canvas when opened</small>
+          <small class="help-text">Automatically open tabs when added to current context/workspace path</small>
         </div>
 
         <div class="form-group">
           <label class="checkbox-label">
-            <input type="checkbox" id="autoOpenNewTabs">
-            Auto-open new tabs from Canvas (honors current context path)
+            <input type="checkbox" id="closeTabsRemovedFromCanvas">
+            Close tabs removed from Canvas Server
           </label>
-          <small class="help-text">Automatically open tabs when added to the context</small>
+          <small class="help-text">Automatically close tabs when removed from current context/workspace path</small>
         </div>
 
         <div class="form-group">
           <label class="checkbox-label">
-            <input type="checkbox" id="autoCloseRemovedTabs">
-            Auto-close tabs removed from Canvas (honors current context path)
+            <input type="checkbox" id="sendNewTabsToCanvas">
+            Send newly opened tabs to Canvas Server
           </label>
-          <small class="help-text">Automatically close tabs when removed from context</small>
+          <small class="help-text">Automatically save new browser tabs to current context/workspace path</small>
         </div>
 
         <div class="form-group">
           <label class="checkbox-label">
-            <input type="checkbox" id="syncOnlyThisBrowser">
-            Sync only tabs for this browser instance
+            <input type="checkbox" id="removeClosedTabsFromCanvas">
+            Remove closed tabs from Canvas Server
           </label>
-          <small class="help-text">Filter tabs to only those from this browser identity</small>
-        </div>
-
-        <div class="form-group">
-          <label for="contextChangeBehavior">On Context/Path Change</label>
-          <select id="contextChangeBehavior" class="input-field">
-            <option value="close-open-new">Close current and open new</option>
-            <option value="save-close-open-new">Save & close current, open new</option>
-            <option value="keep-open-new">Keep current, open new</option>
-            <option value="keep-only">Keep current, don't open new</option>
-          </select>
-          <small class="help-text">What to do with tabs when switching contexts or workspace paths</small>
+          <small class="help-text">Automatically remove tabs from Canvas when closed in browser</small>
         </div>
 
         <div class="form-actions">

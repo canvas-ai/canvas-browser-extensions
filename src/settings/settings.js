@@ -9,7 +9,7 @@ let syncModeSection, syncModeSelect;
 let explorerSettings, workspaceSelect;
 let contextSettings, contextSelect, bindContextBtn;
 let currentContext, boundContextId, boundContextUrl;
-let autoSyncNewTabs, autoOpenNewTabs, autoCloseRemovedTabs, syncOnlyThisBrowser, contextChangeBehavior;
+let openTabsAddedToCanvas, closeTabsRemovedFromCanvas, sendNewTabsToCanvas, removeClosedTabsFromCanvas;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
 let toast;
 
@@ -49,6 +49,7 @@ function initializeElements() {
   apiToken = document.getElementById('apiToken');
 
   // Connection controls
+
   testConnectionBtn = document.getElementById('testConnectionBtn');
   connectBtn = document.getElementById('connectBtn');
   disconnectBtn = document.getElementById('disconnectBtn');
@@ -72,11 +73,10 @@ function initializeElements() {
   boundContextUrl = document.getElementById('boundContextUrl');
 
   // Sync settings
-  autoSyncNewTabs = document.getElementById('autoSyncNewTabs');
-  autoOpenNewTabs = document.getElementById('autoOpenNewTabs');
-  autoCloseRemovedTabs = document.getElementById('autoCloseRemovedTabs');
-  syncOnlyThisBrowser = document.getElementById('syncOnlyThisBrowser');
-  contextChangeBehavior = document.getElementById('contextChangeBehavior');
+  openTabsAddedToCanvas = document.getElementById('openTabsAddedToCanvas');
+  closeTabsRemovedFromCanvas = document.getElementById('closeTabsRemovedFromCanvas');
+  sendNewTabsToCanvas = document.getElementById('sendNewTabsToCanvas');
+  removeClosedTabsFromCanvas = document.getElementById('removeClosedTabsFromCanvas');
 
   // Action buttons
   saveSettingsBtn = document.getElementById('saveSettingsBtn');
@@ -89,6 +89,7 @@ function initializeElements() {
 
 function setupEventListeners() {
   // Connection buttons
+
   testConnectionBtn.addEventListener('click', handleTestConnection);
   connectBtn.addEventListener('click', handleConnect);
   disconnectBtn.addEventListener('click', handleDisconnect);
@@ -120,7 +121,11 @@ function setupEventListeners() {
 
   // Auto-generate browser identity if empty
   browserIdentity.addEventListener('blur', handleBrowserIdentityBlur);
+
+
 }
+
+
 
 async function loadSettings() {
   try {
@@ -150,11 +155,10 @@ async function loadSettings() {
         connected: savedConnectionSettings.connected || false
       },
       syncSettings: {
-        autoSyncNewTabs: savedSyncSettings.autoSyncNewTabs || false,
-        autoOpenNewTabs: savedSyncSettings.autoOpenNewTabs || false,
-        autoCloseRemovedTabs: savedSyncSettings.autoCloseRemovedTabs || false,
-        syncOnlyThisBrowser: savedSyncSettings.syncOnlyThisBrowser || false,
-        contextChangeBehavior: savedSyncSettings.contextChangeBehavior || 'keep-open-new'
+        openTabsAddedToCanvas: savedSyncSettings.openTabsAddedToCanvas || false,
+        closeTabsRemovedFromCanvas: savedSyncSettings.closeTabsRemovedFromCanvas || false,
+        sendNewTabsToCanvas: savedSyncSettings.sendNewTabsToCanvas || false,
+        removeClosedTabsFromCanvas: savedSyncSettings.removeClosedTabsFromCanvas || false
       },
       browserIdentity: '',
       currentContext: (modeSelResponse.success ? modeSelResponse.context : null) || (response.context || null),
@@ -175,13 +179,7 @@ async function loadSettings() {
         loadWorkspaces()
       ]);
 
-      // Preselect dropdowns if values exist
-      if (settings.currentContext?.id) {
-        contextSelect.value = settings.currentContext.id;
-      }
-      if (settings.currentWorkspace?.id) {
-        workspaceSelect.value = settings.currentWorkspace.id;
-      }
+      // Preselect dropdowns if values exist - this will be handled in populate functions
     }
 
     showToast('Settings loaded successfully', 'success');
@@ -198,11 +196,10 @@ async function loadSettings() {
         connected: false
       },
       syncSettings: {
-        autoSyncNewTabs: false,
-        autoOpenNewTabs: false,
-        autoCloseRemovedTabs: false,
-        syncOnlyThisBrowser: false,
-        contextChangeBehavior: 'keep-open-new'
+        openTabsAddedToCanvas: false,
+        closeTabsRemovedFromCanvas: false,
+        sendNewTabsToCanvas: false,
+        removeClosedTabsFromCanvas: false
       },
       browserIdentity: '',
       currentContext: null
@@ -219,11 +216,10 @@ function populateForm() {
   browserIdentity.value = settings.browserIdentity;
 
   // Sync settings
-  autoSyncNewTabs.checked = settings.syncSettings.autoSyncNewTabs;
-  autoOpenNewTabs.checked = settings.syncSettings.autoOpenNewTabs;
-  autoCloseRemovedTabs.checked = settings.syncSettings.autoCloseRemovedTabs;
-  syncOnlyThisBrowser.checked = settings.syncSettings.syncOnlyThisBrowser;
-  contextChangeBehavior.value = settings.syncSettings.contextChangeBehavior;
+  openTabsAddedToCanvas.checked = settings.syncSettings.openTabsAddedToCanvas;
+  closeTabsRemovedFromCanvas.checked = settings.syncSettings.closeTabsRemovedFromCanvas;
+  sendNewTabsToCanvas.checked = settings.syncSettings.sendNewTabsToCanvas;
+  removeClosedTabsFromCanvas.checked = settings.syncSettings.removeClosedTabsFromCanvas;
 
   // Update connection status
   updateConnectionStatus(settings.connectionSettings.connected);
@@ -323,6 +319,8 @@ async function handleConnect() {
     };
 
     console.log('Connecting with:', connectionData);
+
+
 
     // Send connect request to background
     const response = await sendMessageToBackground('CONNECT', connectionData);
@@ -464,6 +462,12 @@ function populateContextSelect() {
     option.textContent = `${context.id} (${context.url})`;
     contextSelect.appendChild(option);
   });
+
+  // Set current context selection if we have one and we're in context mode
+  if (settings.currentContext?.id && currentMode === 'context') {
+    contextSelect.value = settings.currentContext.id;
+    console.log('Pre-selected current context:', settings.currentContext.id);
+  }
 }
 
 async function loadWorkspaces() {
@@ -501,6 +505,7 @@ function populateWorkspaceSelect() {
   defaultOption.value = '';
   defaultOption.textContent = 'Select a workspace...';
   workspaceSelect.appendChild(defaultOption);
+
   availableWorkspaces.forEach(ws => {
     const option = document.createElement('option');
     option.value = ws.id;
@@ -508,6 +513,12 @@ function populateWorkspaceSelect() {
     option.dataset.name = ws.name;
     workspaceSelect.appendChild(option);
   });
+
+  // Set current workspace selection if we have one and we're in explorer mode
+  if (settings.currentWorkspace?.id && currentMode === 'explorer') {
+    workspaceSelect.value = settings.currentWorkspace.id;
+    console.log('Pre-selected current workspace:', settings.currentWorkspace.id);
+  }
 }
 
 function updateModeVisibility(mode) {
@@ -651,11 +662,10 @@ async function handleSaveSettings() {
         connected: isConnected
       },
       syncSettings: {
-        autoSyncNewTabs: autoSyncNewTabs.checked,
-        autoOpenNewTabs: autoOpenNewTabs.checked,
-        autoCloseRemovedTabs: autoCloseRemovedTabs.checked,
-        syncOnlyThisBrowser: syncOnlyThisBrowser.checked,
-        contextChangeBehavior: contextChangeBehavior.value
+        openTabsAddedToCanvas: openTabsAddedToCanvas.checked,
+        closeTabsRemovedFromCanvas: closeTabsRemovedFromCanvas.checked,
+        sendNewTabsToCanvas: sendNewTabsToCanvas.checked,
+        removeClosedTabsFromCanvas: removeClosedTabsFromCanvas.checked
       },
       browserIdentity: browserIdentity.value.trim()
     };
@@ -801,9 +811,10 @@ function showToast(message, type = 'info') {
 
 // Setup storage change listeners for real-time updates
 function setupStorageListeners() {
-  // Listen for chrome.storage.local changes
-  if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.onChanged.addListener((changes, area) => {
+  // Listen for storage changes (cross-browser compatible)
+  const browserAPI = (typeof chrome !== 'undefined') ? chrome : browser;
+  if (browserAPI && browserAPI.storage) {
+    browserAPI.storage.onChanged.addListener((changes, area) => {
       if (area === 'local') {
         console.log('Settings: Storage changed:', changes);
 
