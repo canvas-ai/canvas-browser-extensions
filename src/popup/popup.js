@@ -11,6 +11,7 @@ let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
+let toast;
 
 // Tab elements
 let browserToCanvasTab, canvasToBrowserTab;
@@ -237,6 +238,8 @@ function initializeElements() {
   workspacesSelectionTab = document.getElementById('workspacesSelectionTab');
   contextsList = document.getElementById('contextsList');
   workspacesList = document.getElementById('workspacesList');
+
+  toast = document.getElementById('toast');
 }
 
 function setupEventListeners() {
@@ -1712,40 +1715,31 @@ function renderSelectionTab() {
 
 async function bindToContext(contextId, contextName, contextUrl) {
   try {
-    console.log('Binding to context:', contextId);
+    console.log('Binding to context:', contextId, 'with URL:', contextUrl);
 
-    // Preserve workspace information if available
-    let workspaceInfo = null;
-    let workspaceName = null;
+    // Get the full context object from the contexts list to access workspaceName
+    const contextsResponse = await sendMessageToBackground('GET_CONTEXTS');
+    let selectedContext = null;
 
-    if (currentConnection.workspace) {
-      workspaceInfo = currentConnection.workspace;
-      workspaceName = getWorkspaceName(workspaceInfo);
-    } else {
-      // Try to get workspace info from available workspaces if not in current connection
-      try {
-        const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
-        if (workspacesResponse.success && workspacesResponse.workspaces && workspacesResponse.workspaces.length > 0) {
-          // Prefer "universe" workspace if available, otherwise use first workspace
-          workspaceInfo = workspacesResponse.workspaces.find(ws => ws.name === 'universe');
-          if (!workspaceInfo) {
-            workspaceInfo = workspacesResponse.workspaces[0];
-          }
-          workspaceName = getWorkspaceName(workspaceInfo);
-          console.log('Using fallback workspace for context binding (preferred universe):', workspaceName);
-        }
-      } catch (error) {
-        console.warn('Could not load workspace information for context binding:', error);
-      }
+    if (contextsResponse.success && contextsResponse.contexts) {
+      selectedContext = contextsResponse.contexts.find(ctx => ctx.id === contextId);
     }
 
+    if (!selectedContext) {
+      throw new Error('Context not found in available contexts');
+    }
+
+    console.log('Full context object from API:', selectedContext);
+
+    // Use the context data directly from the API response
     const contextData = {
-      id: contextId,
-      name: contextName,
-      url: contextUrl || '/',
-      // Preserve workspace information for proper URL formatting
-      workspaceName: workspaceName,
-      workspace: workspaceName
+      id: selectedContext.id,
+      name: selectedContext.name || contextName,
+      url: selectedContext.url,
+      path: selectedContext.path,
+      workspaceName: selectedContext.workspaceName,
+      workspaceId: selectedContext.workspaceId,
+      workspace: selectedContext.workspaceName
     };
 
     console.log('Context data for binding:', contextData);
@@ -1755,27 +1749,30 @@ async function bindToContext(contextId, contextName, contextUrl) {
     if (response.success) {
       console.log('Bound to context successfully');
 
-      // Update current connection
+      // Set full context object from response to include all properties
       currentConnection.mode = 'context';
-      currentConnection.context = contextData;
-      // Keep workspace info for reference, but context takes precedence
-      if (workspaceInfo) {
-        currentConnection.workspace = workspaceInfo;
-      }
+      currentConnection.context = response.context;
 
-      console.log('Updated currentConnection:', currentConnection);
+      // Persist mode and selection to storage
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', {
+        mode: 'context',
+        context: response.context
+      });
 
-      // Update connection status display
+      // Update header with proper formatting
       updateConnectionStatus(currentConnection);
 
-      // Navigate to tree view to show the context tree
-      await navigateToTreeView();
+      showToast(`Bound to context: ${contextId}`, 'success');
+
+      // Navigate back to main view
+      navigateToView('main');
     } else {
-      throw new Error(response.error || 'Failed to bind to context');
+      console.error('Failed to bind context:', response.error);
+      showToast(`Failed to bind context: ${response.error}`, 'error');
     }
   } catch (error) {
-    console.error('Failed to bind to context:', error);
-    alert('Failed to bind to context: ' + error.message);
+    console.error('Error in bindToContext:', error);
+    showToast(`Error binding context: ${error.message}`, 'error');
   }
 }
 
@@ -2704,4 +2701,17 @@ async function handleDeleteSelected() {
   } catch (error) {
     console.error('Failed to delete selected Canvas tabs:', error);
   }
+}
+
+// Add showToast function
+function showToast(message, type = 'info') {
+  if (!toast) return console.log(message); // Fallback
+
+  toast.textContent = message;
+  toast.className = `toast ${type}`;
+  toast.style.display = 'block';
+
+  setTimeout(() => {
+    toast.style.display = 'none';
+  }, 5000);
 }
