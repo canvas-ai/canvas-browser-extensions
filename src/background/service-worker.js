@@ -15,6 +15,15 @@ console.log('🚀 Service Worker: Registering tab event listeners...');
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Extension installed/updated:', details.reason);
 
+  // Migrate legacy storage keys on update to prevent perceived settings loss
+  if (details.reason === 'update') {
+    try {
+      await migrateLegacyStorageKeys();
+    } catch (e) {
+      console.warn('Storage migration failed (non-fatal):', e);
+    }
+  }
+
   // Open settings page on first install
   if (details.reason === 'install') {
     await openSettingsPage();
@@ -30,6 +39,13 @@ chrome.runtime.onStartup.addListener(async () => {
 async function initializeExtension() {
   try {
     console.log('Initializing Canvas Extension...');
+
+    // Always attempt a one-time migration of legacy keys before reading settings
+    try {
+      await migrateLegacyStorageKeys();
+    } catch (e) {
+      console.warn('Storage migration failed (non-fatal):', e);
+    }
 
     // Load connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
@@ -592,6 +608,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function openSettingsPage() {
   const url = chrome.runtime.getURL('settings/settings.html');
   await chrome.tabs.create({ url });
+}
+
+// Migrate legacy storage keys from older versions to the current key scheme
+// Legacy keys: connectionSettings, syncSettings, currentContext, browserIdentity
+// New keys: canvasConnectionSettings, canvasSyncSettings, canvasCurrentContext, canvasBrowserIdentity
+async function migrateLegacyStorageKeys() {
+  const all = await chrome.storage.local.get(null);
+
+  const legacyToNew = [
+    ['connectionSettings', 'canvasConnectionSettings'],
+    ['syncSettings', 'canvasSyncSettings'],
+    ['currentContext', 'canvasCurrentContext'],
+    ['browserIdentity', 'canvasBrowserIdentity']
+  ];
+
+  let migrated = 0;
+  for (const [legacyKey, newKey] of legacyToNew) {
+    const hasLegacy = Object.prototype.hasOwnProperty.call(all, legacyKey);
+    const hasNew = Object.prototype.hasOwnProperty.call(all, newKey);
+    if (hasLegacy && !hasNew) {
+      const value = all[legacyKey];
+      await chrome.storage.local.set({ [newKey]: value });
+      migrated++;
+    }
+  }
+
+  // Clean up legacy keys only after successful copy
+  if (migrated > 0) {
+    const keysToRemove = legacyToNew
+      .map(([legacyKey]) => legacyKey)
+      .filter((k) => Object.prototype.hasOwnProperty.call(all, k));
+    try {
+      await chrome.storage.local.remove(keysToRemove);
+      console.log('Migrated legacy storage keys:', migrated, 'removed:', keysToRemove);
+    } catch (e) {
+      console.warn('Failed to remove legacy storage keys (safe to ignore):', e);
+    }
+  }
 }
 
 async function handleGetConnectionStatus(sendResponse) {

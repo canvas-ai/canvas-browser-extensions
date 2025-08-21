@@ -523,11 +523,24 @@ export class TabManager {
           };
         }
 
-        // Open new tab
-        const tab = await this.openTab(canvasDoc.data.url, {
+        // Open new tab (prefer the same window if available)
+        const baseOptions = {
           active: options.active !== false,
           pinned: canvasDoc.data.pinned || false
-        });
+        };
+        const preferredWindowId = Number.isInteger(canvasDoc.data?.windowId) ? canvasDoc.data.windowId : undefined;
+
+        let tab;
+        if (preferredWindowId !== undefined) {
+          try {
+            tab = await this.openTab(canvasDoc.data.url, { ...baseOptions, windowId: preferredWindowId });
+          } catch (err) {
+            console.warn('Failed to open tab in preferred window, retrying without windowId:', err?.message || err);
+            tab = await this.openTab(canvasDoc.data.url, baseOptions);
+          }
+        } else {
+          tab = await this.openTab(canvasDoc.data.url, baseOptions);
+        }
 
         // Mark as synced immediately to prevent auto-sync
         this.markTabAsSynced(tab.id, canvasDoc.id);
