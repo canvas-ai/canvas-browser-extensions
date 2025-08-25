@@ -666,7 +666,9 @@ export class SyncEngine {
   // Execute context change behavior based on settings
   async _executeContextChangeBehavior(behavior, oldContextId, newContextId, isUrlChange = false) {
     try {
-      console.log('SyncEngine: Executing context change behavior:', behavior, 'isUrlChange:', isUrlChange);
+      // Default to 'close-open-new' if behavior is undefined
+      const actualBehavior = behavior || 'close-open-new';
+      console.log('SyncEngine: Executing context change behavior:', actualBehavior, 'isUrlChange:', isUrlChange);
 
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
@@ -679,7 +681,7 @@ export class SyncEngine {
         console.log('SyncEngine: Will fetch documents from backend for context:', newContextId);
       }
 
-      switch (behavior) {
+      switch (actualBehavior) {
         case 'close-open-new':
           if (shouldFetchDocuments) {
             await this.closeCurrentTabs();
@@ -712,9 +714,10 @@ export class SyncEngine {
           break;
 
         default:
-          console.warn('SyncEngine: Unknown context change behavior:', behavior);
-          // Fallback to keep-open-new
+          console.warn('SyncEngine: Unknown context change behavior:', actualBehavior);
+          // Fallback to close-open-new
           if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
             await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
           }
       }
@@ -1034,7 +1037,9 @@ export class SyncEngine {
   // Execute workspace path change behavior
   async _executeWorkspacePathChangeBehavior(behavior, workspace, oldPath, newPath) {
     try {
-      console.log('SyncEngine: Executing workspace path change behavior:', behavior);
+      // Default to 'close-open-new' if behavior is undefined
+      const actualBehavior = behavior || 'close-open-new';
+      console.log('SyncEngine: Executing workspace path change behavior:', actualBehavior);
 
       const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
@@ -1043,7 +1048,7 @@ export class SyncEngine {
       const shouldFetchDocuments = true;
       console.log('SyncEngine: Will fetch documents from backend for workspace:', workspace?.name || workspace?.id, 'path:', newPath);
 
-      switch (behavior) {
+      switch (actualBehavior) {
         case 'close-open-new':
           if (shouldFetchDocuments) {
             await this.closeCurrentTabs();
@@ -1071,8 +1076,10 @@ export class SyncEngine {
           break;
 
         default:
-          console.warn('SyncEngine: Unknown workspace path change behavior:', behavior);
+          console.warn('SyncEngine: Unknown workspace path change behavior:', actualBehavior);
+          // Fallback to close-open-new
           if (shouldFetchDocuments) {
+            await this.closeCurrentTabs();
             await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
           }
       }
