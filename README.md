@@ -2,15 +2,6 @@
 
 A browser extension for seamlessly syncing browser tabs with Canvas server contexts. Extension allows you to connect several users / browsers / applications to a single shared context and working with tabs collaboratively.
 
-## Features
-
-- **Real-time synchronization** between browser tabs and Canvas server contexts
-- **Configurable sync behaviors** (auto-sync new tabs, auto-open context tabs, etc.)
-- **Context binding** for organizing tabs by project/workspace
-- **Cross-browser support** (Chromium-based browsers & Firefox)
-- **WebSocket integration** for live updates
-- **Secure API token authentication**
-
 ## Screenshots
 
 ### Extension Popup
@@ -94,20 +85,11 @@ For developers and testing:
 
 ## Setup
 
-1. **Install and run Canvas server** (see main project README)
+1. **Install and run Canvas server** or **create an account via https://getcanvas.org**
 
-2. **Generate API token**:
-   - Open Canvas web interface (usually http://127.0.0.1:8001)
-   - Choose API Tokens on the left sidebar
-   - Create new token with appropriate permissions
+2. **Open Canvas web interface and generate an API token**
 
-3. **(Optional) Generate a adhoc context and context api keys to share with others**
-
-4. **Configure extension**:
-   - Click extension icon in browser toolbar
-   - Click Settings button (opens new tab)
-   - Enter server URL and API token
-   - Test connection and bind to a context
+3. **Configure extension**
 
 ## Sync Behaviors
 
@@ -158,33 +140,6 @@ See the [GitHub Releases page](https://github.com/canvas-ai/canvas-server/releas
 - **Firefox**: v109+
 - **Brave**: v1.20+
 - **Opera**: v74+
-
-## Troubleshooting
-
-### Connection Issues
-
-1. **Check Canvas server status**:
-   - Ensure Canvas server is running and accessible
-   - Verify the server URL in extension settings
-   - Test API connectivity from the settings page
-
-2. **Verify API token**:
-   - Generate a new API token in Canvas web interface
-   - Ensure token has appropriate permissions
-   - Update token in extension settings
-
-3. **Debug extension**:
-   - Open browser DevTools (F12) and check Console for errors
-   - Go to `chrome://extensions/` and click "Inspect views: service worker"
-   - Check extension popup for error messages
-
-### Sync Issues
-
-1. **Check sync settings** in the extension popup
-2. **Verify context binding** - ensure extension is bound to correct context
-3. **Test with manual sync** to isolate automatic sync issues
-
-For more help, see our [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) for comprehensive debugging information.
 
 ## License
 

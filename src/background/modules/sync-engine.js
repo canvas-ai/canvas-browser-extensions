@@ -1,5 +1,12 @@
 // Sync Engine module for Canvas Extension
 // Coordinates synchronization between browser tabs and Canvas server
+//
+// BROWSER EXIT PREVENTION:
+// This module includes a simple safety mechanism to prevent the browser from closing
+// when context changes result in all tabs being closed:
+// - wouldLeaveEmptyBrowser(): Checks if tab closures would leave browser empty
+// - All tab closing methods open a new empty tab before closing if needed
+// - Simple approach: just add a new tab if we'd end up with zero tabs
 
 import { browserStorage } from './browser-storage.js';
 import { apiClient } from './api-client.js';
@@ -717,9 +724,16 @@ export class SyncEngine {
     }
   }
 
-  // Helper: Close all browser tabs
+  // Helper: Close all browser tabs (with safety to prevent browser exit)
   async closeAllBrowserTabs() {
     const browserTabs = await tabManager.getSyncableTabs();
+
+    // Safety: If closing all tabs would leave browser empty, open a new tab first
+    if (await this.wouldLeaveEmptyBrowser(browserTabs)) {
+      console.log('SyncEngine: Would close all tabs - opening new tab to prevent browser exit');
+      await tabManager.openTab('chrome://newtab/', { active: false });
+    }
+
     for (const tab of browserTabs) {
       await tabManager.closeTab(tab.id);
     }
@@ -767,20 +781,34 @@ export class SyncEngine {
       const pinnedTabs = await browserStorage.getPinnedTabs();
       console.log('SyncEngine: Pinned tabs:', Array.from(pinnedTabs));
 
+      // Collect tabs that would be closed (not in context and not pinned)
+      const tabsToClose = [];
+      for (const tab of browserTabs) {
+        if (!contextUrls.has(tab.url) && !pinnedTabs.has(tab.id)) {
+          tabsToClose.push(tab);
+        }
+      }
+
+      // Safety: If closing these tabs would leave browser empty, open a new tab first
+      if (await this.wouldLeaveEmptyBrowser(tabsToClose)) {
+        console.log('SyncEngine: Would close all tabs not in context - opening new tab to prevent browser exit');
+        await tabManager.openTab('chrome://newtab/', { active: false });
+      }
+
       // Close tabs that are not in the new context
       let closedCount = 0;
+      for (const tab of tabsToClose) {
+        console.log('SyncEngine: Closing tab not in context:', tab.title, tab.url);
+        await tabManager.closeTab(tab.id);
+        closedCount++;
+      }
+
+      // Log summary of what was kept vs closed
       for (const tab of browserTabs) {
-        if (!contextUrls.has(tab.url)) {
-          // Check if tab is pinned - if so, don't close it
-          if (pinnedTabs.has(tab.id)) {
-            console.log('SyncEngine: Keeping pinned tab (not closing):', tab.title, tab.url);
-          } else {
-            console.log('SyncEngine: Closing tab not in context:', tab.title, tab.url);
-            await tabManager.closeTab(tab.id);
-            closedCount++;
-          }
-        } else {
+        if (contextUrls.has(tab.url)) {
           console.log('SyncEngine: Keeping tab in context:', tab.title, tab.url);
+        } else if (pinnedTabs.has(tab.id)) {
+          console.log('SyncEngine: Keeping pinned tab (not closing):', tab.title, tab.url);
         }
       }
 
@@ -816,21 +844,33 @@ export class SyncEngine {
     }
   }
 
-  // Helper: Close current tabs
+  // Helper: Close current tabs (with safety to prevent browser exit)
   async closeCurrentTabs() {
     const browserTabs = await tabManager.getSyncableTabs();
     const pinnedTabs = await browserStorage.getPinnedTabs();
 
+    // Collect tabs to close (don't close pinned tabs)
+    const tabsToClose = [];
     for (const tab of browserTabs) {
-      // Don't close pinned tabs
       if (!pinnedTabs.has(tab.id)) {
-        console.log('SyncEngine: Closing tab:', tab.title, tab.url);
-        await tabManager.closeTab(tab.id);
+        tabsToClose.push(tab);
       }
+    }
+
+    // Safety: If closing these tabs would leave browser empty, open a new tab first
+    if (await this.wouldLeaveEmptyBrowser(tabsToClose)) {
+      console.log('SyncEngine: Would close all tabs - opening new tab to prevent browser exit');
+      await tabManager.openTab('chrome://newtab/', { active: false });
+    }
+
+    // Close all the tabs
+    for (const tab of tabsToClose) {
+      console.log('SyncEngine: Closing tab:', tab.title, tab.url);
+      await tabManager.closeTab(tab.id);
     }
   }
 
-    // Helper: Fetch and open new tabs based on mode
+  // Helper: Fetch and open new tabs based on mode
   async fetchAndOpenNewTabs(mode, contextId, workspace, workspacePath) {
     try {
       // Create unique key for this fetch to prevent duplicates
@@ -942,6 +982,34 @@ export class SyncEngine {
 
     } catch (error) {
       console.error('SyncEngine: Failed to update internal indexes:', error);
+    }
+  }
+
+  // Helper: Check if closing specified tabs would leave the browser with zero tabs
+  async wouldLeaveEmptyBrowser(tabsToClose) {
+    try {
+      // Get ALL browser tabs (not just syncable ones)
+      const allTabs = await tabManager.getAllTabs();
+
+      // Create a set of tab IDs that would be closed
+      const closeTabIds = new Set(tabsToClose.map(tab => tab.id));
+
+      // Count how many tabs would remain after closing
+      const remainingTabs = allTabs.filter(tab => !closeTabIds.has(tab.id));
+
+      console.log('SyncEngine: Browser safety check:', {
+        totalTabs: allTabs.length,
+        tabsToClose: tabsToClose.length,
+        remainingTabs: remainingTabs.length
+      });
+
+      // If no tabs would remain, the browser would exit
+      return remainingTabs.length === 0;
+
+    } catch (error) {
+      console.error('SyncEngine: Error checking browser safety:', error);
+      // Err on the side of caution - assume we would leave it empty
+      return true;
     }
   }
 
