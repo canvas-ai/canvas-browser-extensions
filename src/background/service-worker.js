@@ -7,7 +7,6 @@ import { webSocketClient } from './modules/websocket-client.js';
 import { tabManager } from './modules/tab-manager.js';
 import { syncEngine } from './modules/sync-engine.js';
 import { contextIntegration } from './modules/context-integration.js';
-import { fileManager } from './modules/file-manager.js';
 
 console.log('🚀 Canvas Extension Service Worker loaded and starting...');
 console.log('🚀 Service Worker: Registering tab event listeners...');
@@ -481,51 +480,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'OPEN_WORKSPACE':
       // Open a workspace by id/name
       handleOpenWorkspace(message.data, sendResponse);
-      return true;
-
-    // File Manager operations
-    case 'FILE_CUT':
-      handleFileCut(message.data, sendResponse);
-      return true;
-
-    case 'FILE_COPY':
-      handleFileCopy(message.data, sendResponse);
-      return true;
-
-    case 'FILE_PASTE':
-      handleFilePaste(message.data, sendResponse);
-      return true;
-
-    case 'FILE_DELETE':
-      handleFileDelete(message.data, sendResponse);
-      return true;
-
-    case 'FILE_REMOVE':
-      handleFileRemove(message.data, sendResponse);
-      return true;
-
-    case 'FILE_MERGE_UP':
-      handleFileMergeUp(message.data, sendResponse);
-      return true;
-
-    case 'FILE_MERGE_DOWN':
-      handleFileMergeDown(message.data, sendResponse);
-      return true;
-
-    case 'FILE_SUBTRACT_UP':
-      handleFileSubtractUp(message.data, sendResponse);
-      return true;
-
-    case 'FILE_SUBTRACT_DOWN':
-      handleFileSubtractDown(message.data, sendResponse);
-      return true;
-
-    case 'FILE_MOVE':
-      handleFileMove(message.data, sendResponse);
-      return true;
-
-    case 'GET_CLIPBOARD':
-      handleGetClipboard(sendResponse);
       return true;
 
     case 'BIND_CONTEXT':
@@ -1942,127 +1896,6 @@ async function handleUpdateContextUrl(message, sendResponse) {
       success: false,
       error: error.message
     });
-  }
-}
-
-// File Manager Handlers
-async function handleFileCut(data, sendResponse) {
-  try {
-    const result = await fileManager.cut(data.items, data.source);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to cut files:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileCopy(data, sendResponse) {
-  try {
-    const result = await fileManager.copy(data.items, data.source);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to copy files:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFilePaste(data, sendResponse) {
-  try {
-    const result = await fileManager.paste(data.targetPath, data.targetWorkspace);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to paste files:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileDelete(data, sendResponse) {
-  try {
-    const result = await fileManager.deleteDocuments(
-      data.workspace,
-      data.documentIds,
-      data.contextSpec,
-      data.featureArray
-    );
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to delete files:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileRemove(data, sendResponse) {
-  try {
-    const result = await fileManager.removeDocuments(
-      data.workspace,
-      data.documentIds,
-      data.contextSpec,
-      data.featureArray
-    );
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to remove files:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileMergeUp(data, sendResponse) {
-  try {
-    const result = await fileManager.mergeUp(data.workspace, data.path);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to merge up:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileMergeDown(data, sendResponse) {
-  try {
-    const result = await fileManager.mergeDown(data.workspace, data.path);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to merge down:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileSubtractUp(data, sendResponse) {
-  try {
-    const result = await fileManager.subtractUp(data.workspace, data.path);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to subtract up:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileSubtractDown(data, sendResponse) {
-  try {
-    const result = await fileManager.subtractDown(data.workspace, data.path);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to subtract down:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleFileMove(data, sendResponse) {
-  try {
-    const result = await fileManager.move(data.from, data.to, data.recursive);
-    sendResponse({ success: true, result });
-  } catch (error) {
-    console.error('Failed to move file:', error);
-    sendResponse({ success: false, error: error.message });
-  }
-}
-
-async function handleGetClipboard(sendResponse) {
-  try {
-    const clipboard = await fileManager.loadClipboard();
-    sendResponse({ success: true, clipboard });
-  } catch (error) {
-    console.error('Failed to get clipboard:', error);
-    sendResponse({ success: false, error: error.message });
   }
 }
 

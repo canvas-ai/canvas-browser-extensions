@@ -370,31 +370,6 @@ export class CanvasApiClient {
     const data = { documentIds };
     return await this.post(`/contexts/${contextId}/documents/delete-batch`, data);
   }
-
-  // Path operations for workspace tree management
-  async mergeUpPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-up`, { path });
-  }
-
-  async mergeDownPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-down`, { path });
-  }
-
-  async subtractUpPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-up`, { path });
-  }
-
-  async subtractDownPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-down`, { path });
-  }
-
-  async movePath(from, to, recursive = true) {
-    return await this.post('/paths/move', { from, to, recursive });
-  }
-
-  async copyPath(from, to, recursive = true) {
-    return await this.post('/paths/copy', { from, to, recursive });
-  }
 }
 
 // Create singleton instance

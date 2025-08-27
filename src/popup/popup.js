@@ -73,15 +73,6 @@ const fuseConfig = {
 document.addEventListener('DOMContentLoaded', async () => {
   initializeElements();
   setupEventListeners();
-  
-  // Initialize file manager UI
-  if (typeof fileManagerUI !== 'undefined') {
-    fileManagerUI.initialize();
-    window.fileManagerUI = fileManagerUI;
-    window.refreshTreeView = initializeTreeView;
-    window.refreshDocumentList = loadTabs;
-  }
-  
   await loadInitialData();
 });
 
@@ -880,10 +871,7 @@ function renderCanvasTabs() {
     // Create tab element
     const tabElement = createSecureElement('div', {
       className: 'tab-item',
-      'data-document-id': tab.id,
-      'data-id': tab.id,
-      'data-path': tab.path || '/',
-      'data-name': tab.title || 'Untitled'
+      'data-document-id': tab.id
     });
 
     // Create checkbox label
@@ -951,24 +939,6 @@ function renderCanvasTabs() {
   });
 
   updateBulkActionVisibility();
-
-  // Attach context menus and drag-drop to canvas tab items
-  if (window.fileManagerUI) {
-    canvasToBrowserList.querySelectorAll('.tab-item').forEach(item => {
-      const itemData = {
-        id: item.dataset.id,
-        path: item.dataset.path,
-        type: 'document',
-        name: item.dataset.name
-      };
-      
-      // Set up context menu for documents
-      window.fileManagerUI.attachDocumentContextMenu(item);
-      
-      // Set up drag and drop
-      window.fileManagerUI.setupDragAndDrop(item, itemData);
-    });
-  }
 }
 
 // Event handlers
@@ -1482,35 +1452,6 @@ function setupTreeEventListeners() {
       }
     }
   });
-
-  // Attach context menus and drag-drop to tree nodes
-  if (window.fileManagerUI) {
-    document.querySelectorAll('.tree-node').forEach(node => {
-      const path = node.dataset.path;
-      const nodeId = node.dataset.nodeId;
-      const isFolder = node.querySelector('.folder-icon') !== null;
-      
-      // Add type data attribute
-      node.dataset.type = isFolder ? 'folder' : 'file';
-      
-      // Set up context menu
-      window.fileManagerUI.attachTreeNodeContextMenu(node);
-      
-      // Set up drag and drop
-      const itemData = {
-        id: nodeId,
-        path: path,
-        type: isFolder ? 'folder' : 'file',
-        name: path.split('/').pop() || '/'
-      };
-      
-      window.fileManagerUI.setupDragAndDrop(node, itemData);
-      
-      if (isFolder) {
-        window.fileManagerUI.setupDropZone(node, path);
-      }
-    });
-  }
 }
 
 function selectTreePath(path) {
