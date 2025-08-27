@@ -2008,7 +2008,7 @@ async function handleFileRemove(data, sendResponse) {
 
 async function handleFileMergeUp(data, sendResponse) {
   try {
-    const result = await fileManager.mergeUp(data.workspace, data.path);
+    const result = await fileManager.mergeUp(data.workspace, data.layerName, data.path);
     sendResponse({ success: true, result });
   } catch (error) {
     console.error('Failed to merge up:', error);
@@ -2018,7 +2018,7 @@ async function handleFileMergeUp(data, sendResponse) {
 
 async function handleFileMergeDown(data, sendResponse) {
   try {
-    const result = await fileManager.mergeDown(data.workspace, data.path);
+    const result = await fileManager.mergeDown(data.workspace, data.layerName, data.path);
     sendResponse({ success: true, result });
   } catch (error) {
     console.error('Failed to merge down:', error);
@@ -2028,7 +2028,7 @@ async function handleFileMergeDown(data, sendResponse) {
 
 async function handleFileSubtractUp(data, sendResponse) {
   try {
-    const result = await fileManager.subtractUp(data.workspace, data.path);
+    const result = await fileManager.subtractUp(data.workspace, data.layerName, data.path);
     sendResponse({ success: true, result });
   } catch (error) {
     console.error('Failed to subtract up:', error);
@@ -2038,7 +2038,7 @@ async function handleFileSubtractUp(data, sendResponse) {
 
 async function handleFileSubtractDown(data, sendResponse) {
   try {
-    const result = await fileManager.subtractDown(data.workspace, data.path);
+    const result = await fileManager.subtractDown(data.workspace, data.layerName, data.path);
     sendResponse({ success: true, result });
   } catch (error) {
     console.error('Failed to subtract down:', error);

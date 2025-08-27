@@ -287,17 +287,21 @@ class FileManagerUI {
 
   // Handle merge up operation
   async handleMergeUp(path) {
+    const layerName = await this.promptForLayerName('Merge Up', 'Enter layer name to merge upward:');
+    if (!layerName) return;
+
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'FILE_MERGE_UP',
         data: {
           workspace: this.getCurrentWorkspace(),
+          layerName: layerName,
           path: path
         }
       });
 
       if (response.success) {
-        this.showToast('Merge up completed successfully');
+        this.showToast(`Layer "${layerName}" merged up successfully`);
         await this.refreshView();
       } else {
         this.showToast('Failed to merge up: ' + response.error, 'error');
@@ -310,17 +314,21 @@ class FileManagerUI {
 
   // Handle merge down operation
   async handleMergeDown(path) {
+    const layerName = await this.promptForLayerName('Merge Down', 'Enter layer name to merge downward:');
+    if (!layerName) return;
+
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'FILE_MERGE_DOWN',
         data: {
           workspace: this.getCurrentWorkspace(),
+          layerName: layerName,
           path: path
         }
       });
 
       if (response.success) {
-        this.showToast('Merge down completed successfully');
+        this.showToast(`Layer "${layerName}" merged down successfully`);
         await this.refreshView();
       } else {
         this.showToast('Failed to merge down: ' + response.error, 'error');
@@ -333,17 +341,21 @@ class FileManagerUI {
 
   // Handle subtract up operation
   async handleSubtractUp(path) {
+    const layerName = await this.promptForLayerName('Subtract Up', 'Enter layer name to subtract upward:');
+    if (!layerName) return;
+
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'FILE_SUBTRACT_UP',
         data: {
           workspace: this.getCurrentWorkspace(),
+          layerName: layerName,
           path: path
         }
       });
 
       if (response.success) {
-        this.showToast('Subtract up completed successfully');
+        this.showToast(`Layer "${layerName}" subtracted up successfully`);
         await this.refreshView();
       } else {
         this.showToast('Failed to subtract up: ' + response.error, 'error');
@@ -356,17 +368,21 @@ class FileManagerUI {
 
   // Handle subtract down operation
   async handleSubtractDown(path) {
+    const layerName = await this.promptForLayerName('Subtract Down', 'Enter layer name to subtract downward:');
+    if (!layerName) return;
+
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'FILE_SUBTRACT_DOWN',
         data: {
           workspace: this.getCurrentWorkspace(),
+          layerName: layerName,
           path: path
         }
       });
 
       if (response.success) {
-        this.showToast('Subtract down completed successfully');
+        this.showToast(`Layer "${layerName}" subtracted down successfully`);
         await this.refreshView();
       } else {
         this.showToast('Failed to subtract down: ' + response.error, 'error');
@@ -375,6 +391,101 @@ class FileManagerUI {
       console.error('Subtract down operation failed:', error);
       this.showToast('Subtract down operation failed', 'error');
     }
+  }
+
+  // Prompt for layer name
+  promptForLayerName(title, message) {
+    return new Promise((resolve) => {
+      // Create a simple modal dialog
+      const dialog = this.createLayerDialog(title, message, (layerName) => {
+        document.body.removeChild(dialog);
+        resolve(layerName);
+      });
+      document.body.appendChild(dialog);
+    });
+  }
+
+  // Create layer name input dialog
+  createLayerDialog(title, message, callback) {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 1px solid #e2e2e2;
+      border-radius: 8px;
+      padding: 20px;
+      z-index: 10002;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 300px;
+    `;
+
+    const titleEl = document.createElement('h3');
+    titleEl.textContent = title;
+    titleEl.style.marginBottom = '10px';
+    dialog.appendChild(titleEl);
+
+    const messageEl = document.createElement('p');
+    messageEl.textContent = message;
+    messageEl.style.marginBottom = '15px';
+    messageEl.style.color = '#666';
+    dialog.appendChild(messageEl);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Layer name (e.g., foo)';
+    input.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    `;
+    dialog.appendChild(input);
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `
+      padding: 8px 16px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
+    cancelBtn.onclick = () => callback(null);
+
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'OK';
+    okBtn.style.cssText = `
+      padding: 8px 16px;
+      border: none;
+      background: #000;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
+    okBtn.onclick = () => callback(input.value.trim());
+
+    buttonContainer.appendChild(cancelBtn);
+    buttonContainer.appendChild(okBtn);
+    dialog.appendChild(buttonContainer);
+
+    // Focus input and handle Enter key
+    setTimeout(() => input.focus(), 0);
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        callback(input.value.trim());
+      } else if (e.key === 'Escape') {
+        callback(null);
+      }
+    };
+
+    return dialog;
   }
 
   // Setup drag and drop for an element

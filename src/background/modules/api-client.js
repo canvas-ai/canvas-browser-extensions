@@ -372,20 +372,32 @@ export class CanvasApiClient {
   }
 
   // Path operations for workspace tree management
-  async mergeUpPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-up`, { path });
+  async mergeUpPath(workspaceNameOrId, layerName, path) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-up`, { 
+      layerName, 
+      path 
+    });
   }
 
-  async mergeDownPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-down`, { path });
+  async mergeDownPath(workspaceNameOrId, layerName, path) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/merge-down`, { 
+      layerName, 
+      path 
+    });
   }
 
-  async subtractUpPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-up`, { path });
+  async subtractUpPath(workspaceNameOrId, layerName, path) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-up`, { 
+      layerName, 
+      path 
+    });
   }
 
-  async subtractDownPath(workspaceNameOrId, path) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-down`, { path });
+  async subtractDownPath(workspaceNameOrId, layerName, path) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths/subtract-down`, { 
+      layerName, 
+      path 
+    });
   }
 
   async movePath(from, to, recursive = true) {

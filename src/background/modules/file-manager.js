@@ -107,9 +107,11 @@ export class FileManager {
   }
 
   // Merge operations
-  async mergeUp(workspaceNameOrId, path) {
+  // MergeUp: Merges the bitmap layer upward in the hierarchy
+  // Example: mergeUp("foo", "/work/foo/bar/baz") merges "foo" layer to /work/foo/bar and /work/foo
+  async mergeUp(workspaceNameOrId, layerName, path) {
     try {
-      const result = await apiClient.mergeUpPath(workspaceNameOrId, path);
+      const result = await apiClient.mergeUpPath(workspaceNameOrId, layerName, path);
       return { success: true, result };
     } catch (error) {
       console.error('MergeUp failed:', error);
@@ -117,9 +119,11 @@ export class FileManager {
     }
   }
 
-  async mergeDown(workspaceNameOrId, path) {
+  // MergeDown: Merges the bitmap layer downward in the hierarchy
+  // Example: mergeDown("foo", "/work/mb") merges "foo" layer to children under /work/mb
+  async mergeDown(workspaceNameOrId, layerName, path) {
     try {
-      const result = await apiClient.mergeDownPath(workspaceNameOrId, path);
+      const result = await apiClient.mergeDownPath(workspaceNameOrId, layerName, path);
       return { success: true, result };
     } catch (error) {
       console.error('MergeDown failed:', error);
@@ -128,9 +132,11 @@ export class FileManager {
   }
 
   // Subtract operations
-  async subtractUp(workspaceNameOrId, path) {
+  // SubtractUp: Subtracts the bitmap layer from parent paths
+  // Example: subtractUp("foo", "/work/foo/bar/baz") subtracts "foo" from /work/foo/bar and /work/foo
+  async subtractUp(workspaceNameOrId, layerName, path) {
     try {
-      const result = await apiClient.subtractUpPath(workspaceNameOrId, path);
+      const result = await apiClient.subtractUpPath(workspaceNameOrId, layerName, path);
       return { success: true, result };
     } catch (error) {
       console.error('SubtractUp failed:', error);
@@ -138,9 +144,11 @@ export class FileManager {
     }
   }
 
-  async subtractDown(workspaceNameOrId, path) {
+  // SubtractDown: Subtracts the bitmap layer from child paths
+  // Example: subtractDown("foo", "/work/mb") subtracts "foo" from children under /work/mb
+  async subtractDown(workspaceNameOrId, layerName, path) {
     try {
-      const result = await apiClient.subtractDownPath(workspaceNameOrId, path);
+      const result = await apiClient.subtractDownPath(workspaceNameOrId, layerName, path);
       return { success: true, result };
     } catch (error) {
       console.error('SubtractDown failed:', error);
