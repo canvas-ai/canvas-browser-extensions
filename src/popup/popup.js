@@ -13,6 +13,10 @@ let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 let toast;
 
+// Context menu elements
+let contextMenu, contextMenuSync, contextMenuBrowse;
+let contextMenuTargetTab = null;
+
 // Tab elements
 let browserToCanvasTab, canvasToBrowserTab;
 let browserToCanvasContent, canvasToBrowserContent;
@@ -239,6 +243,11 @@ function initializeElements() {
   contextsList = document.getElementById('contextsList');
   workspacesList = document.getElementById('workspacesList');
 
+  // Context menu elements
+  contextMenu = document.getElementById('contextMenu');
+  contextMenuSync = document.getElementById('contextMenuSync');
+  contextMenuBrowse = document.getElementById('contextMenuBrowse');
+
   toast = document.getElementById('toast');
 }
 
@@ -308,6 +317,9 @@ function setupEventListeners() {
   // Event delegation for favicon error handling
   browserToCanvasList.addEventListener('error', handleImageError, true);
   canvasToBrowserList.addEventListener('error', handleImageError, true);
+
+  // Context menu event listeners
+  setupContextMenuListeners();
 }
 
 // Tab switching functionality
@@ -759,6 +771,12 @@ function renderBrowserTabs() {
       'data-tab-id': tab.id
     });
     if (isSynced) checkbox.disabled = true;
+    
+    // Preserve selection state
+    if (selectedBrowserTabs.has(tab.id)) {
+      checkbox.checked = true;
+    }
+    
     const checkmark = createSecureElement('span', { className: 'checkmark' });
     checkboxLabel.appendChild(checkbox);
     checkboxLabel.appendChild(checkmark);
@@ -880,6 +898,12 @@ function renderCanvasTabs() {
       type: 'checkbox',
       'data-document-id': tab.id
     });
+    
+    // Preserve selection state
+    if (selectedCanvasTabs.has(tab.id)) {
+      checkbox.checked = true;
+    }
+    
     const checkmark = createSecureElement('span', { className: 'checkmark' });
     checkboxLabel.appendChild(checkbox);
     checkboxLabel.appendChild(checkmark);
@@ -2560,7 +2584,7 @@ async function handleSyncSelected() {
 
     if (response.success) {
       console.log(`Synced ${response.successful}/${response.total} selected tabs`);
-      selectedBrowserTabs.clear();
+      // Don't clear selections to allow multiple operations
       await loadTabs(); // Refresh lists
     } else {
       console.error('Failed to sync selected tabs:', response.error);
@@ -2714,4 +2738,123 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.style.display = 'none';
   }, 5000);
+}
+
+// Context Menu functionality
+function setupContextMenuListeners() {
+  // Right-click on tab items
+  browserToCanvasList.addEventListener('contextmenu', handleTabContextMenu);
+  canvasToBrowserList.addEventListener('contextmenu', handleTabContextMenu);
+
+  // Context menu item clicks
+  contextMenuSync.addEventListener('click', handleContextMenuSync);
+  contextMenuBrowse.addEventListener('click', handleContextMenuBrowse);
+
+  // Close context menu on outside click
+  document.addEventListener('click', hideContextMenu);
+  document.addEventListener('contextmenu', hideContextMenu);
+}
+
+function handleTabContextMenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  // Find the tab item
+  const tabItem = event.target.closest('.tab-item');
+  if (!tabItem) return;
+
+  // Store the target tab
+  const tabId = tabItem.dataset.tabId;
+  const documentId = tabItem.dataset.documentId;
+  
+  if (tabId) {
+    // Browser tab
+    const tab = browserTabs.find(t => t.id == tabId);
+    if (tab) {
+      contextMenuTargetTab = { type: 'browser', data: tab };
+      showContextMenu(event.clientX, event.clientY, 'browser');
+    }
+  } else if (documentId) {
+    // Canvas tab
+    const tab = canvasTabs.find(t => t.id == documentId);
+    if (tab) {
+      contextMenuTargetTab = { type: 'canvas', data: tab };
+      showContextMenu(event.clientX, event.clientY, 'canvas');
+    }
+  }
+}
+
+function showContextMenu(x, y, tabType) {
+  // Update context menu items based on connection and mode
+  if (currentConnection.connected) {
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      contextMenuSync.textContent = `Insert to Context: ${currentConnection.context.id}`;
+      contextMenuSync.disabled = false;
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      contextMenuSync.textContent = `Insert to Workspace: ${currentConnection.workspace.name || currentConnection.workspace.id}`;
+      contextMenuSync.disabled = false;
+    } else {
+      contextMenuSync.textContent = 'No target selected';
+      contextMenuSync.disabled = true;
+    }
+    contextMenuBrowse.disabled = false;
+  } else {
+    contextMenuSync.textContent = 'Not connected';
+    contextMenuSync.disabled = true;
+    contextMenuBrowse.disabled = true;
+  }
+
+  // Position and show context menu
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.style.display = 'block';
+
+  // Ensure menu stays within viewport
+  const rect = contextMenu.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  if (rect.right > viewportWidth) {
+    contextMenu.style.left = `${x - rect.width}px`;
+  }
+  if (rect.bottom > viewportHeight) {
+    contextMenu.style.top = `${y - rect.height}px`;
+  }
+}
+
+function hideContextMenu() {
+  contextMenu.style.display = 'none';
+  contextMenuTargetTab = null;
+}
+
+async function handleContextMenuSync() {
+  if (!contextMenuTargetTab || !currentConnection.connected) return;
+
+  try {
+    if (contextMenuTargetTab.type === 'browser') {
+      // Sync browser tab
+      const response = await sendMessageToBackground('SYNC_TAB', { 
+        tab: contextMenuTargetTab.data 
+      });
+      if (response.success) {
+        showToast('Tab synced to Canvas', 'success');
+        await loadTabs(); // Refresh lists
+      } else {
+        showToast(`Failed to sync tab: ${response.error}`, 'error');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to sync tab via context menu:', error);
+    showToast(`Failed to sync tab: ${error.message}`, 'error');
+  }
+
+  hideContextMenu();
+}
+
+async function handleContextMenuBrowse() {
+  if (!currentConnection.connected) return;
+
+  // Navigate to selection view to browse contexts/workspaces
+  navigateToView('selection');
+  hideContextMenu();
 }

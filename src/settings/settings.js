@@ -10,6 +10,7 @@ let explorerSettings, workspaceSelect;
 let contextSettings, contextSelect, bindContextBtn;
 let currentContext, boundContextId, boundContextUrl;
 let openTabsAddedToCanvas, closeTabsRemovedFromCanvas, sendNewTabsToCanvas, removeClosedTabsFromCanvas;
+let syncOnlyCurrentBrowser, syncOnlyTaggedTabs, syncTagFilter;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
 let toast;
 
@@ -77,6 +78,11 @@ function initializeElements() {
   closeTabsRemovedFromCanvas = document.getElementById('closeTabsRemovedFromCanvas');
   sendNewTabsToCanvas = document.getElementById('sendNewTabsToCanvas');
   removeClosedTabsFromCanvas = document.getElementById('removeClosedTabsFromCanvas');
+  
+  // Sync filtering options
+  syncOnlyCurrentBrowser = document.getElementById('syncOnlyCurrentBrowser');
+  syncOnlyTaggedTabs = document.getElementById('syncOnlyTaggedTabs');
+  syncTagFilter = document.getElementById('syncTagFilter');
 
   // Action buttons
   saveSettingsBtn = document.getElementById('saveSettingsBtn');
@@ -122,6 +128,14 @@ function setupEventListeners() {
   // Auto-generate browser identity if empty
   browserIdentity.addEventListener('blur', handleBrowserIdentityBlur);
 
+  // Sync filtering options
+  syncOnlyTaggedTabs.addEventListener('change', () => {
+    syncTagFilter.disabled = !syncOnlyTaggedTabs.checked;
+    if (!syncOnlyTaggedTabs.checked) {
+      syncTagFilter.value = '';
+    }
+  });
+
 
 }
 
@@ -158,7 +172,10 @@ async function loadSettings() {
         openTabsAddedToCanvas: savedSyncSettings.openTabsAddedToCanvas || false,
         closeTabsRemovedFromCanvas: savedSyncSettings.closeTabsRemovedFromCanvas || false,
         sendNewTabsToCanvas: savedSyncSettings.sendNewTabsToCanvas || false,
-        removeClosedTabsFromCanvas: savedSyncSettings.removeClosedTabsFromCanvas || false
+        removeClosedTabsFromCanvas: savedSyncSettings.removeClosedTabsFromCanvas || false,
+        syncOnlyCurrentBrowser: savedSyncSettings.syncOnlyCurrentBrowser || false,
+        syncOnlyTaggedTabs: savedSyncSettings.syncOnlyTaggedTabs || false,
+        syncTagFilter: savedSyncSettings.syncTagFilter || ''
       },
       browserIdentity: '',
       currentContext: (modeSelResponse.success ? modeSelResponse.context : null) || (response.context || null),
@@ -220,6 +237,12 @@ function populateForm() {
   closeTabsRemovedFromCanvas.checked = settings.syncSettings.closeTabsRemovedFromCanvas;
   sendNewTabsToCanvas.checked = settings.syncSettings.sendNewTabsToCanvas;
   removeClosedTabsFromCanvas.checked = settings.syncSettings.removeClosedTabsFromCanvas;
+  
+  // Sync filtering options
+  syncOnlyCurrentBrowser.checked = settings.syncSettings.syncOnlyCurrentBrowser;
+  syncOnlyTaggedTabs.checked = settings.syncSettings.syncOnlyTaggedTabs;
+  syncTagFilter.value = settings.syncSettings.syncTagFilter;
+  syncTagFilter.disabled = !settings.syncSettings.syncOnlyTaggedTabs;
 
   // Update connection status
   updateConnectionStatus(settings.connectionSettings.connected);
@@ -665,7 +688,10 @@ async function handleSaveSettings() {
         openTabsAddedToCanvas: openTabsAddedToCanvas.checked,
         closeTabsRemovedFromCanvas: closeTabsRemovedFromCanvas.checked,
         sendNewTabsToCanvas: sendNewTabsToCanvas.checked,
-        removeClosedTabsFromCanvas: removeClosedTabsFromCanvas.checked
+        removeClosedTabsFromCanvas: removeClosedTabsFromCanvas.checked,
+        syncOnlyCurrentBrowser: syncOnlyCurrentBrowser.checked,
+        syncOnlyTaggedTabs: syncOnlyTaggedTabs.checked,
+        syncTagFilter: syncTagFilter.value.trim()
       },
       browserIdentity: browserIdentity.value.trim()
     };
