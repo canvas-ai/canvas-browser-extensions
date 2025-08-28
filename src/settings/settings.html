@@ -156,6 +156,26 @@
           <small class="help-text">Automatically remove tabs from Canvas when closed in browser</small>
         </div>
 
+        <h3>Sync Filtering Options</h3>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="syncOnlyCurrentBrowser">
+            Sync only tabs for the current browser
+          </label>
+          <small class="help-text">Only sync tabs that match the current browser identity string</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="syncOnlyTaggedTabs">
+            Sync only tabs with tag:
+          </label>
+          <input type="text" id="syncTagFilter" placeholder="e.g., work, personal" 
+                 class="input-field" style="margin-top: 8px;" disabled>
+          <small class="help-text">Only sync tabs that have the specified tag in their feature array</small>
+        </div>
+
         <div class="form-actions">
           <button type="button" id="saveSettingsBtn" class="btn primary">Save Settings</button>
           <button type="button" id="saveAndCloseBtn" class="btn primary">Save Settings and Close</button>

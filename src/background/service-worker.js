@@ -24,6 +24,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
   }
 
+  // Setup context menus
+  await setupContextMenus();
+
   // Open settings page on first install
   if (details.reason === 'install') {
     await openSettingsPage();
@@ -33,6 +36,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.runtime.onStartup.addListener(async () => {
   console.log('Browser startup - initializing Canvas Extension');
   await initializeExtension();
+  await setupContextMenus();
 });
 
 // Initialize extension on service worker startup
@@ -322,10 +326,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       try {
         let syncResult;
         if (mode === 'context') {
-          syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity);
+          syncResult = await tabManager.syncTabToCanvas(tab, apiClient, currentContext.id, browserIdentity, syncSettings);
         } else {
           // Workspace mode: insert document into workspace with contextSpec
-          const document = tabManager.convertTabToDocument(tab, browserIdentity);
+          const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
           const wsId = currentWorkspace.name || currentWorkspace.id;
           const response = await apiClient.insertWorkspaceDocument(wsId, document, workspacePath || '/', document.featureArray);
           if (response.status === 'success') {
@@ -1073,6 +1077,9 @@ async function handleSetModeAndSelection(data, sendResponse) {
       }
     }
 
+    // Update context menus after mode/selection change
+    await setupContextMenus();
+
     sendResponse({ success: true });
   } catch (error) {
     console.error('Failed to set mode/selection:', error);
@@ -1393,6 +1400,9 @@ async function handleSaveSettings(data, sendResponse) {
       context: verifyContext
     });
 
+    // Update context menus after settings change
+    await setupContextMenus();
+
     sendResponse({
       success: true,
       message: 'All settings saved successfully',
@@ -1587,6 +1597,9 @@ async function handleSyncTab(data, sendResponse) {
     const connectionSettings = await browserStorage.getConnectionSettings();
     console.log('Sync Tab: connection settings check:', connectionSettings);
 
+    // Get sync settings
+    const syncSettings = await browserStorage.getSyncSettings();
+
     // Check if we have essential connection info (prioritize API token over connected flag)
     if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
       console.error('Sync Tab: Missing API token or server URL');
@@ -1614,12 +1627,12 @@ async function handleSyncTab(data, sendResponse) {
     if (mode === 'context') {
       const targetContextId = contextId || currentContext?.id;
       if (!targetContextId) throw new Error('No context selected');
-      result = await tabManager.syncTabToCanvas(tab, apiClient, targetContextId, browserIdentity);
+      result = await tabManager.syncTabToCanvas(tab, apiClient, targetContextId, browserIdentity, syncSettings);
     } else {
       // Workspace mode
       const wsId = currentWorkspace?.name || currentWorkspace?.id;
       if (!wsId) throw new Error('No workspace selected');
-      const document = tabManager.convertTabToDocument(tab, browserIdentity);
+      const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
       const resp = await apiClient.insertWorkspaceDocument(wsId, document, contextSpec || workspacePath || '/', document.featureArray);
       if (resp.status === 'success') {
         const docId = Array.isArray(resp.payload) ? resp.payload[0]?.id : resp.payload?.id;
@@ -1695,6 +1708,9 @@ async function handleSyncMultipleTabs(data, sendResponse) {
     const connectionSettings = await browserStorage.getConnectionSettings();
     console.log('🔧 Connection settings:', connectionSettings);
 
+    // Get sync settings
+    const syncSettings = await browserStorage.getSyncSettings();
+
     if (!connectionSettings.connected || !connectionSettings.apiToken) {
       console.error('❌ Not connected to Canvas server:', {
         connected: connectionSettings.connected,
@@ -1722,12 +1738,12 @@ async function handleSyncMultipleTabs(data, sendResponse) {
       console.log('🔧 Calling tabManager.syncMultipleTabs (context mode)...');
       const targetContextId = contextId || currentContext?.id;
       if (!targetContextId) throw new Error('No context selected');
-      result = await tabManager.syncMultipleTabs(tabs, apiClient, targetContextId, browserIdentity);
+      result = await tabManager.syncMultipleTabs(tabs, apiClient, targetContextId, browserIdentity, syncSettings);
     } else {
       console.log('🔧 Syncing multiple tabs to workspace (explorer mode)...');
       const wsId = currentWorkspace?.name || currentWorkspace?.id;
       if (!wsId) throw new Error('No workspace selected');
-      const docs = tabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity));
+      const docs = tabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity, syncSettings));
       const resp = await apiClient.insertWorkspaceDocuments(wsId, docs, contextSpec || workspacePath || '/', docs[0]?.featureArray || []);
       if (resp.status === 'success') {
         result = { success: true, total: tabs.length, successful: tabs.length, failed: 0 };
@@ -1898,6 +1914,91 @@ async function handleUpdateContextUrl(message, sendResponse) {
     });
   }
 }
+
+// Context Menu functionality
+async function setupContextMenus() {
+  try {
+    // Remove existing context menus first
+    await chrome.contextMenus.removeAll();
+
+    // Check if we're connected and have context
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+
+    if (!connectionSettings.connected) {
+      console.log('Not connected - skipping context menu setup');
+      return;
+    }
+
+    // Create main "Insert to Canvas" menu item
+    chrome.contextMenus.create({
+      id: 'insert-to-canvas',
+      title: 'Insert to Canvas',
+      contexts: ['tab'],
+      visible: true
+    });
+
+    if (mode === 'context' && currentContext?.id) {
+      // Context mode - direct insert
+      chrome.contextMenus.create({
+        id: 'insert-to-current-context',
+        parentId: 'insert-to-canvas',
+        title: `Insert to Context: ${currentContext.id}`,
+        contexts: ['tab']
+      });
+    } else if (mode === 'explorer' && currentWorkspace) {
+      // Explorer mode - show workspace tree
+      const workspacePath = await browserStorage.getWorkspacePath();
+      chrome.contextMenus.create({
+        id: 'insert-to-current-workspace',
+        parentId: 'insert-to-canvas',
+        title: `Insert to Workspace: ${currentWorkspace.name || currentWorkspace.id}${workspacePath || '/'}`,
+        contexts: ['tab']
+      });
+
+      // Add option to browse for path
+      chrome.contextMenus.create({
+        id: 'browse-workspace-path',
+        parentId: 'insert-to-canvas',
+        title: 'Browse workspace path...',
+        contexts: ['tab']
+      });
+    }
+
+    console.log('Context menus set up successfully');
+  } catch (error) {
+    console.error('Failed to setup context menus:', error);
+  }
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  try {
+    console.log('Context menu clicked:', info.menuItemId, 'for tab:', tab.id);
+
+    if (info.menuItemId === 'insert-to-current-context') {
+      // Sync tab to current context
+      const currentContext = await browserStorage.getCurrentContext();
+      const response = await handleSyncTab({ tab, contextId: currentContext.id });
+      if (response.success) {
+        console.log('Tab synced to context via context menu');
+      }
+    } else if (info.menuItemId === 'insert-to-current-workspace') {
+      // Sync tab to current workspace
+      const response = await handleSyncTab({ tab });
+      if (response.success) {
+        console.log('Tab synced to workspace via context menu');
+      }
+    } else if (info.menuItemId === 'browse-workspace-path') {
+      // Open popup to browse workspace path
+      console.log('Browse workspace path not yet implemented');
+    }
+  } catch (error) {
+    console.error('Context menu action failed:', error);
+  }
+});
 
 // Initialize extension on service worker startup
 initializeExtension();

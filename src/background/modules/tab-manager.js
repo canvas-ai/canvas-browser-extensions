@@ -9,7 +9,7 @@ export class TabManager {
   }
 
   // Convert browser tab to Canvas document format (based on PAYLOAD.md format)
-  convertTabToDocument(tab, browserIdentity) {
+  convertTabToDocument(tab, browserIdentity, syncSettings = {}) {
     const document = {
       schema: 'data/abstraction/tab',
       schemaVersion: '2.0',
@@ -30,7 +30,7 @@ export class TabManager {
         favIconUrl: tab.favIconUrl,
         timestamp: new Date().toISOString()
       },
-      featureArray: this.generateFeatureArray(browserIdentity),
+      featureArray: this.generateFeatureArray(browserIdentity, syncSettings),
       metadata: {
         contentType: 'application/json',
         contentEncoding: 'utf8',
@@ -61,7 +61,7 @@ export class TabManager {
   }
 
   // Generate feature array for tab document
-  generateFeatureArray(browserIdentity) {
+  generateFeatureArray(browserIdentity, syncSettings = {}) {
     const features = ['data/abstraction/tab'];
 
     // Add browser type
@@ -76,8 +76,18 @@ export class TabManager {
         features.push('client/app/safari');
       }
 
+      // Add browser identity string if "sync only current browser" is enabled
+      if (syncSettings.syncOnlyCurrentBrowser) {
+        features.push(`client/app/browser-identity-string`);
+      }
+
       // Add instance identifier
       features.push(`tag/${browserIdentity}`);
+    }
+
+    // Add custom tag if "sync only tagged tabs" is enabled and tag is specified
+    if (syncSettings.syncOnlyTaggedTabs && syncSettings.syncTagFilter) {
+      features.push(`custom/tag/${syncSettings.syncTagFilter}`);
     }
 
     return features;
@@ -433,7 +443,7 @@ export class TabManager {
   }
 
   // Sync a browser tab to Canvas
-  async syncTabToCanvas(tab, apiClient, contextId, browserIdentity) {
+  async syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings = {}) {
     try {
       console.log(`🔧 TabManager.syncTabToCanvas: Starting sync for tab: ${tab.title} (${tab.url})`);
 
@@ -445,7 +455,7 @@ export class TabManager {
       console.log(`🔧 TabManager.syncTabToCanvas: Tab is syncable, proceeding with sync`);
 
       // Convert tab to Canvas document format
-      const document = this.convertTabToDocument(tab, browserIdentity);
+      const document = this.convertTabToDocument(tab, browserIdentity, syncSettings);
       console.log(`🔧 TabManager.syncTabToCanvas: Converted to document:`, {
         schema: document.schema,
         url: document.data.url,
@@ -565,7 +575,7 @@ export class TabManager {
   }
 
   // Bulk sync multiple tabs
-  async syncMultipleTabs(tabs, apiClient, contextId, browserIdentity) {
+  async syncMultipleTabs(tabs, apiClient, contextId, browserIdentity, syncSettings = {}) {
     console.log(`🔧 TabManager.syncMultipleTabs: Starting batch sync of ${tabs.length} tabs to context ${contextId}`);
     console.log('🔧 TabManager.syncMultipleTabs: API client status:', {
       hasApiClient: !!apiClient,
@@ -597,7 +607,7 @@ export class TabManager {
       console.log(`🔧 TabManager.syncMultipleTabs: Converting ${syncableTabs.length} syncable tabs to documents`);
 
       // Convert all tabs to documents
-      const documents = syncableTabs.map(tab => this.convertTabToDocument(tab, browserIdentity));
+      const documents = syncableTabs.map(tab => this.convertTabToDocument(tab, browserIdentity, syncSettings));
 
       // Use batch API for better performance
       console.log(`🔧 TabManager.syncMultipleTabs: Making batch API call with ${documents.length} documents`);

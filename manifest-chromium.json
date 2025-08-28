@@ -6,7 +6,8 @@
 
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
 
   "host_permissions": [

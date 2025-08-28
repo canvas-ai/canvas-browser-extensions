@@ -830,7 +830,8 @@ export class SyncEngine {
     const browserTabs = await tabManager.getSyncableTabs();
     if (browserTabs.length > 0) {
       const browserIdentity = await browserStorage.getBrowserIdentity();
-      await tabManager.syncMultipleTabs(browserTabs, apiClient, contextId, browserIdentity);
+      const syncSettings = await browserStorage.getSyncSettings();
+      await tabManager.syncMultipleTabs(browserTabs, apiClient, contextId, browserIdentity, syncSettings);
     }
   }
 
@@ -839,9 +840,10 @@ export class SyncEngine {
     const browserTabs = await tabManager.getSyncableTabs();
     if (browserTabs.length > 0) {
       const browserIdentity = await browserStorage.getBrowserIdentity();
+      const syncSettings = await browserStorage.getSyncSettings();
       const wsId = workspace?.name || workspace?.id;
       if (wsId) {
-        const docs = browserTabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity));
+        const docs = browserTabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity, syncSettings));
         await apiClient.insertWorkspaceDocuments(wsId, docs, workspacePath || '/', docs[0]?.featureArray || []);
       }
     }
