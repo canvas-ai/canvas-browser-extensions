@@ -771,12 +771,12 @@ function renderBrowserTabs() {
       'data-tab-id': tab.id
     });
     if (isSynced) checkbox.disabled = true;
-    
+
     // Preserve selection state
     if (selectedBrowserTabs.has(tab.id)) {
       checkbox.checked = true;
     }
-    
+
     const checkmark = createSecureElement('span', { className: 'checkmark' });
     checkboxLabel.appendChild(checkbox);
     checkboxLabel.appendChild(checkmark);
@@ -898,12 +898,12 @@ function renderCanvasTabs() {
       type: 'checkbox',
       'data-document-id': tab.id
     });
-    
+
     // Preserve selection state
     if (selectedCanvasTabs.has(tab.id)) {
       checkbox.checked = true;
     }
-    
+
     const checkmark = createSecureElement('span', { className: 'checkmark' });
     checkboxLabel.appendChild(checkbox);
     checkboxLabel.appendChild(checkmark);
@@ -2766,7 +2766,7 @@ function handleTabContextMenu(event) {
   // Store the target tab
   const tabId = tabItem.dataset.tabId;
   const documentId = tabItem.dataset.documentId;
-  
+
   if (tabId) {
     // Browser tab
     const tab = browserTabs.find(t => t.id == tabId);
@@ -2784,24 +2784,132 @@ function handleTabContextMenu(event) {
   }
 }
 
-function showContextMenu(x, y, tabType) {
-  // Update context menu items based on connection and mode
-  if (currentConnection.connected) {
-    if (currentConnection.mode === 'context' && currentConnection.context) {
-      contextMenuSync.textContent = `Insert to Context: ${currentConnection.context.id}`;
-      contextMenuSync.disabled = false;
+async function showContextMenu(x, y, tabType) {
+  // Rebuild the popup context menu dynamically each time
+  contextMenu.innerHTML = '';
+
+  const addItem = (label, onClick, options = {}) => {
+    const btn = document.createElement('button');
+    btn.className = 'context-menu-item' + (options.submenu ? ' context-menu-submenu' : '');
+    btn.textContent = label;
+    if (options.disabled) btn.disabled = true;
+    if (onClick) btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideContextMenu();
+      onClick();
+    });
+    contextMenu.appendChild(btn);
+    return btn;
+  };
+
+  const addSeparator = () => {
+    const sep = document.createElement('div');
+    sep.className = 'context-menu-separator';
+    contextMenu.appendChild(sep);
+  };
+
+  try {
+    if (!currentConnection.connected) {
+      addItem('Not connected', null, { disabled: true });
+    } else if (currentConnection.mode === 'context' && currentConnection.context) {
+      addItem(`Insert to Context: ${currentConnection.context.id}`, async () => {
+        await handleContextMenuSync();
+      });
     } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-      contextMenuSync.textContent = `Insert to Workspace: ${currentConnection.workspace.name || currentConnection.workspace.id}`;
-      contextMenuSync.disabled = false;
-    } else {
-      contextMenuSync.textContent = 'No target selected';
-      contextMenuSync.disabled = true;
+      // Insert to current workspace path
+      addItem(`Insert to Workspace: ${currentConnection.workspace.name || currentConnection.workspace.id}${currentWorkspacePath || '/'}`, async () => {
+        if (!contextMenuTargetTab) return;
+        await sendMessageToBackground('SYNC_TAB', { tab: contextMenuTargetTab.data, contextSpec: currentWorkspacePath || '/' });
+        await loadTabs();
+      });
+
+      // Build workspace tree submenu
+      const rootBtn = addItem('Insert to Workspace Path ▶', null, { submenu: true });
+      const submenuRoot = document.createElement('div');
+      submenuRoot.className = 'context-menu';
+      submenuRoot.style.position = 'absolute';
+      submenuRoot.style.left = '100%';
+      submenuRoot.style.top = '0';
+      submenuRoot.style.display = 'none';
+      rootBtn.appendChild(submenuRoot);
+
+      rootBtn.addEventListener('mouseenter', () => { submenuRoot.style.display = 'block'; });
+      rootBtn.addEventListener('mouseleave', () => { submenuRoot.style.display = 'none'; });
+
+      const wsIdOrName = currentConnection.workspace.name || currentConnection.workspace.id;
+      try {
+        const resp = await sendMessageToBackground('GET_WORKSPACE_TREE', { workspaceIdOrName: wsIdOrName });
+        const tree = resp?.tree || resp?.payload || resp?.data || resp;
+        if (tree && Array.isArray(tree.children)) {
+          const buildSubmenu = (node, parentEl, basePath) => {
+            const segment = node.name === '/' ? '' : node.name;
+            const nextPath = basePath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${basePath}/${segment}`.replace(/\/+/g, '/');
+            const safePath = nextPath === '' ? '/' : nextPath;
+
+            const folderItem = document.createElement('div');
+            folderItem.className = 'context-menu-item context-menu-submenu';
+            folderItem.textContent = node.label || node.name || safePath;
+
+            const childMenu = document.createElement('div');
+            childMenu.className = 'context-menu';
+            childMenu.style.position = 'absolute';
+            childMenu.style.left = '100%';
+            childMenu.style.top = '0';
+            childMenu.style.display = 'none';
+
+            folderItem.addEventListener('mouseenter', () => { childMenu.style.display = 'block'; });
+            folderItem.addEventListener('mouseleave', () => { childMenu.style.display = 'none'; });
+
+            // Insert here item
+            const insertHere = document.createElement('button');
+            insertHere.className = 'context-menu-item';
+            insertHere.textContent = 'Insert here';
+            insertHere.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              hideContextMenu();
+              if (!contextMenuTargetTab) return;
+              await sendMessageToBackground('SYNC_TAB', { tab: contextMenuTargetTab.data, contextSpec: safePath });
+              await loadTabs();
+            });
+            childMenu.appendChild(insertHere);
+
+            // Recurse
+            if (Array.isArray(node.children)) {
+              for (const child of node.children) {
+                buildSubmenu(child, childMenu, safePath);
+              }
+            }
+
+            parentEl.appendChild(folderItem);
+            folderItem.appendChild(childMenu);
+          };
+
+          // Build from root children at '/'
+          for (const child of tree.children) {
+            buildSubmenu(child, submenuRoot, '/');
+          }
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'context-menu-item';
+          empty.textContent = 'No workspace tree';
+          submenuRoot.appendChild(empty);
+        }
+      } catch (e) {
+        const errItem = document.createElement('div');
+        errItem.className = 'context-menu-item';
+        errItem.textContent = 'Failed to load tree';
+        submenuRoot.appendChild(errItem);
+      }
+
+      addSeparator();
     }
-    contextMenuBrowse.disabled = false;
-  } else {
-    contextMenuSync.textContent = 'Not connected';
-    contextMenuSync.disabled = true;
-    contextMenuBrowse.disabled = true;
+
+    // Browse contexts/workspaces
+    addItem(currentConnection.mode === 'context' ? 'Browse Contexts...' : 'Browse Workspaces...', () => {
+      navigateToView('selection');
+    }, { disabled: !currentConnection.connected });
+  } catch (e) {
+    addItem(`Error: ${e.message}`, null, { disabled: true });
   }
 
   // Position and show context menu
@@ -2813,13 +2921,8 @@ function showContextMenu(x, y, tabType) {
   const rect = contextMenu.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-
-  if (rect.right > viewportWidth) {
-    contextMenu.style.left = `${x - rect.width}px`;
-  }
-  if (rect.bottom > viewportHeight) {
-    contextMenu.style.top = `${y - rect.height}px`;
-  }
+  if (rect.right > viewportWidth) contextMenu.style.left = `${x - rect.width}px`;
+  if (rect.bottom > viewportHeight) contextMenu.style.top = `${y - rect.height}px`;
 }
 
 function hideContextMenu() {
@@ -2833,8 +2936,8 @@ async function handleContextMenuSync() {
   try {
     if (contextMenuTargetTab.type === 'browser') {
       // Sync browser tab
-      const response = await sendMessageToBackground('SYNC_TAB', { 
-        tab: contextMenuTargetTab.data 
+      const response = await sendMessageToBackground('SYNC_TAB', {
+        tab: contextMenuTargetTab.data
       });
       if (response.success) {
         showToast('Tab synced to Canvas', 'success');
