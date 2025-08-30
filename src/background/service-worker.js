@@ -11,8 +11,13 @@ import { contextIntegration } from './modules/context-integration.js';
 console.log('🚀 Canvas Extension Service Worker loaded and starting...');
 console.log('🚀 Service Worker: Registering tab event listeners...');
 
+// Browser compatibility
+const runtimeAPI = (typeof chrome !== 'undefined') ? chrome.runtime : browser.runtime;
+const tabsAPI = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
+const windowsAPI = (typeof chrome !== 'undefined') ? chrome.windows : browser.windows;
+
 // Service worker installation and activation
-chrome.runtime.onInstalled.addListener(async (details) => {
+runtimeAPI.onInstalled.addListener(async (details) => {
   console.log('Extension installed/updated:', details.reason);
 
   // Migrate legacy storage keys on update to prevent perceived settings loss
@@ -33,7 +38,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
-chrome.runtime.onStartup.addListener(async () => {
+runtimeAPI.onStartup.addListener(async () => {
   console.log('Browser startup - initializing Canvas Extension');
   await initializeExtension();
   await setupContextMenus();
@@ -216,9 +221,9 @@ function setupWebSocketEventHandlers() {
 
 // Broadcast message to popup
 function broadcastToPopup(type, data) {
-  // Chrome extensions can send messages to popup if it's open
+  // Browser extensions can send messages to popup if it's open
   try {
-    chrome.runtime.sendMessage({
+    runtimeAPI.sendMessage({
       type: 'BACKGROUND_EVENT',
       eventType: type,
       data: data
@@ -236,12 +241,12 @@ function refreshTabLists() {
 }
 
 // Tab event listeners for synchronization
-chrome.tabs.onCreated.addListener(async (tab) => {
+tabsAPI.onCreated.addListener(async (tab) => {
   console.log('🆕 TAB EVENT: Tab created detected!', tab.id, tab.url);
   // Note: Auto-sync logic moved to onUpdated listener for reliable page load detection
 });
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+tabsAPI.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   console.log('🔄 TAB EVENT: Tab updated detected!', tabId, changeInfo);
 
   // Handle auto-sync when page is fully loaded OR when URL changes
@@ -357,7 +362,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+tabsAPI.onRemoved.addListener(async (tabId, removeInfo) => {
   console.log('❌ TAB EVENT: Tab removed detected!', tabId, removeInfo);
   console.log('Tab removed:', tabId);
 
@@ -365,17 +370,17 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
   tabManager.unmarkTabAsSynced(tabId);
 });
 
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
+tabsAPI.onActivated.addListener(async (activeInfo) => {
   console.log('Tab activated:', activeInfo.tabId);
   // Handle tab activation
 });
 
 // Window event listeners
-chrome.windows.onCreated.addListener(async (window) => {
+windowsAPI.onCreated.addListener(async (window) => {
   console.log('Window created:', window.id);
 });
 
-chrome.windows.onRemoved.addListener(async (windowId) => {
+windowsAPI.onRemoved.addListener(async (windowId) => {
   console.log('Window removed:', windowId);
 });
 
@@ -420,7 +425,7 @@ async function debugAutoSyncStatus() {
 }
 
 // Message handling for popup/settings communication
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message.type, message);
 
   // Add debug command
@@ -610,12 +615,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Helper Functions
 
 async function openSettingsPage() {
-  // Browser compatibility shim
-  const runtime = (typeof chrome !== 'undefined') ? chrome.runtime : browser.runtime;
-  const tabs = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
-
-  const url = runtime.getURL('settings/settings.html');
-  await tabs.create({ url });
+  const url = runtimeAPI.getURL('settings/settings.html');
+  await tabsAPI.create({ url });
 }
 
 // Migrate legacy storage keys from older versions to the current key scheme
@@ -1902,7 +1903,7 @@ async function handleUpdateContextUrl(message, sendResponse) {
     }
 
     // Notify all listeners about the URL change
-    await chrome.runtime.sendMessage({
+    await runtimeAPI.sendMessage({
       type: 'BACKGROUND_EVENT',
       eventType: 'context.url.set',
       data: { contextId, url }
@@ -1924,119 +1925,123 @@ async function handleUpdateContextUrl(message, sendResponse) {
 // Context Menu functionality
 async function setupContextMenus() {
   try {
+    // Browser compatibility for context menus
+    const contextMenusAPI = (typeof chrome !== 'undefined' && chrome.contextMenus) ? chrome.contextMenus : browser.contextMenus;
+
     // Remove existing context menus first
-    await chrome.contextMenus.removeAll();
+    await contextMenusAPI.removeAll();
 
-    // Check if we're connected and have context
+    // Check if we're connected
     const connectionSettings = await browserStorage.getConnectionSettings();
-    const mode = await browserStorage.getSyncMode();
-    const currentContext = await browserStorage.getCurrentContext();
-    const currentWorkspace = await browserStorage.getCurrentWorkspace();
-
     if (!connectionSettings.connected) {
       console.log('Not connected - skipping context menu setup');
       return;
     }
 
-    // Create main "Insert to Canvas" menu item
-    chrome.contextMenus.create({
-      id: 'insert-to-canvas',
-      title: 'Insert to Canvas',
+    // Always create simple "Send page to Canvas" with workspace tree
+    // Note: documentUrlPatterns excludes extension pages
+    contextMenusAPI.create({
+      id: 'send-page-to-canvas',
+      title: 'Send page to Canvas',
       contexts: ['page'],
+      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
       visible: true
     });
 
-    if (mode === 'context' && currentContext?.id) {
-      // Context mode - direct insert
-      chrome.contextMenus.create({
-        id: 'insert-to-current-context',
-        parentId: 'insert-to-canvas',
-        title: `Insert to Context: ${currentContext.id}`,
-        contexts: ['page']
-      });
-    } else if (mode === 'explorer' && currentWorkspace) {
-      // Explorer mode - show workspace tree
-      const workspacePath = await browserStorage.getWorkspacePath();
-      chrome.contextMenus.create({
-        id: 'insert-to-current-workspace',
-        parentId: 'insert-to-canvas',
-        title: `Insert to Workspace: ${currentWorkspace.name || currentWorkspace.id}${workspacePath || '/'}`,
-        contexts: ['page']
-      });
+    // Get all workspaces and build menu tree
+    try {
+      // Ensure API client is initialized
+      if (!apiClient.apiToken) {
+        apiClient.initialize(
+          connectionSettings.serverUrl,
+          connectionSettings.apiBasePath,
+          connectionSettings.apiToken
+        );
+      }
 
-      // Add option to browse for path
-      chrome.contextMenus.create({
-        id: 'browse-workspace-path',
-        parentId: 'insert-to-canvas',
-        title: 'Browse workspace path...',
-        contexts: ['page']
-      });
+      const workspacesResp = await apiClient.getWorkspaces();
+      if (workspacesResp.status === 'success' && workspacesResp.payload) {
+        for (const workspace of workspacesResp.payload) {
+          const wsId = `ws:${workspace.name || workspace.id}`;
 
-      // Build workspace tree submenu for direct path insertion
-      try {
-        const wsIdOrName = currentWorkspace.name || currentWorkspace.id;
-
-        // Ensure API client is initialized
-        if (!apiClient.apiToken) {
-          apiClient.initialize(
-            connectionSettings.serverUrl,
-            connectionSettings.apiBasePath,
-            connectionSettings.apiToken
-          );
-        }
-
-        const treeResp = await apiClient.getWorkspaceTree(wsIdOrName);
-        const tree = treeResp?.payload || treeResp?.data || treeResp;
-
-        if (tree && tree.children && Array.isArray(tree.children)) {
-          const rootParentId = 'insert-workspace-tree';
-          chrome.contextMenus.create({
-            id: rootParentId,
-            parentId: 'insert-to-canvas',
-            title: 'Insert to Workspace Path ▶',
-            contexts: ['page']
+          // Create workspace submenu
+          contextMenusAPI.create({
+            id: wsId,
+            parentId: 'send-page-to-canvas',
+            title: workspace.name || workspace.id,
+            contexts: ['page'],
+            documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
           });
 
-          const buildMenuForNode = (node, parentId, basePath) => {
-            const segment = node.name === '/' ? '' : node.name;
-            const nextPath = basePath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${basePath}/${segment}`.replace(/\/+/g, '/');
-            const safePath = nextPath === '' ? '/' : nextPath;
+          // Try to get workspace tree for this workspace
+          try {
+            const treeResp = await apiClient.getWorkspaceTree(workspace.name || workspace.id);
+            const tree = treeResp?.payload || treeResp?.data || treeResp;
 
-            const folderId = `ws-folder:${safePath}`;
-            const insertId = `ws-path:${safePath}`;
+            if (tree && tree.children && Array.isArray(tree.children)) {
+              // Add root option
+              contextMenusAPI.create({
+                id: `${wsId}:/`,
+                parentId: wsId,
+                title: '📁 / (root)',
+                contexts: ['page'],
+                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+              });
 
-            // Create folder menu node
-            chrome.contextMenus.create({
-              id: folderId,
-              parentId,
-              title: node.label || node.name || safePath,
-              contexts: ['page']
-            });
+              // Build tree structure
+              const buildMenuForNode = (node, parentMenuId, currentPath) => {
+                const segment = node.name === '/' ? '' : node.name;
+                const newPath = currentPath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${currentPath}/${segment}`.replace(/\/+/g, '/');
+                const safePath = newPath === '' ? '/' : newPath;
 
-            // Add an actionable item to insert here
-            chrome.contextMenus.create({
-              id: insertId,
-              parentId: folderId,
-              title: 'Insert here',
-              contexts: ['page']
-            });
+                const nodeMenuId = `${wsId}:${safePath}`;
 
-            // Recurse children
-            if (Array.isArray(node.children) && node.children.length > 0) {
-              for (const child of node.children) {
-                buildMenuForNode(child, folderId, safePath);
+                // Create menu item for this path
+                contextMenusAPI.create({
+                  id: nodeMenuId,
+                  parentId: parentMenuId,
+                  title: `📁 ${node.label || node.name}`,
+                  contexts: ['page'],
+                  documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                });
+
+                // Recurse for children
+                if (Array.isArray(node.children) && node.children.length > 0) {
+                  for (const child of node.children) {
+                    buildMenuForNode(child, nodeMenuId, safePath);
+                  }
+                }
+              };
+
+              // Build tree starting from root children
+              for (const child of tree.children) {
+                buildMenuForNode(child, wsId, '/');
               }
+            } else {
+                          // No tree structure, just add root option
+            contextMenusAPI.create({
+              id: `${wsId}:/`,
+              parentId: wsId,
+              title: '📁 / (root)',
+              contexts: ['page'],
+              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+            });
             }
-          };
-
-          // Seed with root children; treat root path as '/'
-          for (const child of tree.children) {
-            buildMenuForNode(child, rootParentId, '/');
+          } catch (treeError) {
+            console.warn(`Failed to load tree for workspace ${workspace.name || workspace.id}:`, treeError);
+            // Add root option as fallback
+            contextMenusAPI.create({
+              id: `${wsId}:/`,
+              parentId: wsId,
+              title: '📁 / (root)',
+              contexts: ['page'],
+              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+            });
           }
         }
-      } catch (menuError) {
-        console.warn('Failed to build workspace tree context menu (non-fatal):', menuError);
       }
+    } catch (workspaceError) {
+      console.warn('Failed to load workspaces for context menu:', workspaceError);
     }
 
     console.log('Context menus set up successfully');
@@ -2046,37 +2051,51 @@ async function setupContextMenus() {
 }
 
 // Handle context menu clicks
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+// Browser compatibility for context menu events
+const contextMenusAPI = (typeof chrome !== 'undefined' && chrome.contextMenus) ? chrome.contextMenus : browser.contextMenus;
+contextMenusAPI.onClicked.addListener(async (info, tab) => {
   try {
-    console.log('Context menu clicked:', info.menuItemId, 'for tab:', tab.id);
+    console.log('Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url);
 
-    if (info.menuItemId === 'insert-to-current-context') {
-      // Sync tab to current context
-      const currentContext = await browserStorage.getCurrentContext();
-      const response = await handleSyncTab({ tab, contextId: currentContext.id });
-      if (response.success) {
-        console.log('Tab synced to context via context menu');
-      }
-    } else if (info.menuItemId === 'insert-to-current-workspace') {
-      // Sync tab to current workspace
-      const response = await handleSyncTab({ tab });
-      if (response.success) {
-        console.log('Tab synced to workspace via context menu');
-      }
-    } else if (info.menuItemId === 'browse-workspace-path') {
-      // Open popup to browse workspace path
-      console.log('Browse workspace path not yet implemented');
-    } else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws-path:')) {
-      const contextSpec = info.menuItemId.substring('ws-path:'.length) || '/';
-      try {
-        const result = await handleSyncTab({ tab, contextSpec });
-        if (result?.success) {
-          console.log('Tab synced to workspace path via context menu:', contextSpec);
-        } else {
-          console.error('Failed to sync tab to workspace path:', contextSpec, result?.error);
+    // Block context menu actions on extension pages (popup, settings, etc.)
+    if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('browser-extension://'))) {
+      console.log('Context menu blocked on extension page:', tab.url);
+      return;
+    }
+
+    // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder")
+    if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
+      const parts = info.menuItemId.split(':');
+      if (parts.length >= 3) {
+        const workspaceName = parts[1];
+        const contextSpec = parts.slice(2).join(':'); // Rejoin in case path contains colons
+
+        try {
+          // Get sync settings and browser identity
+          const syncSettings = await browserStorage.getSyncSettings();
+          const browserIdentity = await browserStorage.getBrowserIdentity();
+
+          // Convert tab to document format
+          const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
+
+          // Sync tab to specific workspace and path
+          const response = await apiClient.insertWorkspaceDocument(
+            workspaceName,
+            document,
+            contextSpec || '/',
+            document.featureArray
+          );
+
+          if (response.status === 'success') {
+            const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
+            tabManager.markTabAsSynced(tab.id, docId);
+            console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
+          } else {
+            console.error('Failed to sync tab via context menu:', response.message);
+          }
+        } catch (e) {
+          console.error('Exception syncing tab via context menu:', e);
         }
-      } catch (e) {
-        console.error('Exception syncing tab to workspace path:', contextSpec, e);
       }
     }
   } catch (error) {

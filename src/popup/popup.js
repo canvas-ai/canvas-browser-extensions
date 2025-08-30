@@ -13,9 +13,7 @@ let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 let toast;
 
-// Context menu elements
-let contextMenu, contextMenuSync, contextMenuBrowse;
-let contextMenuTargetTab = null;
+// Context menu elements - REMOVED: Popup context menus don't work properly due to popup boundaries
 
 // Tab elements
 let browserToCanvasTab, canvasToBrowserTab;
@@ -243,10 +241,7 @@ function initializeElements() {
   contextsList = document.getElementById('contextsList');
   workspacesList = document.getElementById('workspacesList');
 
-  // Context menu elements
-  contextMenu = document.getElementById('contextMenu');
-  contextMenuSync = document.getElementById('contextMenuSync');
-  contextMenuBrowse = document.getElementById('contextMenuBrowse');
+  // Context menu elements - REMOVED
 
   toast = document.getElementById('toast');
 }
@@ -318,8 +313,7 @@ function setupEventListeners() {
   browserToCanvasList.addEventListener('error', handleImageError, true);
   canvasToBrowserList.addEventListener('error', handleImageError, true);
 
-  // Context menu event listeners
-  setupContextMenuListeners();
+  // Context menu event listeners - REMOVED
 }
 
 // Tab switching functionality
@@ -2740,224 +2734,7 @@ function showToast(message, type = 'info') {
   }, 5000);
 }
 
-// Context Menu functionality
-function setupContextMenuListeners() {
-  // Right-click on tab items
-  browserToCanvasList.addEventListener('contextmenu', handleTabContextMenu);
-  canvasToBrowserList.addEventListener('contextmenu', handleTabContextMenu);
-
-  // Context menu item clicks
-  contextMenuSync.addEventListener('click', handleContextMenuSync);
-  contextMenuBrowse.addEventListener('click', handleContextMenuBrowse);
-
-  // Close context menu on outside click
-  document.addEventListener('click', hideContextMenu);
-  document.addEventListener('contextmenu', hideContextMenu);
-}
-
-function handleTabContextMenu(event) {
-  event.preventDefault();
-  event.stopPropagation();
-
-  // Find the tab item
-  const tabItem = event.target.closest('.tab-item');
-  if (!tabItem) return;
-
-  // Store the target tab
-  const tabId = tabItem.dataset.tabId;
-  const documentId = tabItem.dataset.documentId;
-
-  if (tabId) {
-    // Browser tab
-    const tab = browserTabs.find(t => t.id == tabId);
-    if (tab) {
-      contextMenuTargetTab = { type: 'browser', data: tab };
-      showContextMenu(event.clientX, event.clientY, 'browser');
-    }
-  } else if (documentId) {
-    // Canvas tab
-    const tab = canvasTabs.find(t => t.id == documentId);
-    if (tab) {
-      contextMenuTargetTab = { type: 'canvas', data: tab };
-      showContextMenu(event.clientX, event.clientY, 'canvas');
-    }
-  }
-}
-
-async function showContextMenu(x, y, tabType) {
-  // Rebuild the popup context menu dynamically each time
-  contextMenu.innerHTML = '';
-
-  const addItem = (label, onClick, options = {}) => {
-    const btn = document.createElement('button');
-    btn.className = 'context-menu-item' + (options.submenu ? ' context-menu-submenu' : '');
-    btn.textContent = label;
-    if (options.disabled) btn.disabled = true;
-    if (onClick) btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hideContextMenu();
-      onClick();
-    });
-    contextMenu.appendChild(btn);
-    return btn;
-  };
-
-  const addSeparator = () => {
-    const sep = document.createElement('div');
-    sep.className = 'context-menu-separator';
-    contextMenu.appendChild(sep);
-  };
-
-  try {
-    if (!currentConnection.connected) {
-      addItem('Not connected', null, { disabled: true });
-    } else if (currentConnection.mode === 'context' && currentConnection.context) {
-      addItem(`Insert to Context: ${currentConnection.context.id}`, async () => {
-        await handleContextMenuSync();
-      });
-    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-      // Insert to current workspace path
-      addItem(`Insert to Workspace: ${currentConnection.workspace.name || currentConnection.workspace.id}${currentWorkspacePath || '/'}`, async () => {
-        if (!contextMenuTargetTab) return;
-        await sendMessageToBackground('SYNC_TAB', { tab: contextMenuTargetTab.data, contextSpec: currentWorkspacePath || '/' });
-        await loadTabs();
-      });
-
-      // Build workspace tree submenu
-      const rootBtn = addItem('Insert to Workspace Path ▶', null, { submenu: true });
-      const submenuRoot = document.createElement('div');
-      submenuRoot.className = 'context-menu';
-      submenuRoot.style.position = 'absolute';
-      submenuRoot.style.left = '100%';
-      submenuRoot.style.top = '0';
-      submenuRoot.style.display = 'none';
-      rootBtn.appendChild(submenuRoot);
-
-      rootBtn.addEventListener('mouseenter', () => { submenuRoot.style.display = 'block'; });
-      rootBtn.addEventListener('mouseleave', () => { submenuRoot.style.display = 'none'; });
-
-      const wsIdOrName = currentConnection.workspace.name || currentConnection.workspace.id;
-      try {
-        const resp = await sendMessageToBackground('GET_WORKSPACE_TREE', { workspaceIdOrName: wsIdOrName });
-        const tree = resp?.tree || resp?.payload || resp?.data || resp;
-        if (tree && Array.isArray(tree.children)) {
-          const buildSubmenu = (node, parentEl, basePath) => {
-            const segment = node.name === '/' ? '' : node.name;
-            const nextPath = basePath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${basePath}/${segment}`.replace(/\/+/g, '/');
-            const safePath = nextPath === '' ? '/' : nextPath;
-
-            const folderItem = document.createElement('div');
-            folderItem.className = 'context-menu-item context-menu-submenu';
-            folderItem.textContent = node.label || node.name || safePath;
-
-            const childMenu = document.createElement('div');
-            childMenu.className = 'context-menu';
-            childMenu.style.position = 'absolute';
-            childMenu.style.left = '100%';
-            childMenu.style.top = '0';
-            childMenu.style.display = 'none';
-
-            folderItem.addEventListener('mouseenter', () => { childMenu.style.display = 'block'; });
-            folderItem.addEventListener('mouseleave', () => { childMenu.style.display = 'none'; });
-
-            // Insert here item
-            const insertHere = document.createElement('button');
-            insertHere.className = 'context-menu-item';
-            insertHere.textContent = 'Insert here';
-            insertHere.addEventListener('click', async (e) => {
-              e.stopPropagation();
-              hideContextMenu();
-              if (!contextMenuTargetTab) return;
-              await sendMessageToBackground('SYNC_TAB', { tab: contextMenuTargetTab.data, contextSpec: safePath });
-              await loadTabs();
-            });
-            childMenu.appendChild(insertHere);
-
-            // Recurse
-            if (Array.isArray(node.children)) {
-              for (const child of node.children) {
-                buildSubmenu(child, childMenu, safePath);
-              }
-            }
-
-            parentEl.appendChild(folderItem);
-            folderItem.appendChild(childMenu);
-          };
-
-          // Build from root children at '/'
-          for (const child of tree.children) {
-            buildSubmenu(child, submenuRoot, '/');
-          }
-        } else {
-          const empty = document.createElement('div');
-          empty.className = 'context-menu-item';
-          empty.textContent = 'No workspace tree';
-          submenuRoot.appendChild(empty);
-        }
-      } catch (e) {
-        const errItem = document.createElement('div');
-        errItem.className = 'context-menu-item';
-        errItem.textContent = 'Failed to load tree';
-        submenuRoot.appendChild(errItem);
-      }
-
-      addSeparator();
-    }
-
-    // Browse contexts/workspaces
-    addItem(currentConnection.mode === 'context' ? 'Browse Contexts...' : 'Browse Workspaces...', () => {
-      navigateToView('selection');
-    }, { disabled: !currentConnection.connected });
-  } catch (e) {
-    addItem(`Error: ${e.message}`, null, { disabled: true });
-  }
-
-  // Position and show context menu
-  contextMenu.style.left = `${x}px`;
-  contextMenu.style.top = `${y}px`;
-  contextMenu.style.display = 'block';
-
-  // Ensure menu stays within viewport
-  const rect = contextMenu.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  if (rect.right > viewportWidth) contextMenu.style.left = `${x - rect.width}px`;
-  if (rect.bottom > viewportHeight) contextMenu.style.top = `${y - rect.height}px`;
-}
-
-function hideContextMenu() {
-  contextMenu.style.display = 'none';
-  contextMenuTargetTab = null;
-}
-
-async function handleContextMenuSync() {
-  if (!contextMenuTargetTab || !currentConnection.connected) return;
-
-  try {
-    if (contextMenuTargetTab.type === 'browser') {
-      // Sync browser tab
-      const response = await sendMessageToBackground('SYNC_TAB', {
-        tab: contextMenuTargetTab.data
-      });
-      if (response.success) {
-        showToast('Tab synced to Canvas', 'success');
-        await loadTabs(); // Refresh lists
-      } else {
-        showToast(`Failed to sync tab: ${response.error}`, 'error');
-      }
-    }
-  } catch (error) {
-    console.error('Failed to sync tab via context menu:', error);
-    showToast(`Failed to sync tab: ${error.message}`, 'error');
-  }
-
-  hideContextMenu();
-}
-
-async function handleContextMenuBrowse() {
-  if (!currentConnection.connected) return;
-
-  // Navigate to selection view to browse contexts/workspaces
-  navigateToView('selection');
-  hideContextMenu();
-}
+// REMOVED: Popup context menu functionality
+// Context menus in extension popups are constrained by popup boundaries and can't float properly.
+// This causes issues with submenu expansion, especially in Firefox.
+// Alternative UI approaches will be implemented for popup-based workspace selection.

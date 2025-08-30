@@ -6,6 +6,10 @@ export class TabManager {
     this.trackedTabs = new Map(); // tabId -> tab data
     this.syncedTabs = new Set(); // tabIds that are synced to Canvas
     this.pendingCanvasTabs = new Set(); // URLs of tabs being opened from Canvas (to prevent auto-sync race conditions)
+
+    // Browser compatibility
+    this.tabsAPI = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
+    this.windowsAPI = (typeof chrome !== 'undefined') ? chrome.windows : browser.windows;
   }
 
   // Convert browser tab to Canvas document format (based on PAYLOAD.md format)
@@ -193,7 +197,7 @@ export class TabManager {
   // Get all browser tabs
   async getAllTabs() {
     try {
-      const tabs = await chrome.tabs.query({});
+      const tabs = await this.tabsAPI.query({});
       return tabs;
     } catch (error) {
       console.error('Failed to get all tabs:', error);
@@ -264,7 +268,7 @@ export class TabManager {
   // Get tab by ID
   async getTab(tabId) {
     try {
-      const tab = await chrome.tabs.get(tabId);
+      const tab = await this.tabsAPI.get(tabId);
       return tab;
     } catch (error) {
       console.error('Failed to get tab:', error);
@@ -275,7 +279,7 @@ export class TabManager {
   // Open URL in new tab
   async openTab(url, options = {}) {
     try {
-      const tab = await chrome.tabs.create({
+      const tab = await this.tabsAPI.create({
         url,
         active: options.active !== false, // Default to active
         ...options
@@ -290,7 +294,7 @@ export class TabManager {
   // Close tab
   async closeTab(tabId) {
     try {
-      await chrome.tabs.remove(tabId);
+      await this.tabsAPI.remove(tabId);
       this.unmarkTabAsSynced(tabId);
       return true;
     } catch (error) {
@@ -302,9 +306,9 @@ export class TabManager {
   // Focus tab
   async focusTab(tabId) {
     try {
-      const tab = await chrome.tabs.get(tabId);
-      await chrome.tabs.update(tabId, { active: true });
-      await chrome.windows.update(tab.windowId, { focused: true });
+      const tab = await this.tabsAPI.get(tabId);
+      await this.tabsAPI.update(tabId, { active: true });
+      await this.windowsAPI.update(tab.windowId, { focused: true });
       return true;
     } catch (error) {
       console.error('Failed to focus tab:', error);
@@ -315,7 +319,7 @@ export class TabManager {
   // Close multiple tabs
   async closeTabs(tabIds) {
     try {
-      await chrome.tabs.remove(tabIds);
+      await this.tabsAPI.remove(tabIds);
       tabIds.forEach(tabId => this.unmarkTabAsSynced(tabId));
       return true;
     } catch (error) {
@@ -327,7 +331,7 @@ export class TabManager {
   // Update tab
   async updateTab(tabId, updateProperties) {
     try {
-      const tab = await chrome.tabs.update(tabId, updateProperties);
+      const tab = await this.tabsAPI.update(tabId, updateProperties);
       return tab;
     } catch (error) {
       console.error('Failed to update tab:', error);
@@ -338,7 +342,7 @@ export class TabManager {
   // Check if tab exists
   async tabExists(tabId) {
     try {
-      await chrome.tabs.get(tabId);
+      await this.tabsAPI.get(tabId);
       return true;
     } catch (error) {
       return false;
@@ -523,8 +527,8 @@ export class TabManager {
         if (existingTabs.length > 0 && !options.allowDuplicates) {
           // Focus existing tab instead
           const existingTab = existingTabs[0];
-          await chrome.tabs.update(existingTab.id, { active: true });
-          await chrome.windows.update(existingTab.windowId, { focused: true });
+          await this.tabsAPI.update(existingTab.id, { active: true });
+          await this.windowsAPI.update(existingTab.windowId, { focused: true });
 
           // Mark as synced and remove from pending
           this.markTabAsSynced(existingTab.id, canvasDoc.id);
