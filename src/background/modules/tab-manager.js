@@ -481,13 +481,16 @@ export class TabManager {
       console.log(`🔧 TabManager.syncTabToCanvas: API response:`, response);
 
       if (response.status === 'success') {
+        // response.payload is now an array of document IDs
+        const documentId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
+
         // Mark tab as synced
-        this.markTabAsSynced(tab.id, response.payload?.id);
+        this.markTabAsSynced(tab.id, documentId);
 
         console.log(`Tab synced successfully: ${tab.title}`);
         return {
           success: true,
-          documentId: response.payload?.id,
+          documentId: documentId,
           message: 'Tab synced to Canvas'
         };
       } else {
@@ -621,7 +624,7 @@ export class TabManager {
       console.log(`🔧 TabManager.syncMultipleTabs: Batch API response:`, response);
 
       if (response.status === 'success') {
-        // Mark all tabs as synced
+        // response.payload is now an array of document IDs
         const documentIds = Array.isArray(response.payload) ? response.payload : [response.payload];
         syncableTabs.forEach((tab, index) => {
           const documentId = documentIds[index] || documentIds[0]; // Fallback to first ID if array mismatch

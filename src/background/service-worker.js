@@ -333,7 +333,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           const wsId = currentWorkspace.name || currentWorkspace.id;
           const response = await apiClient.insertWorkspaceDocument(wsId, document, workspacePath || '/', document.featureArray);
           if (response.status === 'success') {
-            const docId = Array.isArray(response.payload) ? response.payload[0]?.id : response.payload?.id;
+            const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
             tabManager.markTabAsSynced(tab.id, docId);
             syncResult = { success: true, documentId: docId };
           } else {
@@ -1517,7 +1517,8 @@ async function handleGetCanvasDocuments(data, sendResponse) {
       sendResponse({
         success: true,
         documents: response.payload || [],
-        count: response.count || 0
+        count: response.count || 0,
+        totalCount: response.totalCount || 0
       });
     } else {
       throw new Error(response.message || 'Failed to fetch Canvas documents');
@@ -1568,7 +1569,12 @@ async function handleGetWorkspaceDocuments(data, sendResponse) {
     const response = await apiClient.getWorkspaceDocuments(wsIdOrName, contextSpec, ['data/abstraction/tab']);
 
     if (response.status === 'success') {
-      sendResponse({ success: true, documents: response.payload?.data || [], count: response.payload?.count || response.count || 0 });
+      sendResponse({
+        success: true,
+        documents: response.payload || [],
+        count: response.count || 0,
+        totalCount: response.totalCount || 0
+      });
     } else {
       throw new Error(response.message || 'Failed to fetch workspace documents');
     }

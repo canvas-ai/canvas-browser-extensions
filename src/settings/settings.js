@@ -78,7 +78,7 @@ function initializeElements() {
   closeTabsRemovedFromCanvas = document.getElementById('closeTabsRemovedFromCanvas');
   sendNewTabsToCanvas = document.getElementById('sendNewTabsToCanvas');
   removeClosedTabsFromCanvas = document.getElementById('removeClosedTabsFromCanvas');
-  
+
   // Sync filtering options
   syncOnlyCurrentBrowser = document.getElementById('syncOnlyCurrentBrowser');
   syncOnlyTaggedTabs = document.getElementById('syncOnlyTaggedTabs');
@@ -237,7 +237,7 @@ function populateForm() {
   closeTabsRemovedFromCanvas.checked = settings.syncSettings.closeTabsRemovedFromCanvas;
   sendNewTabsToCanvas.checked = settings.syncSettings.sendNewTabsToCanvas;
   removeClosedTabsFromCanvas.checked = settings.syncSettings.removeClosedTabsFromCanvas;
-  
+
   // Sync filtering options
   syncOnlyCurrentBrowser.checked = settings.syncSettings.syncOnlyCurrentBrowser;
   syncOnlyTaggedTabs.checked = settings.syncSettings.syncOnlyTaggedTabs;
@@ -362,14 +362,27 @@ async function handleConnect() {
       // Load contexts and workspaces
       await Promise.all([loadContexts(), loadWorkspaces()]);
 
-      // Auto-bind to first/selected context if available (mandatory)
-      if (contextSelect.value) {
-        await handleBindContext();
-      } else if (availableContexts.length > 0) {
-        // Auto-select and bind to first context if none selected
-        contextSelect.value = availableContexts[0].id;
-        await handleBindContext();
-        showToast('Auto-bound to first available context', 'info');
+      // Auto-select universe workspace in explorer mode if available
+      if (currentMode === 'explorer') {
+        const universeWorkspace = availableWorkspaces.find(w => w.name === 'universe');
+        if (universeWorkspace && !workspaceSelect.value) {
+          workspaceSelect.value = universeWorkspace.id;
+          const selectedWorkspace = availableWorkspaces.find(w => w.id === universeWorkspace.id);
+          await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: selectedWorkspace, workspacePath: '/' });
+          showToast('Auto-selected universe workspace', 'info');
+        }
+      }
+
+      // Auto-bind to first/selected context if available (mandatory for context mode)
+      if (currentMode === 'context') {
+        if (contextSelect.value) {
+          await handleBindContext();
+        } else if (availableContexts.length > 0) {
+          // Auto-select and bind to first context if none selected
+          contextSelect.value = availableContexts[0].id;
+          await handleBindContext();
+          showToast('Auto-bound to first available context', 'info');
+        }
       }
     } else if (response.success && response.connected && !response.authenticated) {
       // Server reachable but authentication failed
@@ -508,6 +521,15 @@ async function loadWorkspaces() {
     if (response.success) {
       availableWorkspaces = response.workspaces || [];
       populateWorkspaceSelect();
+
+      // Auto-select universe workspace if in explorer mode and no workspace is selected
+      if (currentMode === 'explorer') {
+        const universeWorkspace = availableWorkspaces.find(w => w.name === 'universe');
+        if (universeWorkspace && !workspaceSelect.value) {
+          workspaceSelect.value = universeWorkspace.id;
+          console.log('Auto-selected universe workspace during workspace loading:', universeWorkspace.id);
+        }
+      }
     } else {
       availableWorkspaces = [];
       populateWorkspaceSelect();
@@ -541,6 +563,13 @@ function populateWorkspaceSelect() {
   if (settings.currentWorkspace?.id && currentMode === 'explorer') {
     workspaceSelect.value = settings.currentWorkspace.id;
     console.log('Pre-selected current workspace:', settings.currentWorkspace.id);
+  } else if (currentMode === 'explorer') {
+    // Auto-select 'universe' workspace if available and no workspace is selected
+    const universeWorkspace = availableWorkspaces.find(w => w.name === 'universe');
+    if (universeWorkspace) {
+      workspaceSelect.value = universeWorkspace.id;
+      console.log('Auto-selected universe workspace:', universeWorkspace.id);
+    }
   }
 }
 

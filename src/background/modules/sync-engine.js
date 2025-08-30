@@ -453,7 +453,8 @@ export class SyncEngine {
         throw new Error('Failed to get Canvas documents');
       }
 
-      const document = response.payload.find(doc => doc.id === documentId);
+      const documents = response.payload || [];
+      const document = documents.find(doc => doc.id === documentId);
       if (!document) {
         throw new Error('Canvas document not found');
       }
@@ -551,8 +552,13 @@ export class SyncEngine {
       }
 
       const response = await apiClient.getContextDocuments(contextId, featureArray);
-      const canvasDocuments = (response.status === 'success') ? response.payload : [];
-      console.log('SyncEngine: Found Canvas documents:', canvasDocuments.length);
+      const canvasDocuments = (response.status === 'success') ? (response.payload || []) : [];
+      console.log('SyncEngine: Found Canvas documents:', canvasDocuments.length, 'total:', response.totalCount || 'unknown');
+
+      // Check for pagination - warn if we might have incomplete data
+      if (response.totalCount && response.count && response.totalCount > response.count) {
+        console.warn('SyncEngine: Pagination detected - only got', response.count, 'of', response.totalCount, 'documents. Full sync may be incomplete.');
+      }
 
       // Compare and identify sync needs
       const comparison = tabManager.compareWithCanvasDocuments(browserTabs, canvasDocuments);
@@ -663,12 +669,39 @@ export class SyncEngine {
     }
   }
 
+  // Determine the appropriate context change behavior based on sync settings
+  async _determineContextChangeBehavior(syncSettings) {
+    const explicitBehavior = syncSettings.contextChangeBehavior;
+
+    // If user has explicitly set a behavior, use it
+    if (explicitBehavior && explicitBehavior !== 'keep-only') {
+      return explicitBehavior;
+    }
+
+    // Auto-determine behavior based on individual sync settings
+    const shouldClose = syncSettings.closeTabsRemovedFromCanvas;
+    const shouldOpen = syncSettings.openTabsAddedToCanvas;
+    const shouldSave = syncSettings.sendNewTabsToCanvas;
+
+    if (shouldSave && shouldClose && shouldOpen) {
+      return 'save-close-open-new';
+    } else if (shouldClose && shouldOpen) {
+      return 'close-open-new';
+    } else if (shouldOpen) {
+      return 'keep-open-new';
+    } else {
+      return 'keep-only';
+    }
+  }
+
   // Execute context change behavior based on settings
   async _executeContextChangeBehavior(behavior, oldContextId, newContextId, isUrlChange = false) {
     try {
-      // Default to 'close-open-new' if behavior is undefined
-      const actualBehavior = behavior || 'close-open-new';
-      console.log('SyncEngine: Executing context change behavior:', actualBehavior, 'isUrlChange:', isUrlChange);
+      const syncSettings = await browserStorage.getSyncSettings();
+
+      // Determine actual behavior based on settings
+      const actualBehavior = await this._determineContextChangeBehavior(syncSettings);
+      console.log('SyncEngine: Executing context change behavior:', actualBehavior, 'isUrlChange:', isUrlChange, 'fromExplicitSetting:', behavior === actualBehavior);
 
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
@@ -711,6 +744,7 @@ export class SyncEngine {
           // Do nothing - keep current tabs, don't open new ones
           // But still update our internal indexes
           await this.updateInternalIndexes(mode, newContextId, currentWorkspace, workspacePath);
+          console.log('SyncEngine: Keep-only mode - preserving current tabs, not fetching new ones');
           break;
 
         default:
@@ -767,8 +801,13 @@ export class SyncEngine {
       }
 
       const response = await apiClient.getContextDocuments(contextId, featureArray);
-      const canvasDocuments = (response.status === 'success') ? response.payload : [];
-      console.log('SyncEngine: Found Canvas documents in new context:', canvasDocuments.length);
+      const canvasDocuments = (response.status === 'success') ? (response.payload || []) : [];
+      console.log('SyncEngine: Found Canvas documents in new context:', canvasDocuments.length, 'total:', response.totalCount || 'unknown');
+
+      // Check for pagination - warn if we might have incomplete data
+      if (response.totalCount && response.count && response.totalCount > response.count) {
+        console.warn('SyncEngine: Pagination detected in context switch - only got', response.count, 'of', response.totalCount, 'documents. Some tabs may not be closed.');
+      }
 
       // Create a set of URLs that exist in the new context for fast lookup
       const contextUrls = new Set();
@@ -926,24 +965,38 @@ export class SyncEngine {
         }
 
         const response = await apiClient.getContextDocuments(contextId, featureArray);
-        documents = (response.status === 'success') ? response.payload : [];
+        documents = (response.status === 'success') ? (response.payload || []) : [];
         console.log('SyncEngine: API response for context documents:', {
           success: response.status === 'success',
           documentCount: documents.length,
+          totalCount: response.totalCount || 'unknown',
+          count: response.count || 'unknown',
           urls: documents.map(d => d.data?.url).filter(Boolean)
         });
+
+        // Check for pagination - warn if we might have incomplete data
+        if (response.totalCount && response.count && response.totalCount > response.count) {
+          console.warn('SyncEngine: Pagination detected in context document fetch - only got', response.count, 'of', response.totalCount, 'documents. Some tabs may not be opened.');
+        }
 
       } else if (mode === 'explorer' && workspace) {
         console.log('SyncEngine: Fetching documents from workspace:', workspace.name || workspace.id, 'path:', workspacePath);
 
         const wsId = workspace.name || workspace.id;
         const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', ['data/abstraction/tab']);
-        documents = (response.status === 'success') ? (response.payload?.data || response.payload) : [];
+        documents = (response.status === 'success') ? (response.payload || []) : [];
         console.log('SyncEngine: API response for workspace documents:', {
           success: response.status === 'success',
           documentCount: documents.length,
+          totalCount: response.totalCount || 'unknown',
+          count: response.count || 'unknown',
           urls: documents.map(d => d.data?.url).filter(Boolean)
         });
+
+        // Check for pagination - warn if we might have incomplete data
+        if (response.totalCount && response.count && response.totalCount > response.count) {
+          console.warn('SyncEngine: Pagination detected in workspace document fetch - only got', response.count, 'of', response.totalCount, 'documents. Some tabs may not be opened.');
+        }
       }
 
       console.log('SyncEngine: Found', documents.length, 'documents to open');
@@ -1039,9 +1092,11 @@ export class SyncEngine {
   // Execute workspace path change behavior
   async _executeWorkspacePathChangeBehavior(behavior, workspace, oldPath, newPath) {
     try {
-      // Default to 'close-open-new' if behavior is undefined
-      const actualBehavior = behavior || 'close-open-new';
-      console.log('SyncEngine: Executing workspace path change behavior:', actualBehavior);
+      const syncSettings = await browserStorage.getSyncSettings();
+
+      // Determine actual behavior based on settings
+      const actualBehavior = await this._determineContextChangeBehavior(syncSettings);
+      console.log('SyncEngine: Executing workspace path change behavior:', actualBehavior, 'fromExplicitSetting:', behavior === actualBehavior);
 
       const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
@@ -1075,6 +1130,7 @@ export class SyncEngine {
         case 'keep-only':
           // Do nothing - keep current tabs, don't open new ones
           await this.updateInternalIndexes(mode, currentContext?.id, workspace, newPath);
+          console.log('SyncEngine: Keep-only mode - preserving current tabs during workspace path change');
           break;
 
         default:

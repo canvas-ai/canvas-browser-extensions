@@ -44,7 +44,7 @@ export class BrowserStorage {
         closeTabsRemovedFromCanvas: false,   // Close tabs when removed from Canvas Server
         sendNewTabsToCanvas: false,          // Send newly opened browser tabs to Canvas Server
         removeClosedTabsFromCanvas: false,   // Remove closed browser tabs from Canvas Server
-        contextChangeBehavior: 'close-open-new'  // How to handle context changes: 'close-open-new', 'save-close-open-new', 'keep-open-new', 'keep-only'
+        contextChangeBehavior: 'keep-only'  // How to handle context changes: 'close-open-new', 'save-close-open-new', 'keep-open-new', 'keep-only'
       },
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
