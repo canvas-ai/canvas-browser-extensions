@@ -113,16 +113,32 @@ export class SyncEngine {
       await this.handleWebSocketEvent({ type: 'tree.document.inserted', ...eventData });
     });
 
+    webSocketClient.on('tree.document.inserted.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.inserted.batch', ...eventData });
+    });
+
     webSocketClient.on('tree.document.updated', async (eventData) => {
       await this.handleWebSocketEvent({ type: 'tree.document.updated', ...eventData });
+    });
+
+    webSocketClient.on('tree.document.updated.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.updated.batch', ...eventData });
     });
 
     webSocketClient.on('tree.document.removed', async (eventData) => {
       await this.handleWebSocketEvent({ type: 'tree.document.removed', ...eventData });
     });
 
+    webSocketClient.on('tree.document.removed.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.removed.batch', ...eventData });
+    });
+
     webSocketClient.on('tree.document.deleted', async (eventData) => {
       await this.handleWebSocketEvent({ type: 'tree.document.deleted', ...eventData });
+    });
+
+    webSocketClient.on('tree.document.deleted.batch', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.deleted.batch', ...eventData });
     });
 
     // Context path change (when URL changes)
@@ -166,23 +182,27 @@ export class SyncEngine {
       switch (eventData.type) {
         case 'document.inserted':
         case 'tree.document.inserted':
+        case 'tree.document.inserted.batch':
           await this.handleRemoteDocumentInserted(eventData, syncSettings);
           break;
 
         case 'document.updated':
         case 'tree.document.updated':
+        case 'tree.document.updated.batch':
           await this.handleRemoteDocumentUpdated(eventData, syncSettings);
           break;
 
         case 'document.removed':
         case 'document.removed.batch':
         case 'tree.document.removed':
+        case 'tree.document.removed.batch':
           await this.handleRemoteDocumentRemoved(eventData, syncSettings);
           break;
 
         case 'document.deleted':
         case 'document.deleted.batch':
         case 'tree.document.deleted':
+        case 'tree.document.deleted.batch':
           await this.handleRemoteDocumentDeleted(eventData, syncSettings);
           break;
       }
@@ -200,8 +220,8 @@ export class SyncEngine {
 
     console.log('SyncEngine: Processing document insertion event:', eventData.type, eventData);
 
-    // Handle tree events differently - they have documentId instead of full document
-    if (eventData.type === 'tree.document.inserted') {
+    // Handle tree events differently - they have documentId(s) instead of full document
+    if (eventData.type === 'tree.document.inserted' || eventData.type === 'tree.document.inserted.batch') {
       await this.handleTreeDocumentInserted(eventData, syncSettings);
       return;
     }
@@ -248,69 +268,87 @@ export class SyncEngine {
     }
   }
 
-  // Handle tree document insertion events (these have documentId and contextSpec)
+    // Handle tree document insertion events (these have documentId/documentIds and contextSpec)
   async handleTreeDocumentInserted(eventData, syncSettings) {
     try {
       console.log('SyncEngine: Handling tree document insertion:', eventData);
 
-      // Tree events have documentId instead of full document
-      const documentId = eventData.documentId;
-      if (!documentId) {
-        console.log('SyncEngine: No documentId in tree event, skipping');
+      // Handle both single and batch tree events
+      const isBatch = eventData.type === 'tree.document.inserted.batch';
+      const documentIds = isBatch ? (eventData.documentIds || []) : [eventData.documentId];
+
+      if (documentIds.length === 0) {
+        console.log('SyncEngine: No documentId(s) in tree event, skipping');
         return;
       }
 
-      // We need to fetch the document to check if it's a tab document
+      console.log(`SyncEngine: Processing ${isBatch ? 'batch' : 'single'} tree event with ${documentIds.length} document(s)`);
+
+      // We need to fetch the documents to check if they're tab documents
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
       const workspacePath = await browserStorage.getWorkspacePath();
 
       if (mode === 'explorer' && currentWorkspace) {
-        console.log('SyncEngine: Fetching document for tree event in explorer mode');
+        console.log('SyncEngine: Fetching documents for tree event in explorer mode');
 
-        // Fetch the document from the workspace
+        // Fetch documents from the workspace
         const wsId = currentWorkspace.name || currentWorkspace.id;
         const response = await apiClient.getWorkspaceDocuments(wsId, eventData.contextSpec || '/', ['data/abstraction/tab']);
 
         if (response.status === 'success') {
           const documents = response.payload || [];
-          const document = documents.find(doc => doc.id === documentId);
+          const documentsToOpen = [];
 
-          if (document && document.schema === 'data/abstraction/tab' && document.data?.url) {
-            console.log('SyncEngine: Found tab document from tree event:', document.data.title);
+          // Process each document ID from the tree event
+          for (const documentId of documentIds) {
+            const document = documents.find(doc => doc.id === documentId);
 
-            // Check if we should open this tab (filter by browser identity if enabled)
-            if (syncSettings.syncOnlyThisBrowser) {
-              const browserIdentity = await browserStorage.getBrowserIdentity();
-              const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
+            if (document && document.schema === 'data/abstraction/tab' && document.data?.url) {
+              console.log('SyncEngine: Found tab document from tree event:', document.data.title);
 
-              if (hasOurFeature) {
-                console.log('SyncEngine: Skipping tab from same browser instance (tree event)');
-                return;
+              // Check if we should open this tab (filter by browser identity if enabled)
+              if (syncSettings.syncOnlyThisBrowser) {
+                const browserIdentity = await browserStorage.getBrowserIdentity();
+                const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
+
+                if (hasOurFeature) {
+                  console.log('SyncEngine: Skipping tab from same browser instance (tree event)');
+                  continue;
+                }
               }
-            }
 
-            // Check if tab is already open or pending
-            const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
-            const isPending = this.isPendingTabOpen(document.data.url);
+              // Check if tab is already open or pending
+              const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
+              const isPending = this.isPendingTabOpen(document.data.url);
 
-            if (existingTabs.length === 0 && !isPending) {
-              console.log('SyncEngine: Auto-opening tab from tree event:', document.data.title);
-              this.markPendingTabOpen(document.data.url);
-
-              try {
-                await this.openTabsWithRateLimit([document]);
-              } finally {
-                this.clearPendingTabOpen(document.data.url);
+              if (existingTabs.length === 0 && !isPending) {
+                console.log('SyncEngine: Queuing tab for opening from tree event:', document.data.title);
+                documentsToOpen.push(document);
+                this.markPendingTabOpen(document.data.url);
+              } else {
+                console.log('SyncEngine: Tab already exists or pending (tree event):', document.data.url);
               }
             } else {
-              console.log('SyncEngine: Tab already exists or pending (tree event):', document.data.url);
+              console.log('SyncEngine: Document from tree event is not a tab document:', documentId);
             }
-          } else {
-            console.log('SyncEngine: Document from tree event is not a tab document');
+          }
+
+          // Open all valid documents with rate limiting
+          if (documentsToOpen.length > 0) {
+            console.log(`SyncEngine: Auto-opening ${documentsToOpen.length} tabs from tree event`);
+
+            try {
+              await this.openTabsWithRateLimit(documentsToOpen);
+            } finally {
+              // Clear pending flags after opening
+              for (const document of documentsToOpen) {
+                this.clearPendingTabOpen(document.data.url);
+              }
+            }
           }
         } else {
-          console.log('SyncEngine: Failed to fetch document for tree event:', response);
+          console.log('SyncEngine: Failed to fetch documents for tree event:', response);
         }
       }
     } catch (error) {
