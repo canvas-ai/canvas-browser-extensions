@@ -163,7 +163,7 @@ async function loadSettings() {
 
     settings = {
       connectionSettings: {
-        serverUrl: savedConnectionSettings.serverUrl || 'http://127.0.0.1:8001',
+        serverUrl: savedConnectionSettings.serverUrl || 'https://my.cnvs.ai',
         apiBasePath: savedConnectionSettings.apiBasePath || '/rest/v2',
         apiToken: savedConnectionSettings.apiToken || '',
         connected: savedConnectionSettings.connected || false
@@ -207,7 +207,7 @@ async function loadSettings() {
     // Use defaults on error
     settings = {
       connectionSettings: {
-        serverUrl: 'http://127.0.0.1:8001',
+        serverUrl: 'https://my.cnvs.ai',
         apiBasePath: '/rest/v2',
         apiToken: '',
         connected: false
@@ -945,9 +945,11 @@ function setupStorageListeners() {
 // Utility functions
 async function sendMessageToBackground(type, data = null) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type, data }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
+    const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
+    runtime.sendMessage({ type, data }, (response) => {
+      const lastError = (typeof browser !== 'undefined') ? browser.runtime.lastError : chrome.runtime.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
       } else {
         resolve(response);
       }

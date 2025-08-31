@@ -107,7 +107,7 @@ async function exportForBrowser(browser) {
 
     // Common files to copy
   const commonFiles = [
-    // Background script
+    // Background script (will be renamed for Firefox)
     { src: 'build/background/service-worker.js', dst: 'service-worker.js' },
 
     // Popup files
@@ -126,6 +126,11 @@ async function exportForBrowser(browser) {
 
   // Copy all files
   await copyFiles(commonFiles, browserDir)
+
+  // For Firefox, also copy service worker as background.js
+  if (browser === 'firefox') {
+    await fs.copy('build/background/service-worker.js', `${browserDir}/background.js`);
+  }
 
   // Copy assets directory if it exists
   if (fs.existsSync('assets')) {
@@ -148,8 +153,12 @@ async function exportForBrowser(browser) {
     if (manifest.background) {
       if (browser === 'chromium') {
         manifest.background.service_worker = 'service-worker.js'
+        delete manifest.background.scripts
+        delete manifest.background.type
       } else if (browser === 'firefox') {
-        manifest.background.scripts = ['service-worker.js']
+        manifest.background.scripts = ['background.js']
+        delete manifest.background.service_worker
+        delete manifest.background.type
       }
     }
 

@@ -13,15 +13,11 @@
   "host_permissions": [
     "*://localhost/*",
     "*://127.0.0.1/*",
-    "http://*/*",
-    "https://*/*",
-    "https://my.cnvs.ai/*",
-    "https://canvas.idnc.sk/*"
+    "<all_urls>"
   ],
 
   "background": {
-    "service_worker": "service-worker.js",
-    "type": "module"
+    "scripts": ["background.js"]
   },
 
   "action": {

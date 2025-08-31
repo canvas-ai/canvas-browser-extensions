@@ -623,48 +623,41 @@ async function openSettingsPage() {
 // Legacy keys: connectionSettings, syncSettings, currentContext, browserIdentity
 // New keys: canvasConnectionSettings, canvasSyncSettings, canvasCurrentContext, canvasBrowserIdentity
 async function migrateLegacyStorageKeys() {
-  // Browser compatibility shim
-  const storageAPI = (() => {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      return chrome.storage.local;
-    }
-    if (typeof browser !== 'undefined' && browser.storage) {
-      return browser.storage.local;
-    }
-    throw new Error('Browser storage API not available');
-  })();
+  try {
+    const all = await browserStorage.storage.get(null);
 
-  const all = await storageAPI.get(null);
+    const legacyToNew = [
+      ['connectionSettings', 'canvasConnectionSettings'],
+      ['syncSettings', 'canvasSyncSettings'],
+      ['currentContext', 'canvasCurrentContext'],
+      ['browserIdentity', 'canvasBrowserIdentity']
+    ];
 
-  const legacyToNew = [
-    ['connectionSettings', 'canvasConnectionSettings'],
-    ['syncSettings', 'canvasSyncSettings'],
-    ['currentContext', 'canvasCurrentContext'],
-    ['browserIdentity', 'canvasBrowserIdentity']
-  ];
-
-  let migrated = 0;
-  for (const [legacyKey, newKey] of legacyToNew) {
-    const hasLegacy = Object.prototype.hasOwnProperty.call(all, legacyKey);
-    const hasNew = Object.prototype.hasOwnProperty.call(all, newKey);
-    if (hasLegacy && !hasNew) {
-      const value = all[legacyKey];
-      await storageAPI.set({ [newKey]: value });
-      migrated++;
+    let migrated = 0;
+    for (const [legacyKey, newKey] of legacyToNew) {
+      const hasLegacy = Object.prototype.hasOwnProperty.call(all, legacyKey);
+      const hasNew = Object.prototype.hasOwnProperty.call(all, newKey);
+      if (hasLegacy && !hasNew) {
+        const value = all[legacyKey];
+        await browserStorage.storage.set({ [newKey]: value });
+        migrated++;
+      }
     }
-  }
 
-  // Clean up legacy keys only after successful copy
-  if (migrated > 0) {
-    const keysToRemove = legacyToNew
-      .map(([legacyKey]) => legacyKey)
-      .filter((k) => Object.prototype.hasOwnProperty.call(all, k));
-    try {
-      await storageAPI.remove(keysToRemove);
-      console.log('Migrated legacy storage keys:', migrated, 'removed:', keysToRemove);
-    } catch (e) {
-      console.warn('Failed to remove legacy storage keys (safe to ignore):', e);
+    // Clean up legacy keys only after successful copy
+    if (migrated > 0) {
+      const keysToRemove = legacyToNew
+        .map(([legacyKey]) => legacyKey)
+        .filter((k) => Object.prototype.hasOwnProperty.call(all, k));
+      try {
+        await browserStorage.storage.remove(keysToRemove);
+        console.log('Migrated legacy storage keys:', migrated, 'removed:', keysToRemove);
+      } catch (e) {
+        console.warn('Failed to remove legacy storage keys (safe to ignore):', e);
+      }
     }
+  } catch (error) {
+    console.error('Failed to migrate legacy storage keys:', error);
   }
 }
 
@@ -787,10 +780,10 @@ async function handleConnect(data, sendResponse) {
   } catch (error) {
     console.error('Connection failed:', error);
 
-    // Make sure we clear any connected state on failure
-      await browserStorage.setConnectionSettings({
-      serverUrl: 'http://127.0.0.1:8001',
-      apiBasePath: '/rest/v2',
+    // Keep the user's URL but mark as disconnected
+    await browserStorage.setConnectionSettings({
+      serverUrl: data.serverUrl,
+      apiBasePath: data.apiBasePath,
       apiToken: '',
       connected: false
     });
@@ -809,10 +802,11 @@ async function handleDisconnect(sendResponse) {
   try {
     console.log('Disconnecting from Canvas server...');
 
-    // Clear connection settings
+    // Clear connection settings but keep the server URL
+    const currentSettings = await browserStorage.getConnectionSettings();
     await browserStorage.setConnectionSettings({
-      serverUrl: 'http://127.0.0.1:8001',
-      apiBasePath: '/rest/v2',
+      serverUrl: currentSettings.serverUrl || 'https://my.cnvs.ai',
+      apiBasePath: currentSettings.apiBasePath || '/rest/v2',
       apiToken: '',
       connected: false
     });
@@ -1925,28 +1919,45 @@ async function handleUpdateContextUrl(message, sendResponse) {
 // Context Menu functionality
 async function setupContextMenus() {
   try {
+    console.log('🔧 Setting up context menus...');
+
     // Browser compatibility for context menus
     const contextMenusAPI = (typeof chrome !== 'undefined' && chrome.contextMenus) ? chrome.contextMenus : browser.contextMenus;
 
+    if (!contextMenusAPI) {
+      console.error('❌ Context menus API not available');
+      return;
+    }
+
+    console.log('🔧 Context menus API available, removing existing menus...');
     // Remove existing context menus first
     await contextMenusAPI.removeAll();
 
     // Check if we're connected
     const connectionSettings = await browserStorage.getConnectionSettings();
+    console.log('🔧 Connection settings for context menu:', connectionSettings);
+
     if (!connectionSettings.connected) {
       console.log('Not connected - skipping context menu setup');
       return;
     }
 
+    console.log('🔧 Creating root context menu item...');
     // Always create simple "Send page to Canvas" with workspace tree
     // Note: documentUrlPatterns excludes extension pages
-    contextMenusAPI.create({
-      id: 'send-page-to-canvas',
-      title: 'Send page to Canvas',
-      contexts: ['page'],
-      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
-      visible: true
-    });
+    try {
+      contextMenusAPI.create({
+        id: 'send-page-to-canvas',
+        title: 'Send page to Canvas',
+        contexts: ['page'],
+        documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
+        visible: true
+      });
+      console.log('✅ Root context menu item created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create root context menu item:', error);
+      return;
+    }
 
     // Get all workspaces and build menu tree
     try {
@@ -1960,18 +1971,29 @@ async function setupContextMenus() {
       }
 
       const workspacesResp = await apiClient.getWorkspaces();
+      console.log('🔧 Workspaces response:', workspacesResp);
+
       if (workspacesResp.status === 'success' && workspacesResp.payload) {
+        console.log(`🔧 Creating workspace menus for ${workspacesResp.payload.length} workspaces...`);
+
         for (const workspace of workspacesResp.payload) {
           const wsId = `ws:${workspace.name || workspace.id}`;
+          console.log(`🔧 Creating workspace menu for: ${workspace.name || workspace.id}`);
 
           // Create workspace submenu
-          contextMenusAPI.create({
-            id: wsId,
-            parentId: 'send-page-to-canvas',
-            title: workspace.name || workspace.id,
-            contexts: ['page'],
-            documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-          });
+          try {
+            contextMenusAPI.create({
+              id: wsId,
+              parentId: 'send-page-to-canvas',
+              title: workspace.name || workspace.id,
+              contexts: ['page'],
+              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+            });
+            console.log(`✅ Workspace menu created for: ${workspace.name || workspace.id}`);
+          } catch (error) {
+            console.error(`❌ Failed to create workspace menu for ${workspace.name || workspace.id}:`, error);
+            continue;
+          }
 
           // Try to get workspace tree for this workspace
           try {
@@ -2044,18 +2066,22 @@ async function setupContextMenus() {
       console.warn('Failed to load workspaces for context menu:', workspaceError);
     }
 
-    console.log('Context menus set up successfully');
+    console.log('✅ Context menus set up successfully');
   } catch (error) {
-    console.error('Failed to setup context menus:', error);
+    console.error('❌ Failed to setup context menus:', error);
+    console.error('❌ Context menu setup error details:', error.stack || error);
   }
 }
 
 // Handle context menu clicks
 // Browser compatibility for context menu events
 const contextMenusAPI = (typeof chrome !== 'undefined' && chrome.contextMenus) ? chrome.contextMenus : browser.contextMenus;
-contextMenusAPI.onClicked.addListener(async (info, tab) => {
-  try {
-    console.log('Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url);
+
+if (contextMenusAPI && contextMenusAPI.onClicked) {
+  console.log('🔧 Setting up context menu click listener...');
+  contextMenusAPI.onClicked.addListener(async (info, tab) => {
+    try {
+      console.log('🔧 Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url);
 
     // Block context menu actions on extension pages (popup, settings, etc.)
     if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('browser-extension://'))) {
@@ -2098,10 +2124,13 @@ contextMenusAPI.onClicked.addListener(async (info, tab) => {
         }
       }
     }
-  } catch (error) {
-    console.error('Context menu action failed:', error);
-  }
-});
+    } catch (error) {
+      console.error('❌ Context menu action failed:', error);
+    }
+  });
+} else {
+  console.error('❌ Context menus API not available for event handling');
+}
 
 // Initialize extension on service worker startup
 initializeExtension();

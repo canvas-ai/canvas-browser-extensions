@@ -24,7 +24,7 @@ export class StorageManager {
 
     this.DEFAULT_SETTINGS = {
       connectionSettings: {
-        serverUrl: 'http://127.0.0.1:8001',
+        serverUrl: 'https://my.cnvs.ai',
         apiBasePath: '/rest/v2',
         apiToken: '',
         connected: false

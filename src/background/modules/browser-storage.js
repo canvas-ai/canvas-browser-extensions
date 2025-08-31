@@ -32,7 +32,7 @@ export class BrowserStorage {
     // Default values
     this.DEFAULTS = {
       [this.KEYS.CONNECTION_SETTINGS]: {
-        serverUrl: 'http://127.0.0.1:8001',
+        serverUrl: 'https://my.cnvs.ai',
         apiBasePath: '/rest/v2',
         apiToken: '',
         connected: false
