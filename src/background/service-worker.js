@@ -1294,8 +1294,8 @@ async function handleGetConnectionSettings(data, sendResponse) {
 
 async function handleRemoveFromContext(data, sendResponse) {
   try {
-    // TODO: Implement context removal
-    sendResponse({ success: true, message: 'Tab removed from context' });
+    // Delegate to handleRemoveCanvasDocument for consistent behavior
+    await handleRemoveCanvasDocument(data, sendResponse);
   } catch (error) {
     console.error('Failed to remove from context:', error);
     sendResponse({ success: false, error: error.message });
@@ -1304,8 +1304,75 @@ async function handleRemoveFromContext(data, sendResponse) {
 
 async function handleDeleteFromDatabase(data, sendResponse) {
   try {
-    // TODO: Implement database deletion
-    sendResponse({ success: true, message: 'Tab deleted from database' });
+    const { document, contextId, closeTab = false } = data;
+
+    if (!document) {
+      throw new Error('Canvas document is required');
+    }
+
+    // Get current mode and selection
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
+
+    // Get connection settings
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.connected || !connectionSettings.apiToken) {
+      throw new Error('Not connected to Canvas server');
+    }
+
+    // Initialize API client if needed
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    let result;
+
+    if (mode === 'context') {
+      // Context mode: use context API
+      let targetContextId = contextId;
+      if (!targetContextId) {
+        if (!currentContext?.id) {
+          throw new Error('No context selected');
+        }
+        targetContextId = currentContext.id;
+      }
+
+      // Delete from context/database
+      const response = await apiClient.deleteDocument(targetContextId, document.id);
+      result = { success: response.status === 'success', response };
+    } else {
+      // Explorer mode: use workspace API
+      const workspace = currentWorkspace;
+      if (!workspace?.id && !workspace?.name) {
+        throw new Error('No workspace selected');
+      }
+
+      const wsId = workspace.name || workspace.id;
+      const contextSpec = workspacePath || '/';
+
+      console.log('Deleting document from workspace:', wsId, 'path:', contextSpec, 'documentId:', document.id);
+
+      // Delete from workspace/database
+      const response = await apiClient.deleteWorkspaceDocuments(wsId, [document.id], contextSpec, ['data/abstraction/tab']);
+      result = { success: response.status === 'success', response };
+    }
+
+    // Close tab if requested
+    if (closeTab && result.success && document.data?.url) {
+      const tabs = await tabManager.findDuplicateTabs(document.data.url);
+      for (const tab of tabs) {
+        await tabManager.closeTab(tab.id);
+      }
+    }
+
+    console.log('Delete Canvas document response:', result);
+    sendResponse(result);
   } catch (error) {
     console.error('Failed to delete from database:', error);
     sendResponse({ success: false, error: error.message });
@@ -1832,15 +1899,11 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
       throw new Error('Canvas document is required');
     }
 
-    // Get current context if not provided
-    let targetContextId = contextId;
-    if (!targetContextId) {
-      const currentContext = await browserStorage.getCurrentContext();
-      if (!currentContext?.id) {
-        throw new Error('No context selected');
-      }
-      targetContextId = currentContext.id;
-    }
+    // Get current mode and selection
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
 
     // Get connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
@@ -1857,9 +1920,47 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
       );
     }
 
-    // Remove the Canvas document
-    const result = await tabManager.removeCanvasDocument(document, apiClient, targetContextId, closeTab);
+    let result;
 
+    if (mode === 'context') {
+      // Context mode: use context API
+      let targetContextId = contextId;
+      if (!targetContextId) {
+        if (!currentContext?.id) {
+          throw new Error('No context selected');
+        }
+        targetContextId = currentContext.id;
+      }
+
+      // Remove from context
+      const response = await apiClient.removeDocument(targetContextId, document.id);
+      result = { success: response.status === 'success', response };
+    } else {
+      // Explorer mode: use workspace API
+      const workspace = currentWorkspace;
+      if (!workspace?.id && !workspace?.name) {
+        throw new Error('No workspace selected');
+      }
+
+      const wsId = workspace.name || workspace.id;
+      const contextSpec = workspacePath || '/';
+
+      console.log('Removing document from workspace:', wsId, 'path:', contextSpec, 'documentId:', document.id);
+
+      // Remove from workspace
+      const response = await apiClient.removeWorkspaceDocuments(wsId, [document.id], contextSpec, ['data/abstraction/tab']);
+      result = { success: response.status === 'success', response };
+    }
+
+    // Close tab if requested
+    if (closeTab && result.success && document.data?.url) {
+      const tabs = await tabManager.findDuplicateTabs(document.data.url);
+      for (const tab of tabs) {
+        await tabManager.closeTab(tab.id);
+      }
+    }
+
+    console.log('Remove Canvas document response:', result);
     sendResponse(result);
   } catch (error) {
     console.error('Failed to remove Canvas document:', error);
