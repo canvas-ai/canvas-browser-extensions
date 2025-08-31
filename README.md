@@ -59,7 +59,7 @@ For developers and testing:
 
 1. **Install dependencies** (from browser extension directory):
    ```bash
-   cd src/ui/browser-extension
+   cd extensions/browser-extensions
    npm install
    ```
 

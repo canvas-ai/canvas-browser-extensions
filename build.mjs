@@ -140,7 +140,7 @@ async function exportForBrowser(browser) {
     // Create basic icon structure if assets don't exist
     await fs.ensureDir(path.join(browserDir, 'assets', 'icons'))
     console.log(`Assets directory not found, created placeholder for ${browser}`)
-    console.warn(`⚠️  Missing logo: assets/icons/logo-br_64x64.png`)
+    console.warn(`⚠️  Missing logo: assets/icons/logo-wr_64x64.png`)
     console.warn(`   The extension will work but may show broken icon images`)
   }
 

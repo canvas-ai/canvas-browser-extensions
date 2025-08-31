@@ -21,9 +21,6 @@ We use **GitHub Actions** for automated builds and releases, triggered by Git ta
 git checkout main
 git pull origin main
 
-# Navigate to browser extension directory
-cd src/ui/browser-extension
-
 # Run tests and build locally
 npm run build:dev
 # Test both packages
@@ -96,7 +93,7 @@ After the automated release:
 If you need to create a release manually:
 
 ```bash
-cd src/ui/browser-extension
+cd extensions/browser-extensions
 
 # Install dependencies
 npm ci
