@@ -507,8 +507,8 @@ Firefox blocks local network requests for security reasons.
   }
 
   async removeWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
-    // DELETE with body supported by backend route
-    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/remove`;
+    // DELETE /workspaces/:id/documents/remove with body and query
+    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents/remove`;
     const url = new URL(this.buildUrl(endpoint));
     if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
     if (Array.isArray(featureArray)) {
@@ -524,8 +524,8 @@ Firefox blocks local network requests for security reasons.
   }
 
   async deleteWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
-    // DELETE /workspaces/:id with body and query
-    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}`;
+    // DELETE /workspaces/:id/documents with body and query
+    const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`;
     const url = new URL(this.buildUrl(endpoint));
     if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
     if (Array.isArray(featureArray)) {
