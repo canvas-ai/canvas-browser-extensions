@@ -13,25 +13,29 @@
   "host_permissions": [
     "*://localhost/*",
     "*://127.0.0.1/*",
-    "<all_urls>"
+    "http://*/*",
+    "https://*/*",
+    "https://my.cnvs.ai/*",
+    "https://canvas.idnc.sk/*"
   ],
 
   "background": {
-    "scripts": ["background.js"]
+    "service_worker": "service-worker.js",
+    "type": "module"
   },
 
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Canvas Browser Extension",
     "default_icon": {
-      "64": "assets/icons/logo-br_64x64.png",
-      "128": "assets/icons/logo-br_128x128.png"
+      "64": "assets/icons/logo-wr_64x64.png",
+      "128": "assets/icons/logo-wr_128x128.png"
     }
   },
 
   "icons": {
-    "64": "assets/icons/logo-br_64x64.png",
-    "128": "assets/icons/logo-br_128x128.png"
+    "64": "assets/icons/logo-wr_64x64.png",
+    "128": "assets/icons/logo-wr_128x128.png"
   },
 
   "content_security_policy": {

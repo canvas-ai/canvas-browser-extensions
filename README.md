@@ -1,6 +1,6 @@
 # Canvas Browser Extension
 
-A browser extension for seamlessly syncing browser tabs with Canvas server contexts. Extension allows you to connect several users / browsers / applications to a single shared context and working with tabs collaboratively.
+A browser extension for seamlessly syncing browser tabs with Canvas server. Extension allows you to (aot) connect several users / browsers / applications to a single shared context and working with tabs collaboratively.
 
 ## Screenshots
 
@@ -20,29 +20,20 @@ A browser extension for seamlessly syncing browser tabs with Canvas server conte
 
 ### Method 1: Browser Store Installation (Recommended)
 
-🚀 **Canvas Browser Extension is now available on official browser stores:**
-
 | Browser | Store Link |
 |---------|------------|
 | **Chrome/Chromium** | [Chrome Web Store](https://chromewebstore.google.com/detail/nddefgjgkhcpmgpipifjacmoinoncdgl) |
 | **Firefox** | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/canvas-browser-extension) |
 
-**Benefits of store installation:**
-- ✅ **Automatic updates** - always have the latest version
-- ✅ **Simplified installation** - one-click install
-- ✅ **Verified security** - reviewed by browser vendors
-- ✅ **Easy management** - manage through browser extension settings
 
-### Method 2: Download Release Package
-
-**For users who prefer manual installation or need specific versions:**
+### Method 2: Download Release Package (TBD)
 
 Download the latest release for your browser:
 
 | Browser | Download |
 |---------|----------|
-| **Chromium-based** (Chrome, Edge, Brave, Opera) | [📦 canvas-extension-chromium.zip](https://github.com/canvas-ai/canvas-server/releases/latest) |
-| **Firefox** | [📦 canvas-extension-firefox.zip](https://github.com/canvas-ai/canvas-server/releases/latest) |
+| **Chromium-based** (Chrome, Edge, Brave, Opera) | [📦 canvas-extension-chromium.zip](https://github.com/canvas-ai/canvas-browser-extensions/releases/latest) |
+| **Firefox** | [📦 canvas-extension-firefox.zip](https://github.com/canvas-ai/canvas-browser-extensions/releases/latest) |
 
 **Installation steps:**
 
@@ -90,48 +81,6 @@ For developers and testing:
 2. **Open Canvas web interface and generate an API token**
 
 3. **Configure extension**
-
-## Sync Behaviors
-
-Configure in Settings page:
-
-- **Auto-sync new tabs**: Automatically save new browser tabs to Canvas
-- **Auto-open context tabs**: Automatically open new context tabs in browser
-- **Auto-close removed tabs**: Close browser tabs when removed from context
-- **Browser-specific sync**: Only sync tabs from this browser instance
-- **Context change behavior**: What to do when switching contexts
-
-## Releases and Distribution
-
-Canvas Browser Extension uses automated GitHub Actions to build and distribute cross-platform packages. Every time a version tag is pushed, the system automatically:
-
-- 🏗️ **Builds packages** for Chromium and Firefox browsers
-- 🧪 **Tests all packages** to ensure they work correctly
-- 📦 **Creates release packages** with proper naming and compression
-- 🔐 **Generates checksums** for security verification
-- 🚀 **Publishes to GitHub Releases** with comprehensive release notes
-
-### Verifying Downloads
-
-For security, always verify your downloads using the provided checksums:
-
-```bash
-# Download checksums.txt from the release page
-sha256sum -c checksums.txt
-```
-
-### Release History
-
-See the [GitHub Releases page](https://github.com/canvas-ai/canvas-server/releases) for complete release history, changelogs, and older versions.
-
-## Security
-
-- **API tokens** stored securely via browser storage APIs
-- **Strict Content Security Policy** prevents code injection
-- **Input validation** and sanitization on all user inputs
-- **HTTPS-only communication** in production environments
-- **Manifest V3 compliance** for modern security standards
-- **Minimal permissions** - only requests necessary browser permissions
 
 ## Browser Compatibility
 

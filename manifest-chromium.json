@@ -21,24 +21,22 @@
 
   "background": {
     "service_worker": "service-worker.js",
-    "type": "module"
+    "type": "module",
+    "scripts": ["service-worker.js"]
   },
 
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Canvas Browser Extension",
     "default_icon": {
-      "64": "assets/icons/logo-br_64x64.png",
-      "128": "assets/icons/logo-br_128x128.png"
+      "64": "assets/icons/logo-wr_64x64.png",
+      "128": "assets/icons/logo-wr_128x128.png"
     }
   },
 
   "icons": {
-    "16": "assets/icons/logo-br_64x64.png",
-    "32": "assets/icons/logo-br_64x64.png",
-    "48": "assets/icons/logo-br_64x64.png",
-    "64": "assets/icons/logo-br_64x64.png",
-    "128": "assets/icons/logo-br_128x128.png"
+    "64": "assets/icons/logo-wr_64x64.png",
+    "128": "assets/icons/logo-wr_128x128.png"
   },
 
   "content_security_policy": {
