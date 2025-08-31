@@ -2047,12 +2047,22 @@ async function handleOpenCanvasTab(documentId) {
     console.log('Open Canvas document response:', response);
 
     if (response.success) {
-      await loadTabs(); // Refresh lists
+      console.log('Canvas document opened successfully');
+      showToast(`Opened: ${document.data?.title || 'Tab'}`, 'success');
     } else {
       console.error('Failed to open Canvas document:', response.error);
+      showToast(`Failed to open: ${response.error || 'Unknown error'}`, 'error');
     }
   } catch (error) {
     console.error('Failed to open Canvas tab:', error);
+    showToast(`Error opening tab: ${error.message}`, 'error');
+  } finally {
+    // Always refresh the list to ensure UI is up to date
+    try {
+      await loadTabs();
+    } catch (refreshError) {
+      console.error('Failed to refresh tabs after opening:', refreshError);
+    }
   }
 }
 
@@ -2175,36 +2185,54 @@ function handleCanvasTabAction(event) {
   const button = event.target.closest('button[data-action]');
   console.log('Found button:', button);
 
-  if (!button) return;
+  // Check if it's a button action
+  if (button) {
+    event.preventDefault();
+    event.stopPropagation();
 
-  event.preventDefault();
-  event.stopPropagation();
+    const action = button.dataset.action;
+    const documentId = parseInt(button.dataset.documentId);
 
-  const action = button.dataset.action;
-  const documentId = parseInt(button.dataset.documentId);
+    console.log('Action:', action, 'DocumentId:', documentId);
 
-  console.log('Action:', action, 'DocumentId:', documentId);
+    if (!documentId) {
+      console.error('No documentId found for action:', action);
+      return;
+    }
 
-  if (!documentId) {
-    console.error('No documentId found for action:', action);
+    switch (action) {
+      case 'open':
+        console.log('Calling handleOpenCanvasTab with documentId:', documentId);
+        handleOpenCanvasTab(documentId);
+        break;
+      case 'remove':
+        console.log('Calling handleRemoveCanvasTab with documentId:', documentId);
+        handleRemoveCanvasTab(documentId);
+        break;
+      case 'delete':
+        console.log('Calling handleDeleteCanvasTab with documentId:', documentId);
+        handleDeleteCanvasTab(documentId);
+        break;
+      default:
+        console.warn('Unknown Canvas tab action:', action);
+    }
     return;
   }
 
-  switch (action) {
-    case 'open':
-      console.log('Calling handleOpenCanvasTab with documentId:', documentId);
+  // Check if it's a click on the tab info area (for opening)
+  const tabInfo = event.target.closest('.tab-info');
+  const tabItem = event.target.closest('.tab-item');
+
+  if (tabInfo && tabItem) {
+    const documentId = parseInt(tabItem.dataset.documentId);
+
+    console.log('Canvas tab info clicked, opening tab:', documentId);
+
+    if (documentId) {
+      event.preventDefault();
+      event.stopPropagation();
       handleOpenCanvasTab(documentId);
-      break;
-    case 'remove':
-      console.log('Calling handleRemoveCanvasTab with documentId:', documentId);
-      handleRemoveCanvasTab(documentId);
-      break;
-    case 'delete':
-      console.log('Calling handleDeleteCanvasTab with documentId:', documentId);
-      handleDeleteCanvasTab(documentId);
-      break;
-    default:
-      console.warn('Unknown Canvas tab action:', action);
+    }
   }
 }
 
@@ -2526,6 +2554,7 @@ async function handleOpenAll() {
 
     if (filteredCanvasTabs.length === 0) {
       console.log('No Canvas tabs to open');
+      showToast('No tabs to open', 'info');
       return;
     }
 
@@ -2544,22 +2573,38 @@ async function handleOpenAll() {
       });
 
       if (response.success) {
-        opened = response.successful;
-        failed = response.failed;
+        opened = response.successful || 0;
+        failed = response.failed || 0;
         console.log(`Batch open completed: ${opened} opened, ${failed} failed`);
+
+        if (opened > 0) {
+          showToast(`Opened ${opened} of ${filteredCanvasTabs.length} tabs`, 'success');
+        }
+        if (failed > 0) {
+          showToast(`${failed} tabs failed to open`, 'warning');
+        }
       } else {
         failed = filteredCanvasTabs.length;
         console.error('Batch open failed:', response.error);
+        showToast(`Failed to open tabs: ${response.error}`, 'error');
       }
     } catch (error) {
       failed = filteredCanvasTabs.length;
       console.error('Error in batch open:', error);
+      showToast(`Error opening tabs: ${error.message}`, 'error');
     }
 
     console.log(`Opened ${opened} tabs, ${failed} failed`);
-    await loadTabs(); // Refresh lists
   } catch (error) {
     console.error('Failed to open all Canvas tabs:', error);
+    showToast(`Error opening all tabs: ${error.message}`, 'error');
+  } finally {
+    // Always refresh the list to ensure UI is up to date
+    try {
+      await loadTabs();
+    } catch (refreshError) {
+      console.error('Failed to refresh tabs after opening all:', refreshError);
+    }
   }
 }
 
@@ -2617,6 +2662,7 @@ async function handleOpenSelected() {
 
     if (selectedIds.length === 0) {
       console.log('No Canvas tabs selected for opening');
+      showToast('No tabs selected', 'warning');
       return;
     }
 
@@ -2652,16 +2698,25 @@ async function handleOpenSelected() {
 
       if (response.success) {
         console.log(`Successfully opened ${response.successful}/${response.total} documents`);
+        showToast(`Opened ${response.successful} of ${response.total} tabs`, 'success');
       } else {
         console.error('Failed to open documents:', response.error);
+        showToast(`Failed to open tabs: ${response.error}`, 'error');
       }
     }
 
     console.log('Selected Canvas tabs opened');
     selectedCanvasTabs.clear();
-    await loadTabs(); // Refresh lists
   } catch (error) {
     console.error('Failed to open selected Canvas tabs:', error);
+    showToast(`Error opening tabs: ${error.message}`, 'error');
+  } finally {
+    // Always refresh the list to ensure UI is up to date
+    try {
+      await loadTabs();
+    } catch (refreshError) {
+      console.error('Failed to refresh tabs after opening selected:', refreshError);
+    }
   }
 }
 

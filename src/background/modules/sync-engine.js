@@ -108,6 +108,23 @@ export class SyncEngine {
       await this.handleWebSocketEvent({ type: 'document.deleted.batch', ...eventData });
     });
 
+    // Tree events (include contextSpec for workspace mode)
+    webSocketClient.on('tree.document.inserted', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.inserted', ...eventData });
+    });
+
+    webSocketClient.on('tree.document.updated', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.updated', ...eventData });
+    });
+
+    webSocketClient.on('tree.document.removed', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.removed', ...eventData });
+    });
+
+    webSocketClient.on('tree.document.deleted', async (eventData) => {
+      await this.handleWebSocketEvent({ type: 'tree.document.deleted', ...eventData });
+    });
+
     // Context path change (when URL changes)
     webSocketClient.on('context.url.set', async (eventData) => {
       await this.handleContextUrlChanged(eventData);
@@ -148,20 +165,24 @@ export class SyncEngine {
 
       switch (eventData.type) {
         case 'document.inserted':
+        case 'tree.document.inserted':
           await this.handleRemoteDocumentInserted(eventData, syncSettings);
           break;
 
         case 'document.updated':
+        case 'tree.document.updated':
           await this.handleRemoteDocumentUpdated(eventData, syncSettings);
           break;
 
         case 'document.removed':
         case 'document.removed.batch':
+        case 'tree.document.removed':
           await this.handleRemoteDocumentRemoved(eventData, syncSettings);
           break;
 
         case 'document.deleted':
         case 'document.deleted.batch':
+        case 'tree.document.deleted':
           await this.handleRemoteDocumentDeleted(eventData, syncSettings);
           break;
       }
@@ -177,6 +198,15 @@ export class SyncEngine {
       return;
     }
 
+    console.log('SyncEngine: Processing document insertion event:', eventData.type, eventData);
+
+    // Handle tree events differently - they have documentId instead of full document
+    if (eventData.type === 'tree.document.inserted') {
+      await this.handleTreeDocumentInserted(eventData, syncSettings);
+      return;
+    }
+
+    // Handle regular document.inserted events
     const documents = eventData.documents || [eventData.document];
     const documentsToOpen = [];
 
@@ -215,6 +245,76 @@ export class SyncEngine {
       for (const document of documentsToOpen) {
         this.clearPendingTabOpen(document.data.url);
       }
+    }
+  }
+
+  // Handle tree document insertion events (these have documentId and contextSpec)
+  async handleTreeDocumentInserted(eventData, syncSettings) {
+    try {
+      console.log('SyncEngine: Handling tree document insertion:', eventData);
+
+      // Tree events have documentId instead of full document
+      const documentId = eventData.documentId;
+      if (!documentId) {
+        console.log('SyncEngine: No documentId in tree event, skipping');
+        return;
+      }
+
+      // We need to fetch the document to check if it's a tab document
+      const mode = await browserStorage.getSyncMode();
+      const currentWorkspace = await browserStorage.getCurrentWorkspace();
+      const workspacePath = await browserStorage.getWorkspacePath();
+
+      if (mode === 'explorer' && currentWorkspace) {
+        console.log('SyncEngine: Fetching document for tree event in explorer mode');
+
+        // Fetch the document from the workspace
+        const wsId = currentWorkspace.name || currentWorkspace.id;
+        const response = await apiClient.getWorkspaceDocuments(wsId, eventData.contextSpec || '/', ['data/abstraction/tab']);
+
+        if (response.status === 'success') {
+          const documents = response.payload || [];
+          const document = documents.find(doc => doc.id === documentId);
+
+          if (document && document.schema === 'data/abstraction/tab' && document.data?.url) {
+            console.log('SyncEngine: Found tab document from tree event:', document.data.title);
+
+            // Check if we should open this tab (filter by browser identity if enabled)
+            if (syncSettings.syncOnlyThisBrowser) {
+              const browserIdentity = await browserStorage.getBrowserIdentity();
+              const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
+
+              if (hasOurFeature) {
+                console.log('SyncEngine: Skipping tab from same browser instance (tree event)');
+                return;
+              }
+            }
+
+            // Check if tab is already open or pending
+            const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
+            const isPending = this.isPendingTabOpen(document.data.url);
+
+            if (existingTabs.length === 0 && !isPending) {
+              console.log('SyncEngine: Auto-opening tab from tree event:', document.data.title);
+              this.markPendingTabOpen(document.data.url);
+
+              try {
+                await this.openTabsWithRateLimit([document]);
+              } finally {
+                this.clearPendingTabOpen(document.data.url);
+              }
+            } else {
+              console.log('SyncEngine: Tab already exists or pending (tree event):', document.data.url);
+            }
+          } else {
+            console.log('SyncEngine: Document from tree event is not a tab document');
+          }
+        } else {
+          console.log('SyncEngine: Failed to fetch document for tree event:', response);
+        }
+      }
+    } catch (error) {
+      console.error('SyncEngine: Error handling tree document insertion:', error);
     }
   }
 
@@ -291,13 +391,29 @@ export class SyncEngine {
       } else {
         // Workspace mode: check if event relates to our current workspace and path
         const eventWorkspaceId = eventData.workspaceId || eventData.id;
+
+        // For tree events, contextSpec is directly in the event data
+        // For regular document events, it might be nested or default to '/'
         const eventContextSpec = eventData.contextSpec || '/';
 
         // Check workspace match
         const workspaceMatch = eventWorkspaceId === (currentWorkspace?.id || currentWorkspace?.name);
 
         // Check path match (document events should include contextSpec)
+        // For tree events, we get exact contextSpec, so we can do precise matching
         const pathMatch = workspacePath ? eventContextSpec === workspacePath : true;
+
+        console.log('SyncEngine: Event relevance check:', {
+          eventType: eventData.type,
+          eventWorkspaceId,
+          currentWorkspaceId: currentWorkspace?.id,
+          currentWorkspaceName: currentWorkspace?.name,
+          eventContextSpec,
+          workspacePath,
+          workspaceMatch,
+          pathMatch,
+          relevant: workspaceMatch && pathMatch
+        });
 
         return workspaceMatch && pathMatch;
       }
