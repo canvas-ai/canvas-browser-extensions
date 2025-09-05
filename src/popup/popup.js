@@ -826,7 +826,7 @@ function renderBrowserTabs() {
       className: 'action-btn small primary',
       'data-action': 'sync',
       'data-tab-id': tab.id,
-      title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas'
+      title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas (Ctrl+click to sync and close)'
     }, '↗');
     if (isSynced) syncButton.disabled = true;
 
@@ -1092,7 +1092,7 @@ function applySearchResults(container, results, type) {
     }
   });
 
-  // Show/hide items based on search results
+  // Show/hide items based on search results and auto-select visible ones
   tabItems.forEach(item => {
     const itemId = type === 'browser'
       ? parseInt(item.dataset.tabId)
@@ -1102,6 +1102,18 @@ function applySearchResults(container, results, type) {
       item.style.display = 'flex';
       item.setAttribute('data-search-match', 'true');
 
+      // Auto-select search results for immediate syncing
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      if (checkbox && !checkbox.disabled) {
+        checkbox.checked = true;
+        // Update selection sets
+        if (type === 'browser') {
+          selectedBrowserTabs.add(itemId);
+        } else if (type === 'canvas') {
+          selectedCanvasTabs.add(itemId);
+        }
+      }
+
       // Add search highlighting if available
       const searchResult = results.find(r =>
         (type === 'browser' ? r.item.id : r.item.id) === itemId
@@ -1110,8 +1122,23 @@ function applySearchResults(container, results, type) {
     } else {
       item.style.display = 'none';
       item.removeAttribute('data-search-match');
+
+      // Uncheck hidden items
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = false;
+        // Remove from selection sets
+        if (type === 'browser') {
+          selectedBrowserTabs.delete(itemId);
+        } else if (type === 'canvas') {
+          selectedCanvasTabs.delete(itemId);
+        }
+      }
     }
   });
+
+  // Update bulk action visibility
+  updateBulkActionVisibility();
 }
 
 function showSearchEmptyState(container, query) {
@@ -1212,7 +1239,23 @@ function clearSearch() {
     item.style.display = 'flex';
     item.removeAttribute('data-search-match');
     clearHighlights(item);
+
+    // Clear auto-selections from search when clearing search
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    if (checkbox && !checkbox.disabled) {
+      checkbox.checked = false;
+    }
   });
+
+  // Clear selection sets when clearing search
+  if (currentTab === 'browser-to-canvas') {
+    selectedBrowserTabs.clear();
+  } else if (currentTab === 'canvas-to-browser') {
+    selectedCanvasTabs.clear();
+  }
+
+  // Update bulk action visibility
+  updateBulkActionVisibility();
 
   // Show original empty state if no items
   if (tabItems.length === 0) {
@@ -1965,9 +2008,9 @@ function updateBulkActionVisibility() {
 }
 
 // Tab action handlers (now called via event delegation)
-async function handleSyncTab(tabId) {
+async function handleSyncTab(tabId, shouldCloseAfterSync = false) {
   try {
-    console.log('Syncing tab:', tabId);
+    console.log('Syncing tab:', tabId, shouldCloseAfterSync ? '(will close after sync)' : '');
 
     // Find the tab
     const tab = browserTabs.find(t => t.id === tabId);
@@ -1980,7 +2023,13 @@ async function handleSyncTab(tabId) {
     console.log('Sync tab response:', response);
 
     if (response.success) {
-      await loadTabs(); // Refresh lists
+      // If Ctrl was held, close the tab after successful sync
+      if (shouldCloseAfterSync) {
+        console.log('Closing tab after sync as requested:', tabId);
+        await handleCloseTab(tabId);
+      } else {
+        await loadTabs(); // Refresh lists only if not closing
+      }
     }
   } catch (error) {
     console.error('Failed to sync tab:', error);
@@ -2146,7 +2195,9 @@ function handleBrowserTabAction(event) {
     switch (action) {
       case 'sync':
         console.log('Calling handleSyncTab with tabId:', tabId);
-        handleSyncTab(tabId);
+        // Check if Ctrl key was held during click
+        const shouldCloseAfterSync = event.ctrlKey || event.metaKey;
+        handleSyncTab(tabId, shouldCloseAfterSync);
         break;
       case 'close':
         console.log('Calling handleCloseTab with tabId:', tabId);
