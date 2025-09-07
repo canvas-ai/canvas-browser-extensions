@@ -16,7 +16,7 @@ let toast;
 
 // State
 let isConnected = false;
-let currentUser = null;
+const currentUser = null;
 let availableContexts = [];
 let availableWorkspaces = [];
 let settings = {};
@@ -284,7 +284,7 @@ async function handleTestConnection() {
     const response = await sendMessageToBackground('TEST_CONNECTION', connectionData);
     console.log('Connection test response:', response);
 
-        if (response.success) {
+    if (response.success) {
       // Only show connected status if BOTH connection AND authentication succeed
       const isFullyConnected = response.connected && response.authenticated;
       updateConnectionStatus(isFullyConnected);
@@ -349,7 +349,7 @@ async function handleConnect() {
     const response = await sendMessageToBackground('CONNECT', connectionData);
     console.log('Connect response:', response);
 
-        if (response.success && response.authenticated) {
+    if (response.success && response.authenticated) {
       isConnected = true;
       updateConnectionStatus(true);
 
@@ -899,7 +899,7 @@ function setupStorageListeners() {
         if (changes.canvasCurrentContext) {
           console.log('Settings: Current context changed');
           const newContext = changes.canvasCurrentContext.newValue;
-                    if (newContext) {
+          if (newContext) {
             isBoundToContext = true;
             if (boundContextId) boundContextId.textContent = newContext.id;
             if (boundContextUrl) boundContextUrl.textContent = newContext.url;

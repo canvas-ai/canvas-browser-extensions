@@ -37,11 +37,11 @@ let currentWorkspacePath = '/';
 let browserTabs = [];
 let canvasTabs = [];
 let allBrowserTabs = []; // All tabs including synced ones
-let syncedTabIds = new Set(); // Track which tabs are already synced
+const syncedTabIds = new Set(); // Track which tabs are already synced
 let showingSyncedTabs = false; // Track checkbox state
 let showingAllCanvasTabs = false; // Track show all Canvas tabs checkbox state
-let selectedBrowserTabs = new Set();
-let selectedCanvasTabs = new Set();
+const selectedBrowserTabs = new Set();
+const selectedCanvasTabs = new Set();
 let currentTab = 'browser-to-canvas';
 
 // View state
@@ -86,52 +86,6 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle background events from service worker
   if (message.type === 'BACKGROUND_EVENT') {
     switch (message.eventType) {
-      case 'tabs.refresh':
-        console.log('Refreshing tabs due to context change');
-        loadTabs();
-        break;
-
-      case 'context.changed':
-        console.log('Context changed:', message.data);
-        // Update context display
-        if (message.data.contextId && message.data.url) {
-          // Update current connection and refresh display properly
-          if (currentConnection.context) {
-            currentConnection.context.id = message.data.contextId;
-            currentConnection.context.url = message.data.url;
-          }
-          // Refresh the entire status display to ensure proper formatting
-          updateConnectionStatus(currentConnection);
-        }
-        break;
-
-      case 'context.url.set':
-        console.log('Context URL set:', message.data);
-        // Update context display when URL changes via CLI
-        if (message.data.contextId && message.data.url) {
-          // Update current connection and refresh display properly
-          if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
-            currentConnection.context.url = message.data.url;
-          }
-          // Refresh the entire status display to ensure proper formatting
-          updateConnectionStatus(currentConnection);
-        }
-        // Refresh tabs to show updated context
-        loadTabs();
-        break;
-
-      case 'websocket.context.joined':
-        console.log('Joined context:', message.data);
-        break;
-
-      default:
-        console.log('Unknown background event:', message.eventType, message.data);
-    }
-    return;
-  }
-
-  // Handle direct message types (legacy)
-  switch (message.type) {
     case 'tabs.refresh':
       console.log('Refreshing tabs due to context change');
       loadTabs();
@@ -171,7 +125,53 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     default:
-      console.log('Unknown message type:', message.type, message.data);
+      console.log('Unknown background event:', message.eventType, message.data);
+    }
+    return;
+  }
+
+  // Handle direct message types (legacy)
+  switch (message.type) {
+  case 'tabs.refresh':
+    console.log('Refreshing tabs due to context change');
+    loadTabs();
+    break;
+
+  case 'context.changed':
+    console.log('Context changed:', message.data);
+    // Update context display
+    if (message.data.contextId && message.data.url) {
+      // Update current connection and refresh display properly
+      if (currentConnection.context) {
+        currentConnection.context.id = message.data.contextId;
+        currentConnection.context.url = message.data.url;
+      }
+      // Refresh the entire status display to ensure proper formatting
+      updateConnectionStatus(currentConnection);
+    }
+    break;
+
+  case 'context.url.set':
+    console.log('Context URL set:', message.data);
+    // Update context display when URL changes via CLI
+    if (message.data.contextId && message.data.url) {
+      // Update current connection and refresh display properly
+      if (currentConnection.context && currentConnection.context.id === message.data.contextId) {
+        currentConnection.context.url = message.data.url;
+      }
+      // Refresh the entire status display to ensure proper formatting
+      updateConnectionStatus(currentConnection);
+    }
+    // Refresh tabs to show updated context
+    loadTabs();
+    break;
+
+  case 'websocket.context.joined':
+    console.log('Joined context:', message.data);
+    break;
+
+  default:
+    console.log('Unknown message type:', message.type, message.data);
   }
 });
 
@@ -429,7 +429,7 @@ function updateConnectionStatus(connection) {
     connectionStatus.className = 'status-dot connected';
     connectionText.textContent = 'Connected';
 
-        // Context mode header
+    // Context mode header
     if ((connection.mode === 'context') && connection.context) {
       console.log('Popup: Context mode, context:', connection.context);
       console.log('Popup: Context mode, workspace info:', connection.workspace);
@@ -1259,7 +1259,7 @@ function clearSearch() {
 
   // Show original empty state if no items
   if (tabItems.length === 0) {
-    let emptyState = container.querySelector('.empty-state');
+    const emptyState = container.querySelector('.empty-state');
     if (emptyState) {
       emptyState.className = 'empty-state';
       if (currentTab === 'browser-to-canvas') {
@@ -1475,7 +1475,7 @@ function renderTreeNode(node, parentPath, level) {
       `;
 
       if (childHasChildren) {
-        html += `<div class="tree-children" style="display: none;">`;
+        html += '<div class="tree-children" style="display: none;">';
         // FIXED: Pass currentPath as the parentPath for recursive call, not childPath
         html += renderTreeNode(child, currentPath, level + 1);
         html += '</div>';
@@ -2193,22 +2193,22 @@ function handleBrowserTabAction(event) {
     }
 
     switch (action) {
-      case 'sync':
-        console.log('Calling handleSyncTab with tabId:', tabId);
-        // Check if Ctrl key was held during click
-        const shouldCloseAfterSync = event.ctrlKey || event.metaKey;
-        handleSyncTab(tabId, shouldCloseAfterSync);
-        break;
-      case 'close':
-        console.log('Calling handleCloseTab with tabId:', tabId);
-        handleCloseTab(tabId);
-        break;
-      case 'pin':
-        console.log('Calling handlePinTab with tabId:', tabId);
-        handlePinTab(tabId);
-        break;
-      default:
-        console.warn('Unknown browser tab action:', action);
+    case 'sync':
+      console.log('Calling handleSyncTab with tabId:', tabId);
+      // Check if Ctrl key was held during click
+      const shouldCloseAfterSync = event.ctrlKey || event.metaKey;
+      handleSyncTab(tabId, shouldCloseAfterSync);
+      break;
+    case 'close':
+      console.log('Calling handleCloseTab with tabId:', tabId);
+      handleCloseTab(tabId);
+      break;
+    case 'pin':
+      console.log('Calling handlePinTab with tabId:', tabId);
+      handlePinTab(tabId);
+      break;
+    default:
+      console.warn('Unknown browser tab action:', action);
     }
     return;
   }
@@ -2252,20 +2252,20 @@ function handleCanvasTabAction(event) {
     }
 
     switch (action) {
-      case 'open':
-        console.log('Calling handleOpenCanvasTab with documentId:', documentId);
-        handleOpenCanvasTab(documentId);
-        break;
-      case 'remove':
-        console.log('Calling handleRemoveCanvasTab with documentId:', documentId);
-        handleRemoveCanvasTab(documentId);
-        break;
-      case 'delete':
-        console.log('Calling handleDeleteCanvasTab with documentId:', documentId);
-        handleDeleteCanvasTab(documentId);
-        break;
-      default:
-        console.warn('Unknown Canvas tab action:', action);
+    case 'open':
+      console.log('Calling handleOpenCanvasTab with documentId:', documentId);
+      handleOpenCanvasTab(documentId);
+      break;
+    case 'remove':
+      console.log('Calling handleRemoveCanvasTab with documentId:', documentId);
+      handleRemoveCanvasTab(documentId);
+      break;
+    case 'delete':
+      console.log('Calling handleDeleteCanvasTab with documentId:', documentId);
+      handleDeleteCanvasTab(documentId);
+      break;
+    default:
+      console.warn('Unknown Canvas tab action:', action);
     }
     return;
   }

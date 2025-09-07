@@ -82,7 +82,7 @@ export class TabManager {
 
       // Add browser identity string if "sync only current browser" is enabled
       if (syncSettings.syncOnlyCurrentBrowser) {
-        features.push(`client/app/browser-identity-string`);
+        features.push('client/app/browser-identity-string');
       }
 
       // Add instance identifier
@@ -99,7 +99,7 @@ export class TabManager {
 
   // Check if tab should be synced (exclude internal pages)
   shouldSyncTab(tab) {
-    console.log(`🔧 shouldSyncTab: Checking tab:`, {
+    console.log('🔧 shouldSyncTab: Checking tab:', {
       id: tab?.id,
       url: tab?.url,
       title: tab?.title,
@@ -108,7 +108,7 @@ export class TabManager {
     });
 
     if (!tab || !tab.url || !tab.title) {
-      console.log(`❌ shouldSyncTab: Tab missing basic fields:`, {
+      console.log('❌ shouldSyncTab: Tab missing basic fields:', {
         hasTab: !!tab,
         hasUrl: !!tab?.url,
         hasTitle: !!tab?.title
@@ -119,7 +119,7 @@ export class TabManager {
     // Allow tabs that are complete or loading (but not discarded)
     // Note: 'unloaded' tabs are still syncable - Chrome just unloaded them to save memory
     if (tab.discarded === true) {
-      console.log(`❌ shouldSyncTab: Tab is discarded`);
+      console.log('❌ shouldSyncTab: Tab is discarded');
       return false;
     }
 
@@ -456,19 +456,19 @@ export class TabManager {
         throw new Error('Tab is not syncable');
       }
 
-      console.log(`🔧 TabManager.syncTabToCanvas: Tab is syncable, proceeding with sync`);
+      console.log('🔧 TabManager.syncTabToCanvas: Tab is syncable, proceeding with sync');
 
       // Convert tab to Canvas document format
       const document = this.convertTabToDocument(tab, browserIdentity, syncSettings);
-      console.log(`🔧 TabManager.syncTabToCanvas: Converted to document:`, {
+      console.log('🔧 TabManager.syncTabToCanvas: Converted to document:', {
         schema: document.schema,
         url: document.data.url,
         title: document.data.title,
         featureArrayLength: document.featureArray?.length
       });
 
-      console.log(`🔧 TabManager.syncTabToCanvas: Making API call to insertDocument...`);
-      console.log(`🔧 TabManager.syncTabToCanvas: API client details:`, {
+      console.log('🔧 TabManager.syncTabToCanvas: Making API call to insertDocument...');
+      console.log('🔧 TabManager.syncTabToCanvas: API client details:', {
         hasApiClient: !!apiClient,
         hasInsertMethod: typeof apiClient?.insertDocument === 'function',
         apiToken: apiClient?.apiToken ? 'present' : 'missing',
@@ -482,7 +482,7 @@ export class TabManager {
         document.featureArray
       );
 
-      console.log(`🔧 TabManager.syncTabToCanvas: API response:`, response);
+      console.log('🔧 TabManager.syncTabToCanvas: API response:', response);
 
       if (response.status === 'success') {
         // response.payload is now an array of document IDs
@@ -625,7 +625,7 @@ export class TabManager {
         documents[0]?.featureArray || [] // All tabs should have same feature array
       );
 
-      console.log(`🔧 TabManager.syncMultipleTabs: Batch API response:`, response);
+      console.log('🔧 TabManager.syncMultipleTabs: Batch API response:', response);
 
       if (response.status === 'success') {
         // response.payload is now an array of document IDs
@@ -650,7 +650,7 @@ export class TabManager {
       }
 
     } catch (error) {
-      console.error(`❌ TabManager.syncMultipleTabs: Batch sync failed:`, error);
+      console.error('❌ TabManager.syncMultipleTabs: Batch sync failed:', error);
 
       // Fallback to individual sync if batch fails
       console.log('🔄 TabManager.syncMultipleTabs: Falling back to individual sync...');

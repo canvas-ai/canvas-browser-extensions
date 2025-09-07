@@ -215,6 +215,54 @@ function setupWebSocketEventHandlers() {
     console.log('WebSocket disconnected');
     broadcastToPopup('websocket.disconnected', {});
   });
+
+  // Workspace tree changes
+  webSocketClient.on('workspace.tree.updated', async (data) => {
+    console.log('Workspace tree updated:', data);
+    // Refresh context menus when tree structure changes
+    await setupContextMenus();
+    broadcastToPopup('workspace.tree.updated', data);
+  });
+
+  webSocketClient.on('workspace.tree.created', async (data) => {
+    console.log('Workspace tree node created:', data);
+    // Refresh context menus when new directories are created
+    await setupContextMenus();
+    broadcastToPopup('workspace.tree.created', data);
+  });
+
+  webSocketClient.on('workspace.tree.deleted', async (data) => {
+    console.log('Workspace tree node deleted:', data);
+    // Refresh context menus when directories are deleted
+    await setupContextMenus();
+    broadcastToPopup('workspace.tree.deleted', data);
+  });
+
+  webSocketClient.on('workspace.tree.renamed', async (data) => {
+    console.log('Workspace tree node renamed:', data);
+    // Refresh context menus when directories are renamed
+    await setupContextMenus();
+    broadcastToPopup('workspace.tree.renamed', data);
+  });
+
+  // Directory-specific events
+  webSocketClient.on('directory.created', async (data) => {
+    console.log('Directory created:', data);
+    await setupContextMenus();
+    broadcastToPopup('directory.created', data);
+  });
+
+  webSocketClient.on('directory.deleted', async (data) => {
+    console.log('Directory deleted:', data);
+    await setupContextMenus();
+    broadcastToPopup('directory.deleted', data);
+  });
+
+  webSocketClient.on('directory.renamed', async (data) => {
+    console.log('Directory renamed:', data);
+    await setupContextMenus();
+    broadcastToPopup('directory.renamed', data);
+  });
 }
 
 // Note: Real-time tab event handling has been moved to sync-engine.js to avoid duplication
@@ -446,169 +494,169 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (message.type) {
-    case 'GET_CONNECTION_STATUS':
-      // Return current connection status from storage
-      handleGetConnectionStatus(sendResponse);
-      return true;
+  case 'GET_CONNECTION_STATUS':
+    // Return current connection status from storage
+    handleGetConnectionStatus(sendResponse);
+    return true;
 
-    case 'TEST_CONNECTION':
-      // Test connection to Canvas server
-      handleTestConnection(message.data, sendResponse);
-      return true; // Keep message channel open for async response
+  case 'TEST_CONNECTION':
+    // Test connection to Canvas server
+    handleTestConnection(message.data, sendResponse);
+    return true; // Keep message channel open for async response
 
-    case 'CONNECT':
-      // Connect to Canvas server
-      handleConnect(message.data, sendResponse);
-      return true;
+  case 'CONNECT':
+    // Connect to Canvas server
+    handleConnect(message.data, sendResponse);
+    return true;
 
-    case 'DISCONNECT':
-      // Disconnect from Canvas server
-      handleDisconnect(sendResponse);
-      return true;
+  case 'DISCONNECT':
+    // Disconnect from Canvas server
+    handleDisconnect(sendResponse);
+    return true;
 
-    case 'GET_CONTEXTS':
-      // Get available contexts from Canvas server
-      handleGetContexts(sendResponse);
-      return true;
+  case 'GET_CONTEXTS':
+    // Get available contexts from Canvas server
+    handleGetContexts(sendResponse);
+    return true;
 
-    case 'GET_WORKSPACES':
-      // Get available workspaces from Canvas server
-      handleGetWorkspaces(sendResponse);
-      return true;
+  case 'GET_WORKSPACES':
+    // Get available workspaces from Canvas server
+    handleGetWorkspaces(sendResponse);
+    return true;
 
-    case 'GET_CONTEXT_TREE':
-      // Get context tree
-      handleGetContextTree(message.data, sendResponse);
-      return true;
+  case 'GET_CONTEXT_TREE':
+    // Get context tree
+    handleGetContextTree(message.data, sendResponse);
+    return true;
 
-    case 'GET_WORKSPACE_TREE':
-      // Get workspace tree
-      handleGetWorkspaceTree(message.data, sendResponse);
-      return true;
+  case 'GET_WORKSPACE_TREE':
+    // Get workspace tree
+    handleGetWorkspaceTree(message.data, sendResponse);
+    return true;
 
-    case 'OPEN_WORKSPACE':
-      // Open a workspace by id/name
-      handleOpenWorkspace(message.data, sendResponse);
-      return true;
+  case 'OPEN_WORKSPACE':
+    // Open a workspace by id/name
+    handleOpenWorkspace(message.data, sendResponse);
+    return true;
 
-    case 'BIND_CONTEXT':
-      // Bind to a specific context
-      handleBindContext(message.data, sendResponse);
-      return true;
+  case 'BIND_CONTEXT':
+    // Bind to a specific context
+    handleBindContext(message.data, sendResponse);
+    return true;
 
-    case 'SAVE_SETTINGS':
-      // Save all extension settings
-      handleSaveSettings(message.data, sendResponse);
-      return true;
+  case 'SAVE_SETTINGS':
+    // Save all extension settings
+    handleSaveSettings(message.data, sendResponse);
+    return true;
 
-    case 'GET_SYNC_SETTINGS':
-      // Get sync settings only
-      handleGetSyncSettings(sendResponse);
-      return true;
+  case 'GET_SYNC_SETTINGS':
+    // Get sync settings only
+    handleGetSyncSettings(sendResponse);
+    return true;
 
-    case 'SET_SYNC_SETTINGS':
-      // Set sync settings only
-      handleSetSyncSettings(message.data, sendResponse);
-      return true;
+  case 'SET_SYNC_SETTINGS':
+    // Set sync settings only
+    handleSetSyncSettings(message.data, sendResponse);
+    return true;
 
-    case 'GET_TABS':
-      // Get browser tabs or canvas tabs
-      handleGetTabs(message.data, sendResponse);
-      return true;
+  case 'GET_TABS':
+    // Get browser tabs or canvas tabs
+    handleGetTabs(message.data, sendResponse);
+    return true;
 
-    case 'GET_ALL_TABS':
-      // Get all browser tabs (both synced and unsynced)
-      handleGetAllTabs(message.data, sendResponse);
-      return true;
+  case 'GET_ALL_TABS':
+    // Get all browser tabs (both synced and unsynced)
+    handleGetAllTabs(message.data, sendResponse);
+    return true;
 
-    case 'GET_CANVAS_DOCUMENTS':
-      // Get Canvas documents for current context
-      handleGetCanvasDocuments(message.data, sendResponse);
-      return true;
+  case 'GET_CANVAS_DOCUMENTS':
+    // Get Canvas documents for current context
+    handleGetCanvasDocuments(message.data, sendResponse);
+    return true;
 
-    case 'GET_WORKSPACE_DOCUMENTS':
-      // Get documents for current workspace (explorer mode)
-      handleGetWorkspaceDocuments(message.data, sendResponse);
-      return true;
+  case 'GET_WORKSPACE_DOCUMENTS':
+    // Get documents for current workspace (explorer mode)
+    handleGetWorkspaceDocuments(message.data, sendResponse);
+    return true;
 
-    case 'SYNC_TAB':
-      // Sync a single tab to Canvas
-      handleSyncTab(message.data, sendResponse);
-      return true;
+  case 'SYNC_TAB':
+    // Sync a single tab to Canvas
+    handleSyncTab(message.data, sendResponse);
+    return true;
 
-    case 'SYNC_MULTIPLE_TABS':
-      // Sync multiple tabs to Canvas
-      handleSyncMultipleTabs(message.data, sendResponse);
-      return true;
+  case 'SYNC_MULTIPLE_TABS':
+    // Sync multiple tabs to Canvas
+    handleSyncMultipleTabs(message.data, sendResponse);
+    return true;
 
-    case 'OPEN_CANVAS_DOCUMENT':
-      // Open Canvas document as browser tab
-      handleOpenCanvasDocument(message.data, sendResponse);
-      return true;
+  case 'OPEN_CANVAS_DOCUMENT':
+    // Open Canvas document as browser tab
+    handleOpenCanvasDocument(message.data, sendResponse);
+    return true;
 
-    case 'REMOVE_CANVAS_DOCUMENT':
-      // Remove Canvas document
-      handleRemoveCanvasDocument(message.data, sendResponse);
-      return true;
+  case 'REMOVE_CANVAS_DOCUMENT':
+    // Remove Canvas document
+    handleRemoveCanvasDocument(message.data, sendResponse);
+    return true;
 
-    case 'CLOSE_TAB':
-      // Close browser tab
-      handleCloseTab(message.data, sendResponse);
-      return true;
+  case 'CLOSE_TAB':
+    // Close browser tab
+    handleCloseTab(message.data, sendResponse);
+    return true;
 
-    case 'FOCUS_TAB':
-      // Focus browser tab
-      handleFocusTab(message.data, sendResponse);
-      return true;
+  case 'FOCUS_TAB':
+    // Focus browser tab
+    handleFocusTab(message.data, sendResponse);
+    return true;
 
-    case 'TOGGLE_PIN_TAB':
-      // Toggle pin state of a tab
-      handleTogglePinTab(message.data, sendResponse);
-      return true;
+  case 'TOGGLE_PIN_TAB':
+    // Toggle pin state of a tab
+    handleTogglePinTab(message.data, sendResponse);
+    return true;
 
-    case 'GET_PINNED_TABS':
-      // Get list of pinned tab IDs
-      handleGetPinnedTabs(message.data, sendResponse);
-      return true;
+  case 'GET_PINNED_TABS':
+    // Get list of pinned tab IDs
+    handleGetPinnedTabs(message.data, sendResponse);
+    return true;
 
-    case 'GET_CONNECTION_SETTINGS':
-      // Get connection settings
-      handleGetConnectionSettings(message.data, sendResponse);
-      return true;
+  case 'GET_CONNECTION_SETTINGS':
+    // Get connection settings
+    handleGetConnectionSettings(message.data, sendResponse);
+    return true;
 
-    case 'GET_MODE_AND_SELECTION':
-      // Get current sync mode and selection (context/workspace)
-      handleGetModeAndSelection(sendResponse);
-      return true;
+  case 'GET_MODE_AND_SELECTION':
+    // Get current sync mode and selection (context/workspace)
+    handleGetModeAndSelection(sendResponse);
+    return true;
 
-    case 'SET_MODE_AND_SELECTION':
-      // Set current sync mode and selection
-      handleSetModeAndSelection(message.data, sendResponse);
-      return true;
+  case 'SET_MODE_AND_SELECTION':
+    // Set current sync mode and selection
+    handleSetModeAndSelection(message.data, sendResponse);
+    return true;
 
-    case 'OPEN_TAB':
-      // Open a Canvas tab in browser
-      handleOpenTab(message.data, sendResponse);
-      return true;
+  case 'OPEN_TAB':
+    // Open a Canvas tab in browser
+    handleOpenTab(message.data, sendResponse);
+    return true;
 
-    case 'REMOVE_FROM_CONTEXT':
-      // Remove tab from context
-      handleRemoveFromContext(message.data, sendResponse);
-      return true;
+  case 'REMOVE_FROM_CONTEXT':
+    // Remove tab from context
+    handleRemoveFromContext(message.data, sendResponse);
+    return true;
 
-    case 'DELETE_FROM_DATABASE':
-      // Delete tab from database completely
-      handleDeleteFromDatabase(message.data, sendResponse);
-      return true;
+  case 'DELETE_FROM_DATABASE':
+    // Delete tab from database completely
+    handleDeleteFromDatabase(message.data, sendResponse);
+    return true;
 
-    case 'context.url.update':
-      // Update context URL
-      handleUpdateContextUrl(message, sendResponse);
-      return true;
+  case 'context.url.update':
+    // Update context URL
+    handleUpdateContextUrl(message, sendResponse);
+    return true;
 
-    default:
-      console.warn('Unknown message type:', message.type);
-      sendResponse({ error: 'Unknown message type' });
+  default:
+    console.warn('Unknown message type:', message.type);
+    sendResponse({ error: 'Unknown message type' });
   }
 });
 
@@ -1844,7 +1892,7 @@ async function handleOpenCanvasDocument(data, sendResponse) {
       console.log('Opening multiple Canvas documents:', documents.length);
 
       const results = [];
-            const bulkOptions = {
+      const bulkOptions = {
         ...options,
         allowDuplicates: true,  // Allow duplicates for bulk operations from popup
         active: false  // Don't steal focus when opening multiple
@@ -2119,20 +2167,50 @@ async function setupContextMenus() {
 
                 const nodeMenuId = `${wsId}:${safePath}`;
 
-                // Create menu item for this path
-                contextMenusAPI.create({
-                  id: nodeMenuId,
-                  parentId: parentMenuId,
-                  title: `📁 ${node.label || node.name}`,
-                  contexts: ['page'],
-                  documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-                });
-
-                // Recurse for children
+                // If this directory has children, first create a clickable option for storing in this directory
                 if (Array.isArray(node.children) && node.children.length > 0) {
+                  // Create the directory itself as a clickable option
+                  contextMenusAPI.create({
+                    id: nodeMenuId,
+                    parentId: parentMenuId,
+                    title: `📁 ${node.label || node.name} ➔`,
+                    contexts: ['page'],
+                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                  });
+
+                  // Then create a submenu for its children
+                  const submenuId = `${nodeMenuId}:submenu`;
+                  contextMenusAPI.create({
+                    id: submenuId,
+                    parentId: nodeMenuId,
+                    title: '▸ Subdirectories',
+                    enabled: false,  // This is just a label
+                    contexts: ['page'],
+                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                  });
+
+                  // Add separator
+                  contextMenusAPI.create({
+                    id: `${nodeMenuId}:separator`,
+                    parentId: nodeMenuId,
+                    type: 'separator',
+                    contexts: ['page'],
+                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                  });
+
+                  // Recurse for children under the parent directory menu
                   for (const child of node.children) {
                     buildMenuForNode(child, nodeMenuId, safePath);
                   }
+                } else {
+                  // No children, just create the directory as a clickable item
+                  contextMenusAPI.create({
+                    id: nodeMenuId,
+                    parentId: parentMenuId,
+                    title: `📁 ${node.label || node.name}`,
+                    contexts: ['page'],
+                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                  });
                 }
               };
 
@@ -2141,14 +2219,14 @@ async function setupContextMenus() {
                 buildMenuForNode(child, wsId, '/');
               }
             } else {
-                          // No tree structure, just add root option
-            contextMenusAPI.create({
-              id: `${wsId}:/`,
-              parentId: wsId,
-              title: '📁 / (root)',
-              contexts: ['page'],
-              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-            });
+              // No tree structure, just add root option
+              contextMenusAPI.create({
+                id: `${wsId}:/`,
+                parentId: wsId,
+                title: '📁 / (root)',
+                contexts: ['page'],
+                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+              });
             }
           } catch (treeError) {
             console.warn(`Failed to load tree for workspace ${workspace.name || workspace.id}:`, treeError);
@@ -2184,47 +2262,47 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
     try {
       console.log('🔧 Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url);
 
-    // Block context menu actions on extension pages (popup, settings, etc.)
-    if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('browser-extension://'))) {
-      console.log('Context menu blocked on extension page:', tab.url);
-      return;
-    }
+      // Block context menu actions on extension pages (popup, settings, etc.)
+      if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('browser-extension://'))) {
+        console.log('Context menu blocked on extension page:', tab.url);
+        return;
+      }
 
-    // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder")
-    if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
-      const parts = info.menuItemId.split(':');
-      if (parts.length >= 3) {
-        const workspaceName = parts[1];
-        const contextSpec = parts.slice(2).join(':'); // Rejoin in case path contains colons
+      // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder")
+      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
+        const parts = info.menuItemId.split(':');
+        if (parts.length >= 3) {
+          const workspaceName = parts[1];
+          const contextSpec = parts.slice(2).join(':'); // Rejoin in case path contains colons
 
-        try {
+          try {
           // Get sync settings and browser identity
-          const syncSettings = await browserStorage.getSyncSettings();
-          const browserIdentity = await browserStorage.getBrowserIdentity();
+            const syncSettings = await browserStorage.getSyncSettings();
+            const browserIdentity = await browserStorage.getBrowserIdentity();
 
-          // Convert tab to document format
-          const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
+            // Convert tab to document format
+            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
 
-          // Sync tab to specific workspace and path
-          const response = await apiClient.insertWorkspaceDocument(
-            workspaceName,
-            document,
-            contextSpec || '/',
-            document.featureArray
-          );
+            // Sync tab to specific workspace and path
+            const response = await apiClient.insertWorkspaceDocument(
+              workspaceName,
+              document,
+              contextSpec || '/',
+              document.featureArray
+            );
 
-          if (response.status === 'success') {
-            const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-            tabManager.markTabAsSynced(tab.id, docId);
-            console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
-          } else {
-            console.error('Failed to sync tab via context menu:', response.message);
+            if (response.status === 'success') {
+              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
+              tabManager.markTabAsSynced(tab.id, docId);
+              console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
+            } else {
+              console.error('Failed to sync tab via context menu:', response.message);
+            }
+          } catch (e) {
+            console.error('Exception syncing tab via context menu:', e);
           }
-        } catch (e) {
-          console.error('Exception syncing tab via context menu:', e);
         }
       }
-    }
     } catch (error) {
       console.error('❌ Context menu action failed:', error);
     }
