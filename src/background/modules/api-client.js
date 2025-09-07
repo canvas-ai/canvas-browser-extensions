@@ -147,7 +147,7 @@ This is a Firefox security feature, not an extension bug.
     return await this.request('DELETE', endpoint);
   }
 
-    // Test connection to server
+  // Test connection to server
   async testConnection() {
     try {
       console.log(`Testing connection to ${this.baseUrl}${this.apiBasePath}`);
@@ -197,7 +197,7 @@ This is a Firefox security feature, not an extension bug.
           console.warn('❌ no-cors mode failed:', error1);
         }
 
-                // Try approach 2: no mode specified
+        // Try approach 2: no mode specified
         try {
           console.log('🔧 Trying no mode specified...');
           const controller2 = new AbortController();
@@ -274,7 +274,7 @@ This is a Firefox security feature, not an extension bug.
             xhr.send();
           });
 
-                    console.log('✅ XMLHttpRequest succeeded:', pingData);
+          console.log('✅ XMLHttpRequest succeeded:', pingData);
 
           // Continue to authentication test if we have a token
           if (!this.apiToken) {
@@ -329,7 +329,7 @@ Firefox blocks local network requests for security reasons.
         pingOptions.mode = 'cors';
       }
 
-      console.log(`Testing ping with options:`, pingOptions);
+      console.log('Testing ping with options:', pingOptions);
 
       // Add timeout to prevent hanging
       const controller = new AbortController();

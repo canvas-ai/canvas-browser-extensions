@@ -180,31 +180,31 @@ export class SyncEngine {
       console.log('SyncEngine: Event is relevant, processing...');
 
       switch (eventData.type) {
-        case 'document.inserted':
-        case 'tree.document.inserted':
-        case 'tree.document.inserted.batch':
-          await this.handleRemoteDocumentInserted(eventData, syncSettings);
-          break;
+      case 'document.inserted':
+      case 'tree.document.inserted':
+      case 'tree.document.inserted.batch':
+        await this.handleRemoteDocumentInserted(eventData, syncSettings);
+        break;
 
-        case 'document.updated':
-        case 'tree.document.updated':
-        case 'tree.document.updated.batch':
-          await this.handleRemoteDocumentUpdated(eventData, syncSettings);
-          break;
+      case 'document.updated':
+      case 'tree.document.updated':
+      case 'tree.document.updated.batch':
+        await this.handleRemoteDocumentUpdated(eventData, syncSettings);
+        break;
 
-        case 'document.removed':
-        case 'document.removed.batch':
-        case 'tree.document.removed':
-        case 'tree.document.removed.batch':
-          await this.handleRemoteDocumentRemoved(eventData, syncSettings);
-          break;
+      case 'document.removed':
+      case 'document.removed.batch':
+      case 'tree.document.removed':
+      case 'tree.document.removed.batch':
+        await this.handleRemoteDocumentRemoved(eventData, syncSettings);
+        break;
 
-        case 'document.deleted':
-        case 'document.deleted.batch':
-        case 'tree.document.deleted':
-        case 'tree.document.deleted.batch':
-          await this.handleRemoteDocumentDeleted(eventData, syncSettings);
-          break;
+      case 'document.deleted':
+      case 'document.deleted.batch':
+      case 'tree.document.deleted':
+      case 'tree.document.deleted.batch':
+        await this.handleRemoteDocumentDeleted(eventData, syncSettings);
+        break;
       }
     } catch (error) {
       console.error('SyncEngine: Failed to handle WebSocket event:', error);
@@ -268,7 +268,7 @@ export class SyncEngine {
     }
   }
 
-    // Handle tree document insertion events (these have documentId/documentIds and contextSpec)
+  // Handle tree document insertion events (these have documentId/documentIds and contextSpec)
   async handleTreeDocumentInserted(eventData, syncSettings) {
     try {
       console.log('SyncEngine: Handling tree document insertion:', eventData);
@@ -697,7 +697,7 @@ export class SyncEngine {
 
       // Get Canvas documents
       const syncSettings = await browserStorage.getSyncSettings();
-      let featureArray = ['data/abstraction/tab'];
+      const featureArray = ['data/abstraction/tab'];
 
       // Filter by browser identity if enabled
       if (syncSettings.syncOnlyThisBrowser) {
@@ -869,45 +869,45 @@ export class SyncEngine {
       }
 
       switch (actualBehavior) {
-        case 'close-open-new':
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
-          }
-          break;
+      case 'close-open-new':
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+        }
+        break;
 
-        case 'save-close-open-new':
-          if (oldContextId && mode === 'context') {
-            await this.syncAllBrowserTabs(oldContextId);
-          } else if (mode === 'explorer' && currentWorkspace) {
-            await this.syncAllBrowserTabsToWorkspace(currentWorkspace, workspacePath);
-          }
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
-          }
-          break;
+      case 'save-close-open-new':
+        if (oldContextId && mode === 'context') {
+          await this.syncAllBrowserTabs(oldContextId);
+        } else if (mode === 'explorer' && currentWorkspace) {
+          await this.syncAllBrowserTabsToWorkspace(currentWorkspace, workspacePath);
+        }
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+        }
+        break;
 
-        case 'keep-open-new':
-          if (shouldFetchDocuments) {
-            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
-          }
-          break;
+      case 'keep-open-new':
+        if (shouldFetchDocuments) {
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+        }
+        break;
 
-        case 'keep-only':
-          // Do nothing - keep current tabs, don't open new ones
-          // But still update our internal indexes
-          await this.updateInternalIndexes(mode, newContextId, currentWorkspace, workspacePath);
-          console.log('SyncEngine: Keep-only mode - preserving current tabs, not fetching new ones');
-          break;
+      case 'keep-only':
+        // Do nothing - keep current tabs, don't open new ones
+        // But still update our internal indexes
+        await this.updateInternalIndexes(mode, newContextId, currentWorkspace, workspacePath);
+        console.log('SyncEngine: Keep-only mode - preserving current tabs, not fetching new ones');
+        break;
 
-        default:
-          console.warn('SyncEngine: Unknown context change behavior:', actualBehavior);
-          // Fallback to close-open-new
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
-          }
+      default:
+        console.warn('SyncEngine: Unknown context change behavior:', actualBehavior);
+        // Fallback to close-open-new
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
+        }
       }
 
     } catch (error) {
@@ -946,7 +946,7 @@ export class SyncEngine {
 
       // Get Canvas documents for the new context
       const syncSettings = await browserStorage.getSyncSettings();
-      let featureArray = ['data/abstraction/tab'];
+      const featureArray = ['data/abstraction/tab'];
 
       // Filter by browser identity if enabled
       if (syncSettings.syncOnlyThisBrowser) {
@@ -1111,7 +1111,7 @@ export class SyncEngine {
         console.log('SyncEngine: Fetching documents from context:', contextId);
 
         const syncSettings = await browserStorage.getSyncSettings();
-        let featureArray = ['data/abstraction/tab'];
+        const featureArray = ['data/abstraction/tab'];
 
         if (syncSettings.syncOnlyThisBrowser) {
           const browserIdentity = await browserStorage.getBrowserIdentity();
@@ -1260,40 +1260,40 @@ export class SyncEngine {
       console.log('SyncEngine: Will fetch documents from backend for workspace:', workspace?.name || workspace?.id, 'path:', newPath);
 
       switch (actualBehavior) {
-        case 'close-open-new':
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
-          }
-          break;
+      case 'close-open-new':
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+        }
+        break;
 
-        case 'save-close-open-new':
-          await this.syncAllBrowserTabsToWorkspace(workspace, oldPath);
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
-          }
-          break;
+      case 'save-close-open-new':
+        await this.syncAllBrowserTabsToWorkspace(workspace, oldPath);
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+        }
+        break;
 
-        case 'keep-open-new':
-          if (shouldFetchDocuments) {
-            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
-          }
-          break;
+      case 'keep-open-new':
+        if (shouldFetchDocuments) {
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+        }
+        break;
 
-        case 'keep-only':
-          // Do nothing - keep current tabs, don't open new ones
-          await this.updateInternalIndexes(mode, currentContext?.id, workspace, newPath);
-          console.log('SyncEngine: Keep-only mode - preserving current tabs during workspace path change');
-          break;
+      case 'keep-only':
+        // Do nothing - keep current tabs, don't open new ones
+        await this.updateInternalIndexes(mode, currentContext?.id, workspace, newPath);
+        console.log('SyncEngine: Keep-only mode - preserving current tabs during workspace path change');
+        break;
 
-        default:
-          console.warn('SyncEngine: Unknown workspace path change behavior:', actualBehavior);
-          // Fallback to close-open-new
-          if (shouldFetchDocuments) {
-            await this.closeCurrentTabs();
-            await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
-          }
+      default:
+        console.warn('SyncEngine: Unknown workspace path change behavior:', actualBehavior);
+        // Fallback to close-open-new
+        if (shouldFetchDocuments) {
+          await this.closeCurrentTabs();
+          await this.fetchAndOpenNewTabs(mode, currentContext?.id, workspace, newPath);
+        }
       }
 
     } catch (error) {
@@ -1449,14 +1449,14 @@ export class SyncEngine {
     for (const item of items) {
       try {
         switch (item.type) {
-          case 'sync-tab':
-            await this.syncTabToCanvas(item.tabId, item.contextId);
-            break;
-          case 'open-document':
-            await this.openCanvasTabInBrowser(item.documentId);
-            break;
-          default:
-            console.warn('SyncEngine: Unknown queue item type:', item.type);
+        case 'sync-tab':
+          await this.syncTabToCanvas(item.tabId, item.contextId);
+          break;
+        case 'open-document':
+          await this.openCanvasTabInBrowser(item.documentId);
+          break;
+        default:
+          console.warn('SyncEngine: Unknown queue item type:', item.type);
         }
       } catch (error) {
         console.error('SyncEngine: Failed to process queue item:', error);
