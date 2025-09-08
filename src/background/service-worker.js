@@ -1061,6 +1061,10 @@ async function handleInsertWorkspacePath(data, sendResponse) {
 
     const response = await apiClient.insertWorkspacePath(wsIdOrName, path, nodeData, autoCreateLayers);
     if (response.status === 'success') {
+      // Refresh context menus since tree structure may have changed
+      console.log('🔧 Path inserted successfully, refreshing context menus...');
+      await setupContextMenus();
+
       sendResponse({ success: true, response: response.payload });
     } else {
       throw new Error(response.message || 'Failed to insert workspace path');
@@ -2217,30 +2221,29 @@ async function setupContextMenus() {
                 const safePath = newPath === '' ? '/' : newPath;
 
                 const nodeMenuId = `${wsId}:${safePath}`;
+                const displayName = node.label || node.name;
 
-                // If this directory has children, first create a clickable option for storing in this directory
+                // If this directory has children, create a submenu structure
                 if (Array.isArray(node.children) && node.children.length > 0) {
-                  // Create the directory itself as a clickable option
+                  // Create the directory itself as a submenu container
                   contextMenusAPI.create({
                     id: nodeMenuId,
                     parentId: parentMenuId,
-                    title: `📁 ${node.label || node.name} ➔`,
+                    title: `📁 ${displayName}`,
                     contexts: ['page'],
                     documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
                   });
 
-                  // Then create a submenu for its children
-                  const submenuId = `${nodeMenuId}:submenu`;
+                  // Add "Insert to <directory-name>" as first option
                   contextMenusAPI.create({
-                    id: submenuId,
+                    id: `${nodeMenuId}:insert`,
                     parentId: nodeMenuId,
-                    title: '▸ Subdirectories',
-                    enabled: false,  // This is just a label
+                    title: `📥 Insert to "${displayName}"`,
                     contexts: ['page'],
                     documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
                   });
 
-                  // Add separator
+                  // Add separator before subdirectories
                   contextMenusAPI.create({
                     id: `${nodeMenuId}:separator`,
                     parentId: nodeMenuId,
@@ -2249,16 +2252,16 @@ async function setupContextMenus() {
                     documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
                   });
 
-                  // Recurse for children under the parent directory menu
+                  // Recurse for children under the directory menu
                   for (const child of node.children) {
                     buildMenuForNode(child, nodeMenuId, safePath);
                   }
                 } else {
-                  // No children, just create the directory as a clickable item
+                  // No children, create the directory as a direct clickable item
                   contextMenusAPI.create({
                     id: nodeMenuId,
                     parentId: parentMenuId,
-                    title: `📁 ${node.label || node.name}`,
+                    title: `📁 ${displayName}`,
                     contexts: ['page'],
                     documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
                   });
@@ -2319,12 +2322,17 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
         return;
       }
 
-      // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder")
+      // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder" or "ws:workspaceName:/path/to/folder:insert")
       if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
         const parts = info.menuItemId.split(':');
         if (parts.length >= 3) {
           const workspaceName = parts[1];
-          const contextSpec = parts.slice(2).join(':'); // Rejoin in case path contains colons
+          let contextSpec = parts.slice(2).join(':'); // Rejoin in case path contains colons
+
+          // Check if this is an ":insert" action for a directory
+          if (contextSpec.endsWith(':insert')) {
+            contextSpec = contextSpec.slice(0, -7); // Remove ":insert" suffix
+          }
 
           try {
           // Get sync settings and browser identity

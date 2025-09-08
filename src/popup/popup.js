@@ -991,10 +991,19 @@ async function openCanvasWebUI() {
             targetUrl = `${serverUrl}/contexts/${currentConnection.context.id}`;
             console.log('Opening Canvas webui for context:', currentConnection.context.id);
           } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-            // If in Explorer mode with workspace opened, point to /workspaces/workspace.name
+            // If in Explorer mode with workspace opened, point to /workspaces/workspace.name with contextPath
             const workspaceName = getWorkspaceName(currentConnection.workspace);
-            targetUrl = `${serverUrl}/workspaces/${workspaceName}`;
-            console.log('Opening Canvas webui for workspace:', workspaceName);
+            const contextPath = currentWorkspacePath && currentWorkspacePath !== '/' ? currentWorkspacePath : '';
+
+            if (contextPath) {
+              // Use the new contextPath parameter format: /workspaces/:workspace_id/contextPath
+              targetUrl = `${serverUrl}/workspaces/${workspaceName}${contextPath}`;
+              console.log('Opening Canvas webui for workspace:', workspaceName, 'at path:', contextPath);
+            } else {
+              // Fallback to workspace root
+              targetUrl = `${serverUrl}/workspaces/${workspaceName}`;
+              console.log('Opening Canvas webui for workspace:', workspaceName, 'at root');
+            }
           }
         }
 
