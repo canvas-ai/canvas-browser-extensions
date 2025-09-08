@@ -697,6 +697,8 @@ export class TabManager {
   }
 
   // Remove Canvas document (and optionally close browser tab)
+  // NOTE: This method is deprecated in favor of handleRemoveCanvasDocument in service-worker.js
+  // which properly handles both context and workspace modes with settings
   async removeCanvasDocument(canvasDoc, apiClient, contextId, closeTab = false) {
     try {
       console.log(`Removing Canvas document: ${canvasDoc.data?.title}`);

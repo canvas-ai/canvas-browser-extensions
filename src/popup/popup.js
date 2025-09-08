@@ -1600,6 +1600,26 @@ async function handlePathSubmit() {
         pathToSend = parsed.path;
       }
 
+      // Try to insert the path in the workspace tree (creates path if it doesn't exist)
+      try {
+        const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+        const insertResponse = await sendMessageToBackground('INSERT_WORKSPACE_PATH', {
+          path: pathToSend,
+          workspaceIdOrName: wsId,
+          autoCreateLayers: true
+        });
+
+        if (insertResponse.success) {
+          console.log('Workspace path inserted/created successfully');
+        } else {
+          console.warn('Failed to insert workspace path:', insertResponse.error);
+          // Continue anyway - the path might already exist
+        }
+      } catch (insertError) {
+        console.warn('Error inserting workspace path:', insertError);
+        // Continue anyway - the path might already exist
+      }
+
       // Update workspace path (must be relative)
       currentWorkspacePath = pathToSend;
 

@@ -534,6 +534,11 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     handleGetWorkspaceTree(message.data, sendResponse);
     return true;
 
+  case 'INSERT_WORKSPACE_PATH':
+    // Insert path in workspace tree
+    handleInsertWorkspacePath(message.data, sendResponse);
+    return true;
+
   case 'OPEN_WORKSPACE':
     // Open a workspace by id/name
     handleOpenWorkspace(message.data, sendResponse);
@@ -1027,6 +1032,42 @@ async function handleGetWorkspaceTree(data, sendResponse) {
   } catch (error) {
     console.error('Failed to get workspace tree:', error);
     sendResponse({ success: false, error: error.message, tree: null });
+  }
+}
+
+async function handleInsertWorkspacePath(data, sendResponse) {
+  try {
+    const { path, workspaceIdOrName, data: nodeData, autoCreateLayers = true } = data;
+
+    let wsIdOrName = workspaceIdOrName;
+    if (!wsIdOrName) {
+      const ws = await browserStorage.getCurrentWorkspace();
+      wsIdOrName = ws?.name || ws?.id;
+    }
+    if (!wsIdOrName) throw new Error('No workspace selected');
+    if (!path) throw new Error('Path is required');
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const response = await apiClient.insertWorkspacePath(wsIdOrName, path, nodeData, autoCreateLayers);
+    if (response.status === 'success') {
+      sendResponse({ success: true, response: response.payload });
+    } else {
+      throw new Error(response.message || 'Failed to insert workspace path');
+    }
+  } catch (error) {
+    console.error('Failed to insert workspace path:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
@@ -1953,6 +1994,9 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
     const currentWorkspace = await browserStorage.getCurrentWorkspace();
     const workspacePath = await browserStorage.getWorkspacePath();
 
+    // Get sync settings to check if we should auto-close tabs
+    const syncSettings = await browserStorage.getSyncSettings();
+
     // Get connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
     if (!connectionSettings.connected || !connectionSettings.apiToken) {
@@ -1980,8 +2024,10 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
         targetContextId = currentContext.id;
       }
 
-      // Remove from context
-      const response = await apiClient.removeDocument(targetContextId, document.id);
+      // Remove or delete from context based on closeTab flag
+      const response = closeTab
+        ? await apiClient.deleteDocument(targetContextId, document.id)
+        : await apiClient.removeDocument(targetContextId, document.id);
       result = { success: response.status === 'success', response };
     } else {
       // Explorer mode: use workspace API
@@ -1993,19 +2039,24 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
       const wsId = workspace.name || workspace.id;
       const contextSpec = workspacePath || '/';
 
-      console.log('Removing document from workspace:', wsId, 'path:', contextSpec, 'documentId:', document.id);
+      console.log(`${closeTab ? 'Deleting' : 'Removing'} document from workspace:`, wsId, 'path:', contextSpec, 'documentId:', document.id);
 
-      // Remove from workspace
-      const response = await apiClient.removeWorkspaceDocuments(wsId, [document.id], contextSpec, ['data/abstraction/tab']);
+      // Remove or delete from workspace based on closeTab flag
+      const response = closeTab
+        ? await apiClient.deleteWorkspaceDocuments(wsId, [document.id], contextSpec, ['data/abstraction/tab'])
+        : await apiClient.removeWorkspaceDocuments(wsId, [document.id], contextSpec, ['data/abstraction/tab']);
       result = { success: response.status === 'success', response };
     }
 
-    // Close tab if requested
-    if (closeTab && result.success && document.data?.url) {
+    // Close tab only if user setting allows it and the operation was successful
+    if (result.success && document.data?.url && syncSettings.closeTabsRemovedFromCanvas) {
+      console.log('Closing browser tabs for removed/deleted document due to user setting');
       const tabs = await tabManager.findDuplicateTabs(document.data.url);
       for (const tab of tabs) {
         await tabManager.closeTab(tab.id);
       }
+    } else if (result.success && document.data?.url) {
+      console.log('Not closing browser tabs - closeTabsRemovedFromCanvas setting is disabled');
     }
 
     console.log('Remove Canvas document response:', result);
