@@ -435,8 +435,13 @@ function updateConnectionStatus(connection) {
       console.log('Popup: Context mode, workspace info:', connection.workspace);
       
       // Create green dot indicator for bound state
-      const boundIndicator = '<span class="status-dot connected" style="margin-right: 6px;"></span>';
-      contextId.innerHTML = `${boundIndicator}Bound to context ID: ${connection.context.id}`;
+      contextId.textContent = '';
+      const boundIndicator = createSecureElement('span', {
+        className: 'status-dot connected',
+        style: 'margin-right: 6px;'
+      });
+      contextId.appendChild(boundIndicator);
+      contextId.appendChild(document.createTextNode(`Bound to context ID: ${escapeHtml(connection.context.id)}`));
 
       // Get workspace name from context or use fallback
       const workspaceName = connection.context.workspaceName || connection.context.workspace ||
@@ -458,8 +463,13 @@ function updateConnectionStatus(connection) {
       console.log('Popup: Explorer mode, workspace:', wsName);
       
       // Create gray dot indicator for unbound state (explorer mode is not bound - no dynamic updates)
-      const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
-      contextId.innerHTML = `${unboundIndicator}Current workspace: ${wsName}`;
+      contextId.textContent = '';
+      const unboundIndicator = createSecureElement('span', {
+        className: 'status-dot unbound',
+        style: 'margin-right: 6px;'
+      });
+      contextId.appendChild(unboundIndicator);
+      contextId.appendChild(document.createTextNode(`Current workspace: ${escapeHtml(wsName)}`));
 
       // Format URL as workspace.name://path
       const workspacePath = currentWorkspacePath || '/';
@@ -469,8 +479,13 @@ function updateConnectionStatus(connection) {
       console.log('Popup: No context or workspace selected');
       
       // Create gray button indicator for unbound state
-      const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
-      contextId.innerHTML = `${unboundIndicator}-`;
+      contextId.textContent = '';
+      const unboundIndicator = createSecureElement('span', {
+        className: 'status-dot unbound',
+        style: 'margin-right: 6px;'
+      });
+      contextId.appendChild(unboundIndicator);
+      contextId.appendChild(document.createTextNode('-'));
       contextUrl.textContent = 'Not bound';
       contextUrl.classList.remove('clickable');
     }
@@ -480,8 +495,13 @@ function updateConnectionStatus(connection) {
     connectionText.textContent = 'Disconnected';
     
     // Create gray button indicator for unbound state when disconnected
-    const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
-    contextId.innerHTML = `${unboundIndicator}-`;
+    contextId.textContent = '';
+    const unboundIndicator = createSecureElement('span', {
+      className: 'status-dot unbound',
+      style: 'margin-right: 6px;'
+    });
+    contextId.appendChild(unboundIndicator);
+    contextId.appendChild(document.createTextNode('-'));
     contextUrl.textContent = 'No context';
     contextUrl.classList.remove('clickable');
   }
