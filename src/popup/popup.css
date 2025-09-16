@@ -108,6 +108,10 @@ body {
   background: #28a745;
 }
 
+.status-dot.unbound {
+  background: #6c757d;
+}
+
 .status-text {
   font-size: 12px;
   font-weight: 500;

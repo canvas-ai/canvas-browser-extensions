@@ -433,7 +433,10 @@ function updateConnectionStatus(connection) {
     if ((connection.mode === 'context') && connection.context) {
       console.log('Popup: Context mode, context:', connection.context);
       console.log('Popup: Context mode, workspace info:', connection.workspace);
-      contextId.textContent = `Bound to context ID: ${connection.context.id}`;
+      
+      // Create green dot indicator for bound state
+      const boundIndicator = '<span class="status-dot connected" style="margin-right: 6px;"></span>';
+      contextId.innerHTML = `${boundIndicator}Bound to context ID: ${connection.context.id}`;
 
       // Get workspace name from context or use fallback
       const workspaceName = connection.context.workspaceName || connection.context.workspace ||
@@ -453,7 +456,10 @@ function updateConnectionStatus(connection) {
     } else if ((connection.mode === 'explorer') && connection.workspace) {
       const wsName = getWorkspaceName(connection.workspace);
       console.log('Popup: Explorer mode, workspace:', wsName);
-      contextId.textContent = `Current workspace: ${wsName}`;
+      
+      // Create green dot indicator for bound state (explorer mode is also considered "bound")
+      const boundIndicator = '<span class="status-dot connected" style="margin-right: 6px;"></span>';
+      contextId.innerHTML = `${boundIndicator}Current workspace: ${wsName}`;
 
       // Format URL as workspace.name://path
       const workspacePath = currentWorkspacePath || '/';
@@ -461,7 +467,10 @@ function updateConnectionStatus(connection) {
       contextUrl.classList.add('clickable');
     } else {
       console.log('Popup: No context or workspace selected');
-      contextId.textContent = '-';
+      
+      // Create gray button indicator for unbound state
+      const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
+      contextId.innerHTML = `${unboundIndicator}-`;
       contextUrl.textContent = 'Not bound';
       contextUrl.classList.remove('clickable');
     }
@@ -469,7 +478,10 @@ function updateConnectionStatus(connection) {
     console.log('Popup: Setting status to DISCONNECTED');
     connectionStatus.className = 'status-dot disconnected';
     connectionText.textContent = 'Disconnected';
-    contextId.textContent = '-';
+    
+    // Create gray button indicator for unbound state when disconnected
+    const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
+    contextId.innerHTML = `${unboundIndicator}-`;
     contextUrl.textContent = 'No context';
     contextUrl.classList.remove('clickable');
   }
