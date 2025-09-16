@@ -433,7 +433,7 @@ function updateConnectionStatus(connection) {
     if ((connection.mode === 'context') && connection.context) {
       console.log('Popup: Context mode, context:', connection.context);
       console.log('Popup: Context mode, workspace info:', connection.workspace);
-      
+
       // Create green dot indicator for bound state
       contextId.textContent = '';
       const boundIndicator = createSecureElement('span', {
@@ -461,7 +461,7 @@ function updateConnectionStatus(connection) {
     } else if ((connection.mode === 'explorer') && connection.workspace) {
       const wsName = getWorkspaceName(connection.workspace);
       console.log('Popup: Explorer mode, workspace:', wsName);
-      
+
       // Create gray dot indicator for unbound state (explorer mode is not bound - no dynamic updates)
       contextId.textContent = '';
       const unboundIndicator = createSecureElement('span', {
@@ -469,7 +469,7 @@ function updateConnectionStatus(connection) {
         style: 'margin-right: 6px;'
       });
       contextId.appendChild(unboundIndicator);
-      contextId.appendChild(document.createTextNode(`Current workspace: ${escapeHtml(wsName)}`));
+      contextId.appendChild(document.createTextNode(`(Explorer mode) Workspace: ${escapeHtml(wsName)}`));
 
       // Format URL as workspace.name://path
       const workspacePath = currentWorkspacePath || '/';
@@ -477,7 +477,7 @@ function updateConnectionStatus(connection) {
       contextUrl.classList.add('clickable');
     } else {
       console.log('Popup: No context or workspace selected');
-      
+
       // Create gray button indicator for unbound state
       contextId.textContent = '';
       const unboundIndicator = createSecureElement('span', {
@@ -493,7 +493,7 @@ function updateConnectionStatus(connection) {
     console.log('Popup: Setting status to DISCONNECTED');
     connectionStatus.className = 'status-dot disconnected';
     connectionText.textContent = 'Disconnected';
-    
+
     // Create gray button indicator for unbound state when disconnected
     contextId.textContent = '';
     const unboundIndicator = createSecureElement('span', {
