@@ -112,6 +112,10 @@ body {
   background: #6c757d;
 }
 
+.status-dot.disconnected {
+  background: #dc3545;
+}
+
 .status-text {
   font-size: 12px;
   font-weight: 500;
