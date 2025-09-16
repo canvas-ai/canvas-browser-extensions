@@ -118,7 +118,7 @@ body {
 }
 
 .status-text {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
 }
 
@@ -130,7 +130,7 @@ body {
 
 .context-id {
   font-size: 10px;
-  font-weight: 400;
+  font-weight: 500;
   color: #6c757d;
 }
 
