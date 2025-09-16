@@ -469,7 +469,7 @@ function updateConnectionStatus(connection) {
         style: 'margin-right: 6px;'
       });
       contextId.appendChild(unboundIndicator);
-      contextId.appendChild(document.createTextNode(`(Explorer mode) Workspace: ${escapeHtml(wsName)}`));
+      contextId.appendChild(document.createTextNode(`Workspace: ${escapeHtml(wsName)}`));
 
       // Format URL as workspace.name://path
       const workspacePath = currentWorkspacePath || '/';
