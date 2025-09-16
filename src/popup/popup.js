@@ -457,9 +457,9 @@ function updateConnectionStatus(connection) {
       const wsName = getWorkspaceName(connection.workspace);
       console.log('Popup: Explorer mode, workspace:', wsName);
       
-      // Create green dot indicator for bound state (explorer mode is also considered "bound")
-      const boundIndicator = '<span class="status-dot connected" style="margin-right: 6px;"></span>';
-      contextId.innerHTML = `${boundIndicator}Current workspace: ${wsName}`;
+      // Create gray dot indicator for unbound state (explorer mode is not bound - no dynamic updates)
+      const unboundIndicator = '<span class="status-dot unbound" style="margin-right: 6px;"></span>';
+      contextId.innerHTML = `${unboundIndicator}Current workspace: ${wsName}`;
 
       // Format URL as workspace.name://path
       const workspacePath = currentWorkspacePath || '/';
