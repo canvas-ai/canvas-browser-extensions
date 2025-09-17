@@ -721,17 +721,20 @@ async function handleGetConnectionStatus(sendResponse) {
     // Get connection settings and current context
     const connectionSettings = await browserStorage.getConnectionSettings();
     const currentContext = await browserStorage.getCurrentContext();
+    const userInfo = await browserStorage.getUserInfo();
     const mode = await browserStorage.getSyncMode();
     const workspace = await browserStorage.getCurrentWorkspace();
     const workspacePath = await browserStorage.getWorkspacePath();
 
     console.log('Connection settings:', connectionSettings);
     console.log('Current context:', currentContext);
+    console.log('User info:', userInfo);
 
     sendResponse({
       connected: connectionSettings.connected || false,
       context: currentContext,
       settings: connectionSettings,
+      user: userInfo,
       mode: mode || 'explorer',
       workspace,
       workspacePath
@@ -805,6 +808,12 @@ async function handleConnect(data, sendResponse) {
     console.log('Saving connection settings:', connectionSettings);
     await browserStorage.setConnectionSettings(connectionSettings);
 
+    // Save user info from authentication
+    if (testResult.user) {
+      console.log('Saving user info:', testResult.user);
+      await browserStorage.setUserInfo(testResult.user);
+    }
+
     // Verify settings were saved
     const savedSettings = await browserStorage.getConnectionSettings();
     console.log('Verified saved settings:', savedSettings);
@@ -841,6 +850,9 @@ async function handleConnect(data, sendResponse) {
       connected: false
     });
 
+    // Clear user info on failed connection
+    await browserStorage.setUserInfo(null);
+
     sendResponse({
       success: false,
       connected: false,
@@ -866,6 +878,9 @@ async function handleDisconnect(sendResponse) {
 
     // Clear current context
     await browserStorage.setCurrentContext(null);
+
+    // Clear user info
+    await browserStorage.setUserInfo(null);
 
     // Disconnect WebSocket if connected
     if (webSocketClient.isConnected()) {

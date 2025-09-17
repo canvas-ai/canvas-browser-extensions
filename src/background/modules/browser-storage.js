@@ -26,7 +26,8 @@ export class BrowserStorage {
       WORKSPACE_PATH: 'canvasWorkspacePath',
       SYNC_SETTINGS: 'canvasSyncSettings',
       BROWSER_IDENTITY: 'canvasBrowserIdentity',
-      PINNED_TABS: 'canvasPinnedTabs'
+      PINNED_TABS: 'canvasPinnedTabs',
+      USER_INFO: 'canvasUserInfo'
     };
 
     // Default values
@@ -49,7 +50,8 @@ export class BrowserStorage {
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
       [this.KEYS.BROWSER_IDENTITY]: '',
-      [this.KEYS.PINNED_TABS]: new Set()
+      [this.KEYS.PINNED_TABS]: new Set(),
+      [this.KEYS.USER_INFO]: null // { id, name, email, userType, status }
     };
   }
 
@@ -244,6 +246,15 @@ export class BrowserStorage {
   async isTabPinned(tabId) {
     const pinnedTabs = await this.getPinnedTabs();
     return pinnedTabs.has(tabId);
+  }
+
+  // User Info
+  async getUserInfo() {
+    return await this.get(this.KEYS.USER_INFO);
+  }
+
+  async setUserInfo(userInfo) {
+    return await this.set(this.KEYS.USER_INFO, userInfo);
   }
 
   // Clear all extension data
