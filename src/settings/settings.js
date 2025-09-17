@@ -5,6 +5,7 @@
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let connectionStatus, statusDot, statusText, statusDetails;
+let userInfo, userName, userServer;
 let syncModeSection, syncModeSelect;
 let explorerSettings, workspaceSelect;
 let contextSettings, contextSelect, bindContextBtn;
@@ -60,6 +61,9 @@ function initializeElements() {
   statusDot = document.getElementById('statusDot');
   statusText = document.getElementById('statusText');
   statusDetails = document.getElementById('statusDetails');
+  userInfo = document.getElementById('userInfo');
+  userName = document.getElementById('userName');
+  userServer = document.getElementById('userServer');
 
   // Sync mode and per-mode settings
   syncModeSection = document.getElementById('syncModeSection');
@@ -180,7 +184,8 @@ async function loadSettings() {
       browserIdentity: '',
       currentContext: (modeSelResponse.success ? modeSelResponse.context : null) || (response.context || null),
       currentWorkspace: modeSelResponse.success ? modeSelResponse.workspace : null,
-      mode: modeSelResponse.success ? (modeSelResponse.mode || 'explorer') : 'explorer'
+      mode: modeSelResponse.success ? (modeSelResponse.mode || 'explorer') : 'explorer',
+      user: response.user || null
     };
 
     // Set connection state
@@ -829,12 +834,40 @@ function updateConnectionStatus(connected) {
     statusText.textContent = 'Connected';
     statusDetails.textContent = 'Successfully connected and authenticated to Canvas server';
 
+    // Show user info if available
+    if (settings.user && userInfo && userName && userServer) {
+      userName.textContent = settings.user.name || settings.user.email || 'User';
+      
+      // Extract server URL without protocol
+      const serverUrlValue = settings.connectionSettings.serverUrl;
+      let displayServerUrl = serverUrlValue;
+      if (serverUrlValue) {
+        try {
+          const url = new URL(serverUrlValue);
+          displayServerUrl = url.hostname + (url.port ? ':' + url.port : '');
+        } catch (e) {
+          // If URL parsing fails, use the original value
+          displayServerUrl = serverUrlValue.replace(/^https?:\/\//, '');
+        }
+      }
+      
+      userServer.textContent = `@${displayServerUrl}`;
+      userInfo.style.display = 'block';
+    } else if (userInfo) {
+      userInfo.style.display = 'none';
+    }
+
     connectBtn.style.display = 'none';
     disconnectBtn.style.display = 'inline-block';
   } else {
     statusDot.className = 'status-dot disconnected';
     statusText.textContent = 'Not connected';
     statusDetails.textContent = 'Click "Test Connection" or "Connect" to establish connection';
+
+    // Hide user info when disconnected
+    if (userInfo) {
+      userInfo.style.display = 'none';
+    }
 
     connectBtn.style.display = 'inline-block';
     disconnectBtn.style.display = 'none';

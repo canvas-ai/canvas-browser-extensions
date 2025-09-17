@@ -427,7 +427,25 @@ function updateConnectionStatus(connection) {
   if (connection.connected) {
     console.log('Popup: Setting status to CONNECTED');
     connectionStatus.className = 'status-dot connected';
-    connectionText.textContent = 'Connected';
+    
+    // Show user info if available
+    if (connection.user && connection.user.name) {
+      // Extract server URL without protocol
+      let displayServerUrl = '';
+      if (connection.settings && connection.settings.serverUrl) {
+        try {
+          const url = new URL(connection.settings.serverUrl);
+          displayServerUrl = url.hostname + (url.port ? ':' + url.port : '');
+        } catch (e) {
+          // If URL parsing fails, use the original value
+          displayServerUrl = connection.settings.serverUrl.replace(/^https?:\/\//, '');
+        }
+      }
+      
+      connectionText.innerHTML = `Connected <span style="color: #71717a;">(${escapeHtml(connection.user.name)}@${escapeHtml(displayServerUrl)})</span>`;
+    } else {
+      connectionText.textContent = 'Connected';
+    }
 
     // Context mode header
     if ((connection.mode === 'context') && connection.context) {
