@@ -27,7 +27,8 @@ export class BrowserStorage {
       SYNC_SETTINGS: 'canvasSyncSettings',
       BROWSER_IDENTITY: 'canvasBrowserIdentity',
       PINNED_TABS: 'canvasPinnedTabs',
-      USER_INFO: 'canvasUserInfo'
+      USER_INFO: 'canvasUserInfo',
+      RECENT_DESTINATIONS: 'canvasRecentDestinations'
     };
 
     // Default values
@@ -51,7 +52,8 @@ export class BrowserStorage {
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
       [this.KEYS.BROWSER_IDENTITY]: '',
       [this.KEYS.PINNED_TABS]: new Set(),
-      [this.KEYS.USER_INFO]: null // { id, name, email, userType, status }
+      [this.KEYS.USER_INFO]: null, // { id, name, email, userType, status }
+      [this.KEYS.RECENT_DESTINATIONS]: [] // Array of recent destinations: [{ id, title, type: 'workspace'|'context', workspaceName?, contextSpec?, timestamp }]
     };
   }
 
@@ -255,6 +257,43 @@ export class BrowserStorage {
 
   async setUserInfo(userInfo) {
     return await this.set(this.KEYS.USER_INFO, userInfo);
+  }
+
+  // Recent Destinations Management
+  async getRecentDestinations() {
+    return await this.get(this.KEYS.RECENT_DESTINATIONS);
+  }
+
+  async addRecentDestination(destination) {
+    try {
+      const recent = await this.getRecentDestinations();
+      
+      // Create destination object with timestamp
+      const newDestination = {
+        ...destination,
+        timestamp: Date.now()
+      };
+
+      // Remove any existing destination with the same ID to avoid duplicates
+      const filtered = recent.filter(item => item.id !== destination.id);
+      
+      // Add new destination at the beginning
+      filtered.unshift(newDestination);
+      
+      // Keep only the 5 most recent
+      const trimmed = filtered.slice(0, 5);
+      
+      await this.set(this.KEYS.RECENT_DESTINATIONS, trimmed);
+      console.log('Added recent destination:', newDestination);
+      return trimmed;
+    } catch (error) {
+      console.error('Failed to add recent destination:', error);
+      return [];
+    }
+  }
+
+  async clearRecentDestinations() {
+    return await this.set(this.KEYS.RECENT_DESTINATIONS, []);
   }
 
   // Clear all extension data

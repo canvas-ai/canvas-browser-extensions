@@ -2178,6 +2178,124 @@ async function setupContextMenus() {
       return;
     }
 
+    // Get current mode and selection
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
+
+    // Add current context URL as first item (for better UX)
+    if (mode === 'context' && currentContext?.url) {
+      try {
+        contextMenusAPI.create({
+          id: `current-context:${currentContext.id}`,
+          parentId: 'send-page-to-canvas',
+          title: `🎯 Current Context: ${currentContext.url}`,
+          contexts: ['page'],
+          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+        });
+        console.log('✅ Current context URL menu item created');
+      } catch (error) {
+        console.error('❌ Failed to create current context URL menu item:', error);
+      }
+    } else if (mode === 'explorer' && currentWorkspace) {
+      try {
+        const wsName = currentWorkspace.name || currentWorkspace.id;
+        const pathDisplay = workspacePath && workspacePath !== '/' ? workspacePath : '/';
+        contextMenusAPI.create({
+          id: `current-workspace:${wsName}:${pathDisplay}`,
+          parentId: 'send-page-to-canvas',
+          title: `🎯 Current: ${wsName}${pathDisplay}`,
+          contexts: ['page'],
+          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+        });
+        console.log('✅ Current workspace/path menu item created');
+      } catch (error) {
+        console.error('❌ Failed to create current workspace menu item:', error);
+      }
+    }
+
+    // Add recent destinations
+    try {
+      const recentDestinations = await browserStorage.getRecentDestinations();
+      if (recentDestinations.length > 0) {
+        console.log('🔧 Adding recent destinations:', recentDestinations.length);
+        
+        // Add separator before recent destinations
+        contextMenusAPI.create({
+          id: 'recent-separator',
+          parentId: 'send-page-to-canvas',
+          type: 'separator',
+          contexts: ['page'],
+          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+        });
+
+        // Filter out current context/workspace from recent destinations to avoid duplication
+        const filteredRecent = recentDestinations.filter(dest => {
+          if (mode === 'context' && currentContext) {
+            // For context mode, filter out the current context
+            return !(dest.type === 'context' && dest.contextId === currentContext.id);
+          } else if (mode === 'explorer' && currentWorkspace) {
+            // For explorer mode, filter out the current workspace/path combination
+            const currentWsName = currentWorkspace.name || currentWorkspace.id;
+            const currentPath = workspacePath || '/';
+            return !(dest.type === 'workspace' && dest.workspaceName === currentWsName && dest.contextSpec === currentPath);
+          }
+          return true;
+        });
+
+        // Add recent destinations (up to 5)
+        for (const dest of filteredRecent.slice(0, 5)) {
+          try {
+            let title = '';
+            let menuId = '';
+            
+            if (dest.type === 'context') {
+              title = `📋 Recent: ${dest.title}`;
+              menuId = `recent-context:${dest.contextId}`;
+            } else if (dest.type === 'workspace') {
+              const pathDisplay = dest.contextSpec && dest.contextSpec !== '/' ? dest.contextSpec : '/';
+              title = `📋 Recent: ${dest.workspaceName}${pathDisplay}`;
+              menuId = `recent-workspace:${dest.workspaceName}:${dest.contextSpec || '/'}`;
+            }
+
+            if (title && menuId) {
+              contextMenusAPI.create({
+                id: menuId,
+                parentId: 'send-page-to-canvas',
+                title: title,
+                contexts: ['page'],
+                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+              });
+            }
+          } catch (error) {
+            console.error('❌ Failed to create recent destination menu item:', error);
+          }
+        }
+        
+        console.log('✅ Recent destinations menu items created');
+      }
+    } catch (error) {
+      console.error('❌ Failed to add recent destinations:', error);
+    }
+
+    // Add separator before workspace list
+    if (mode === 'context' && currentContext?.url || 
+        mode === 'explorer' && currentWorkspace ||
+        (await browserStorage.getRecentDestinations()).length > 0) {
+      try {
+        contextMenusAPI.create({
+          id: 'workspaces-separator',
+          parentId: 'send-page-to-canvas',
+          type: 'separator',
+          contexts: ['page'],
+          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+        });
+      } catch (error) {
+        console.error('❌ Failed to create workspaces separator:', error);
+      }
+    }
+
     // Get all workspaces and build menu tree
     try {
       // Ensure API client is initialized
@@ -2337,8 +2455,161 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
         return;
       }
 
+      // Handle current context clicks
+      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('current-context:')) {
+        const contextId = info.menuItemId.replace('current-context:', '');
+        try {
+          // Get sync settings and browser identity
+          const syncSettings = await browserStorage.getSyncSettings();
+          const browserIdentity = await browserStorage.getBrowserIdentity();
+          const currentContext = await browserStorage.getCurrentContext();
+
+          // Sync tab to current context
+          const result = await tabManager.syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings);
+          
+          if (result.success) {
+            console.log(`Tab synced to current context ${contextId} via context menu`);
+            // Track as recent destination
+            if (currentContext) {
+              await browserStorage.addRecentDestination({
+                id: `context:${contextId}`,
+                type: 'context',
+                contextId: contextId,
+                title: currentContext.url || contextId
+              });
+            }
+          } else {
+            console.error('Failed to sync tab to current context:', result.error);
+          }
+        } catch (e) {
+          console.error('Exception syncing tab to current context:', e);
+        }
+      }
+      
+      // Handle current workspace clicks
+      else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('current-workspace:')) {
+        const parts = info.menuItemId.replace('current-workspace:', '').split(':');
+        if (parts.length >= 2) {
+          const workspaceName = parts[0];
+          const contextSpec = parts.slice(1).join(':'); // Rejoin in case path contains colons
+
+          try {
+            // Get sync settings and browser identity
+            const syncSettings = await browserStorage.getSyncSettings();
+            const browserIdentity = await browserStorage.getBrowserIdentity();
+
+            // Convert tab to document format
+            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
+
+            // Sync tab to current workspace and path
+            const response = await apiClient.insertWorkspaceDocument(
+              workspaceName,
+              document,
+              contextSpec || '/',
+              document.featureArray
+            );
+
+            if (response.status === 'success') {
+              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
+              tabManager.markTabAsSynced(tab.id, docId);
+              console.log(`Tab synced to current workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              
+              // Track as recent destination
+              await browserStorage.addRecentDestination({
+                id: `workspace:${workspaceName}:${contextSpec}`,
+                type: 'workspace',
+                workspaceName: workspaceName,
+                contextSpec: contextSpec,
+                title: `${workspaceName}${contextSpec}`
+              });
+            } else {
+              console.error('Failed to sync tab via context menu:', response.message);
+            }
+          } catch (e) {
+            console.error('Exception syncing tab via context menu:', e);
+          }
+        }
+      }
+      
+      // Handle recent context clicks
+      else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('recent-context:')) {
+        const contextId = info.menuItemId.replace('recent-context:', '');
+        try {
+          // Get sync settings and browser identity
+          const syncSettings = await browserStorage.getSyncSettings();
+          const browserIdentity = await browserStorage.getBrowserIdentity();
+
+          // Sync tab to recent context
+          const result = await tabManager.syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings);
+          
+          if (result.success) {
+            console.log(`Tab synced to recent context ${contextId} via context menu`);
+            // Update recent destination timestamp
+            const recentDestinations = await browserStorage.getRecentDestinations();
+            const existingDest = recentDestinations.find(d => d.contextId === contextId);
+            if (existingDest) {
+              await browserStorage.addRecentDestination({
+                id: `context:${contextId}`,
+                type: 'context',
+                contextId: contextId,
+                title: existingDest.title
+              });
+            }
+          } else {
+            console.error('Failed to sync tab to recent context:', result.error);
+          }
+        } catch (e) {
+          console.error('Exception syncing tab to recent context:', e);
+        }
+      }
+      
+      // Handle recent workspace clicks
+      else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('recent-workspace:')) {
+        const parts = info.menuItemId.replace('recent-workspace:', '').split(':');
+        if (parts.length >= 2) {
+          const workspaceName = parts[0];
+          const contextSpec = parts.slice(1).join(':'); // Rejoin in case path contains colons
+
+          try {
+            // Get sync settings and browser identity
+            const syncSettings = await browserStorage.getSyncSettings();
+            const browserIdentity = await browserStorage.getBrowserIdentity();
+
+            // Convert tab to document format
+            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
+
+            // Sync tab to recent workspace and path
+            const response = await apiClient.insertWorkspaceDocument(
+              workspaceName,
+              document,
+              contextSpec || '/',
+              document.featureArray
+            );
+
+            if (response.status === 'success') {
+              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
+              tabManager.markTabAsSynced(tab.id, docId);
+              console.log(`Tab synced to recent workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              
+              // Update recent destination timestamp
+              await browserStorage.addRecentDestination({
+                id: `workspace:${workspaceName}:${contextSpec}`,
+                type: 'workspace',
+                workspaceName: workspaceName,
+                contextSpec: contextSpec,
+                title: `${workspaceName}${contextSpec}`
+              });
+            } else {
+              console.error('Failed to sync tab via context menu:', response.message);
+            }
+          } catch (e) {
+            console.error('Exception syncing tab via context menu:', e);
+          }
+        }
+      }
+      
       // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder" or "ws:workspaceName:/path/to/folder:insert")
-      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
+      else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
         const parts = info.menuItemId.split(':');
         if (parts.length >= 3) {
           const workspaceName = parts[1];
@@ -2369,6 +2640,15 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
               tabManager.markTabAsSynced(tab.id, docId);
               console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              
+              // Track as recent destination
+              await browserStorage.addRecentDestination({
+                id: `workspace:${workspaceName}:${contextSpec}`,
+                type: 'workspace',
+                workspaceName: workspaceName,
+                contextSpec: contextSpec,
+                title: `${workspaceName}${contextSpec}`
+              });
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
