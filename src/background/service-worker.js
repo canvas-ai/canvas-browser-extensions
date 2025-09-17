@@ -2478,6 +2478,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 title: currentContext.url || contextId
               });
             }
+            // Refresh context menus to update recent destinations list
+            await setupContextMenus();
           } else {
             console.error('Failed to sync tab to current context:', result.error);
           }
@@ -2522,6 +2524,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
+              
+              // Refresh context menus to update recent destinations list
+              await setupContextMenus();
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2555,6 +2560,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 title: existingDest.title
               });
             }
+            // Refresh context menus to update recent destinations list
+            await setupContextMenus();
           } else {
             console.error('Failed to sync tab to recent context:', result.error);
           }
@@ -2599,6 +2606,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
+              
+              // Refresh context menus to update recent destinations list
+              await setupContextMenus();
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2649,6 +2659,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
+              
+              // Refresh context menus to update recent destinations list
+              await setupContextMenus();
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
