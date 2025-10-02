@@ -11,6 +11,8 @@ let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
+let selectAllBrowser, selectAllCanvas;
+let browserTabsHeader, canvasTabsHeader;
 let toast;
 
 // Context menu elements - REMOVED: Popup context menus don't work properly due to popup boundaries
@@ -225,6 +227,14 @@ function initializeElements() {
   removeSelectedBtn = document.getElementById('removeSelectedBtn');
   deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
 
+  // Select all checkboxes
+  selectAllBrowser = document.getElementById('selectAllBrowser');
+  selectAllCanvas = document.getElementById('selectAllCanvas');
+
+  // Tab count headers
+  browserTabsHeader = document.getElementById('browserTabsHeader');
+  canvasTabsHeader = document.getElementById('canvasTabsHeader');
+
   // Tree view elements
   treeBackBtn = document.getElementById('treeBackBtn');
   treePathInput = document.getElementById('treePathInput');
@@ -294,6 +304,10 @@ function setupEventListeners() {
   openSelectedBtn.addEventListener('click', () => handleOpenSelected());
   removeSelectedBtn.addEventListener('click', () => handleRemoveSelected());
   deleteSelectedBtn.addEventListener('click', () => handleDeleteSelected());
+
+  // Select all checkboxes
+  selectAllBrowser.addEventListener('change', handleSelectAllBrowser);
+  selectAllCanvas.addEventListener('change', handleSelectAllCanvas);
 
   // Event delegation for browser tab actions
   browserToCanvasList.addEventListener('click', handleBrowserTabAction);
@@ -427,7 +441,7 @@ function updateConnectionStatus(connection) {
   if (connection.connected) {
     console.log('Popup: Setting status to CONNECTED');
     connectionStatus.className = 'status-dot connected';
-    
+
     // Show user info if available
     if (connection.user && connection.user.name) {
       // Extract server URL without protocol
@@ -441,7 +455,7 @@ function updateConnectionStatus(connection) {
           displayServerUrl = connection.settings.serverUrl.replace(/^https?:\/\//, '');
         }
       }
-      
+
       connectionText.innerHTML = `Connected <span style="color: #71717a;">(${escapeHtml(connection.user.name)}@${escapeHtml(displayServerUrl)})</span>`;
     } else {
       connectionText.textContent = 'Connected';
@@ -775,6 +789,32 @@ async function loadSyncSettings() {
   }
 }
 
+function updateTabCountHeaders() {
+  const searchQuery = searchInput?.value?.trim();
+  const isSearching = searchQuery && searchQuery.length > 0;
+
+  // Update browser tabs header
+  if (isSearching) {
+    const visibleBrowserTabs = browserToCanvasList.querySelectorAll('.tab-item:not([style*="display: none"])').length;
+    const totalBrowserTabs = browserTabs.length;
+    const headerText = showingSyncedTabs ? 'Browser Tabs' : 'Unsynced Browser Tabs';
+    browserTabsHeader.textContent = `${headerText} (${visibleBrowserTabs}/${totalBrowserTabs})`;
+  } else {
+    const headerText = showingSyncedTabs ? 'Browser Tabs' : 'Unsynced Browser Tabs';
+    browserTabsHeader.textContent = `${headerText} (${browserTabs.length})`;
+  }
+
+  // Update canvas tabs header
+  const filteredCanvasTabs = getFilteredCanvasTabs();
+  if (isSearching) {
+    const visibleCanvasTabs = canvasToBrowserList.querySelectorAll('.tab-item:not([style*="display: none"])').length;
+    const totalCanvasTabs = filteredCanvasTabs.length;
+    canvasTabsHeader.textContent = `Canvas Context Tabs (${visibleCanvasTabs}/${totalCanvasTabs})`;
+  } else {
+    canvasTabsHeader.textContent = `Canvas Context Tabs (${filteredCanvasTabs.length})`;
+  }
+}
+
 function renderBrowserTabs() {
   console.log('Rendering browser tabs, count:', browserTabs.length);
 
@@ -790,6 +830,7 @@ function renderBrowserTabs() {
     }
     browserToCanvasList.textContent = '';
     browserToCanvasList.appendChild(emptyDiv);
+    updateTabCountHeaders();
     return;
   }
 
@@ -905,6 +946,9 @@ function renderBrowserTabs() {
   browserToCanvasList.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(checkbox => {
     checkbox.addEventListener('change', handleBrowserTabSelection);
   });
+
+  updateTabCountHeaders();
+  updateSelectAllCheckboxState();
 }
 
 function renderCanvasTabs() {
@@ -922,6 +966,7 @@ function renderCanvasTabs() {
     }
     canvasToBrowserList.textContent = '';
     canvasToBrowserList.appendChild(emptyDiv);
+    updateTabCountHeaders();
     return;
   }
 
@@ -1006,6 +1051,8 @@ function renderCanvasTabs() {
     canvasToBrowserList.appendChild(tabElement);
   });
 
+  updateTabCountHeaders();
+  updateSelectAllCheckboxState();
   updateBulkActionVisibility();
 }
 
@@ -1120,6 +1167,10 @@ function performFuzzySearch(query, type) {
 
   // Apply search results to UI
   applySearchResults(container, results, type);
+
+  // Update tab count headers after search
+  updateTabCountHeaders();
+  updateSelectAllCheckboxState();
 }
 
 function applySearchResults(container, results, type) {
@@ -1198,6 +1249,10 @@ function applySearchResults(container, results, type) {
 
   // Update bulk action visibility
   updateBulkActionVisibility();
+
+  // Update tab count headers and select-all state after applying search results
+  updateTabCountHeaders();
+  updateSelectAllCheckboxState();
 }
 
 function showSearchEmptyState(container, query) {
@@ -1331,6 +1386,10 @@ function clearSearch() {
   } else {
     hideEmptyState(container);
   }
+
+  // Update tab count headers after clearing search
+  updateTabCountHeaders();
+  updateSelectAllCheckboxState();
 }
 
 function initializeFuseInstances() {
@@ -2177,6 +2236,9 @@ async function handleOpenCanvasTab(documentId) {
     if (response.success) {
       console.log('Canvas document opened successfully');
       showToast(`Opened: ${document.data?.title || 'Tab'}`, 'success');
+
+      // Give browser time to register the new tab before refreshing (especially important for Firefox)
+      await new Promise(resolve => setTimeout(resolve, 300));
     } else {
       console.error('Failed to open Canvas document:', response.error);
       showToast(`Failed to open: ${response.error || 'Unknown error'}`, 'error');
@@ -2380,6 +2442,7 @@ function handleBrowserTabCheckbox(event) {
   }
 
   updateBulkActionVisibility();
+  updateSelectAllCheckboxState();
 }
 
 function handleCanvasTabCheckbox(event) {
@@ -2396,6 +2459,69 @@ function handleCanvasTabCheckbox(event) {
   }
 
   updateBulkActionVisibility();
+  updateSelectAllCheckboxState();
+}
+
+function handleSelectAllBrowser() {
+  const isChecked = selectAllBrowser.checked;
+  const visibleCheckboxes = browserToCanvasList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:not([disabled])');
+
+  visibleCheckboxes.forEach(checkbox => {
+    const tabId = parseInt(checkbox.dataset.tabId);
+    if (tabId) {
+      checkbox.checked = isChecked;
+      if (isChecked) {
+        selectedBrowserTabs.add(tabId);
+      } else {
+        selectedBrowserTabs.delete(tabId);
+      }
+    }
+  });
+
+  updateBulkActionVisibility();
+}
+
+function handleSelectAllCanvas() {
+  const isChecked = selectAllCanvas.checked;
+  const visibleCheckboxes = canvasToBrowserList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:not([disabled])');
+
+  visibleCheckboxes.forEach(checkbox => {
+    const documentId = parseInt(checkbox.dataset.documentId);
+    if (documentId) {
+      checkbox.checked = isChecked;
+      if (isChecked) {
+        selectedCanvasTabs.add(documentId);
+      } else {
+        selectedCanvasTabs.delete(documentId);
+      }
+    }
+  });
+
+  updateBulkActionVisibility();
+}
+
+function updateSelectAllCheckboxState() {
+  // Update browser select-all checkbox state
+  const visibleBrowserCheckboxes = browserToCanvasList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:not([disabled])');
+  const checkedBrowserCheckboxes = browserToCanvasList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:checked:not([disabled])');
+  if (visibleBrowserCheckboxes.length > 0) {
+    selectAllBrowser.checked = visibleBrowserCheckboxes.length === checkedBrowserCheckboxes.length;
+    selectAllBrowser.indeterminate = checkedBrowserCheckboxes.length > 0 && checkedBrowserCheckboxes.length < visibleBrowserCheckboxes.length;
+  } else {
+    selectAllBrowser.checked = false;
+    selectAllBrowser.indeterminate = false;
+  }
+
+  // Update canvas select-all checkbox state
+  const visibleCanvasCheckboxes = canvasToBrowserList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:not([disabled])');
+  const checkedCanvasCheckboxes = canvasToBrowserList.querySelectorAll('.tab-item:not([style*="display: none"]) input[type="checkbox"]:checked:not([disabled])');
+  if (visibleCanvasCheckboxes.length > 0) {
+    selectAllCanvas.checked = visibleCanvasCheckboxes.length === checkedCanvasCheckboxes.length;
+    selectAllCanvas.indeterminate = checkedCanvasCheckboxes.length > 0 && checkedCanvasCheckboxes.length < visibleCanvasCheckboxes.length;
+  } else {
+    selectAllCanvas.checked = false;
+    selectAllCanvas.indeterminate = false;
+  }
 }
 
 // Event delegation for favicon error handling
@@ -2705,10 +2831,14 @@ async function handleOpenAll() {
       if (response.success) {
         opened = response.successful || 0;
         failed = response.failed || 0;
+        const openedUrls = response.openedUrls || [];
         console.log(`Batch open completed: ${opened} opened, ${failed} failed`);
+        console.log('Opened URLs:', openedUrls);
 
         if (opened > 0) {
           showToast(`Opened ${opened} of ${filteredCanvasTabs.length} tabs`, 'success');
+          // Give browser time to register new tabs before refreshing (especially important for Firefox)
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
         if (failed > 0) {
           showToast(`${failed} tabs failed to open`, 'warning');
@@ -2730,6 +2860,7 @@ async function handleOpenAll() {
     showToast(`Error opening all tabs: ${error.message}`, 'error');
   } finally {
     // Always refresh the list to ensure UI is up to date
+    // This will dynamically remove successfully opened tabs from canvas-to-browser list
     try {
       await loadTabs();
     } catch (refreshError) {
@@ -2829,6 +2960,11 @@ async function handleOpenSelected() {
       if (response.success) {
         console.log(`Successfully opened ${response.successful}/${response.total} documents`);
         showToast(`Opened ${response.successful} of ${response.total} tabs`, 'success');
+
+        // Give browser time to register new tabs before refreshing (especially important for Firefox)
+        if (response.successful > 0) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       } else {
         console.error('Failed to open documents:', response.error);
         showToast(`Failed to open tabs: ${response.error}`, 'error');
