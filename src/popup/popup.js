@@ -1885,7 +1885,17 @@ function renderWorkspacesList(workspaces) {
     return;
   }
 
-  const workspacesHtml = workspaces.map(workspace => `
+  // Filter workspaces to only show those with status "active"
+  const activeWorkspaces = workspaces.filter(workspace => workspace.status === 'active');
+
+  if (activeWorkspaces.length === 0) {
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' }, 'No active workspaces available');
+    workspacesList.textContent = '';
+    workspacesList.appendChild(emptyDiv);
+    return;
+  }
+
+  const workspacesHtml = activeWorkspaces.map(workspace => `
     <div class="selection-item" data-workspace-id="${workspace.id}">
       <div class="selection-item-info">
         <div class="selection-item-name">${workspace.label || workspace.name || workspace.id}</div>
