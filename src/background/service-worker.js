@@ -2135,6 +2135,28 @@ async function handleUpdateContextUrl(message, sendResponse) {
   }
 }
 
+// Notification helper function for cross-browser compatibility
+async function showNotification(title, message) {
+  try {
+    const notificationsAPI = (typeof chrome !== 'undefined' && chrome.notifications) ? chrome.notifications : browser.notifications;
+    
+    if (!notificationsAPI) {
+      console.warn('Notifications API not available');
+      return;
+    }
+
+    await notificationsAPI.create({
+      type: 'basic',
+      iconUrl: 'assets/icons/logo-wr_128x128.png',
+      title: title,
+      message: message,
+      priority: 1
+    });
+  } catch (error) {
+    console.error('Failed to show notification:', error);
+  }
+}
+
 // Context Menu functionality
 async function setupContextMenus() {
   try {
@@ -2531,6 +2553,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             }
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
+            // Show success notification
+            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to current context:', result.error);
           }
@@ -2578,6 +2602,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2613,6 +2639,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             }
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
+            // Show success notification
+            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to recent context:', result.error);
           }
@@ -2660,6 +2688,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2713,6 +2743,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
