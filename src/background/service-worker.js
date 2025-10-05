@@ -2135,6 +2135,28 @@ async function handleUpdateContextUrl(message, sendResponse) {
   }
 }
 
+// Notification helper function for cross-browser compatibility
+async function showNotification(title, message) {
+  try {
+    const notificationsAPI = (typeof chrome !== 'undefined' && chrome.notifications) ? chrome.notifications : browser.notifications;
+    
+    if (!notificationsAPI) {
+      console.warn('Notifications API not available');
+      return;
+    }
+
+    await notificationsAPI.create({
+      type: 'basic',
+      iconUrl: 'assets/icons/logo-wr_128x128.png',
+      title: title,
+      message: message,
+      priority: 1
+    });
+  } catch (error) {
+    console.error('Failed to show notification:', error);
+  }
+}
+
 // Context Menu functionality
 async function setupContextMenus() {
   try {
@@ -2161,7 +2183,7 @@ async function setupContextMenus() {
       return;
     }
 
-    console.log('🔧 Creating root context menu item...');
+    console.log('🔧 Creating root context menu items...');
     // Always create simple "Send page to Canvas" with workspace tree
     // Note: documentUrlPatterns excludes extension pages
     try {
@@ -2172,10 +2194,24 @@ async function setupContextMenus() {
         documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
         visible: true
       });
-      console.log('✅ Root context menu item created successfully');
+      console.log('✅ Root context menu item (page) created successfully');
     } catch (error) {
-      console.error('❌ Failed to create root context menu item:', error);
+      console.error('❌ Failed to create root context menu item (page):', error);
       return;
+    }
+
+    // Also create "Send link to Canvas" for link context menus
+    try {
+      contextMenusAPI.create({
+        id: 'send-link-to-canvas',
+        title: 'Send link to Canvas',
+        contexts: ['link'],
+        documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
+        visible: true
+      });
+      console.log('✅ Root context menu item (link) created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create root context menu item (link):', error);
     }
 
     // Get current mode and selection
@@ -2184,34 +2220,53 @@ async function setupContextMenus() {
     const currentWorkspace = await browserStorage.getCurrentWorkspace();
     const workspacePath = await browserStorage.getWorkspacePath();
 
-    // Add current context URL as first item (for better UX)
-    if (mode === 'context' && currentContext?.url) {
+    // Helper function to create menu items for both page and link contexts
+    const createMenuItemForBothContexts = (itemConfig, parentId) => {
+      // Create for page context
       try {
         contextMenusAPI.create({
-          id: `current-context:${currentContext.id}`,
-          parentId: 'send-page-to-canvas',
-          title: `🎯 Current Context: ${currentContext.url}`,
+          ...itemConfig,
+          id: `${itemConfig.id}`,
+          parentId: `${parentId}`,
           contexts: ['page'],
           documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
         });
-        console.log('✅ Current context URL menu item created');
       } catch (error) {
-        console.error('❌ Failed to create current context URL menu item:', error);
+        console.error(`❌ Failed to create page context menu item ${itemConfig.id}:`, error);
       }
+      
+      // Create for link context
+      try {
+        contextMenusAPI.create({
+          ...itemConfig,
+          id: `link:${itemConfig.id}`,
+          parentId: 'send-link-to-canvas',
+          contexts: ['link'],
+          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+        });
+      } catch (error) {
+        console.error(`❌ Failed to create link context menu item ${itemConfig.id}:`, error);
+      }
+    };
+
+    // Add current context URL as first item (for better UX)
+    if (mode === 'context' && currentContext?.url) {
+      createMenuItemForBothContexts({
+        id: `current-context:${currentContext.id}`,
+        title: `🎯 Current Context: ${currentContext.url}`
+      }, 'send-page-to-canvas');
+      console.log('✅ Current context URL menu items created');
     } else if (mode === 'explorer' && currentWorkspace) {
       try {
         const wsName = currentWorkspace.name || currentWorkspace.id;
         const pathDisplay = workspacePath && workspacePath !== '/' ? workspacePath : '/';
-        contextMenusAPI.create({
+        createMenuItemForBothContexts({
           id: `current-workspace:${wsName}:${pathDisplay}`,
-          parentId: 'send-page-to-canvas',
-          title: `🎯 Current: ${wsName}${pathDisplay}`,
-          contexts: ['page'],
-          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-        });
-        console.log('✅ Current workspace/path menu item created');
+          title: `🎯 Current: ${wsName}${pathDisplay}`
+        }, 'send-page-to-canvas');
+        console.log('✅ Current workspace/path menu items created');
       } catch (error) {
-        console.error('❌ Failed to create current workspace menu item:', error);
+        console.error('❌ Failed to create current workspace menu items:', error);
       }
     }
 
@@ -2222,13 +2277,10 @@ async function setupContextMenus() {
         console.log('🔧 Adding recent destinations:', recentDestinations.length);
         
         // Add separator before recent destinations
-        contextMenusAPI.create({
+        createMenuItemForBothContexts({
           id: 'recent-separator',
-          parentId: 'send-page-to-canvas',
-          type: 'separator',
-          contexts: ['page'],
-          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-        });
+          type: 'separator'
+        }, 'send-page-to-canvas');
 
         // Filter out current context/workspace from recent destinations to avoid duplication
         const filteredRecent = recentDestinations.filter(dest => {
@@ -2260,13 +2312,10 @@ async function setupContextMenus() {
             }
 
             if (title && menuId) {
-              contextMenusAPI.create({
+              createMenuItemForBothContexts({
                 id: menuId,
-                parentId: 'send-page-to-canvas',
-                title: title,
-                contexts: ['page'],
-                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-              });
+                title: title
+              }, 'send-page-to-canvas');
             }
           } catch (error) {
             console.error('❌ Failed to create recent destination menu item:', error);
@@ -2283,18 +2332,140 @@ async function setupContextMenus() {
     if (mode === 'context' && currentContext?.url || 
         mode === 'explorer' && currentWorkspace ||
         (await browserStorage.getRecentDestinations()).length > 0) {
-      try {
-        contextMenusAPI.create({
-          id: 'workspaces-separator',
-          parentId: 'send-page-to-canvas',
-          type: 'separator',
-          contexts: ['page'],
-          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-        });
-      } catch (error) {
-        console.error('❌ Failed to create workspaces separator:', error);
-      }
+      createMenuItemForBothContexts({
+        id: 'workspaces-separator',
+        type: 'separator'
+      }, 'send-page-to-canvas');
     }
+
+    // Helper function to build workspace tree for a given parent menu ID and context
+    const buildWorkspaceMenus = async (parentMenuId, contextType, idPrefix = '') => {
+      try {
+        const workspacesResp = await apiClient.getWorkspaces();
+        console.log(`🔧 Workspaces response for ${contextType}:`, workspacesResp);
+
+        if (workspacesResp.status === 'success' && workspacesResp.payload) {
+          console.log(`🔧 Creating workspace menus for ${workspacesResp.payload.length} workspaces (${contextType})...`);
+
+          for (const workspace of workspacesResp.payload) {
+            const wsId = `${idPrefix}ws:${workspace.name || workspace.id}`;
+            console.log(`🔧 Creating workspace menu for: ${workspace.name || workspace.id} (${contextType})`);
+
+            // Create workspace submenu
+            try {
+              contextMenusAPI.create({
+                id: wsId,
+                parentId: parentMenuId,
+                title: workspace.name || workspace.id,
+                contexts: [contextType],
+                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+              });
+              console.log(`✅ Workspace menu created for: ${workspace.name || workspace.id} (${contextType})`);
+            } catch (error) {
+              console.error(`❌ Failed to create workspace menu for ${workspace.name || workspace.id} (${contextType}):`, error);
+              continue;
+            }
+
+            // Try to get workspace tree for this workspace
+            try {
+              const treeResp = await apiClient.getWorkspaceTree(workspace.name || workspace.id);
+              const tree = treeResp?.payload || treeResp?.data || treeResp;
+
+              if (tree && tree.children && Array.isArray(tree.children)) {
+                // Add root option
+                contextMenusAPI.create({
+                  id: `${wsId}:/`,
+                  parentId: wsId,
+                  title: '📁 / (root)',
+                  contexts: [contextType],
+                  documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                });
+
+                // Build tree structure
+                const buildMenuForNode = (node, parentMenuId, currentPath) => {
+                  const segment = node.name === '/' ? '' : node.name;
+                  const newPath = currentPath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${currentPath}/${segment}`.replace(/\/+/g, '/');
+                  const safePath = newPath === '' ? '/' : newPath;
+
+                  const nodeMenuId = `${wsId}:${safePath}`;
+                  const displayName = node.label || node.name;
+
+                  // If this directory has children, create a submenu structure
+                  if (Array.isArray(node.children) && node.children.length > 0) {
+                    // Create the directory itself as a submenu container
+                    contextMenusAPI.create({
+                      id: nodeMenuId,
+                      parentId: parentMenuId,
+                      title: `📁 ${displayName}`,
+                      contexts: [contextType],
+                      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                    });
+
+                    // Add "Insert to <directory-name>" as first option
+                    contextMenusAPI.create({
+                      id: `${nodeMenuId}:insert`,
+                      parentId: nodeMenuId,
+                      title: `📥 Insert to "${displayName}"`,
+                      contexts: [contextType],
+                      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                    });
+
+                    // Add separator before subdirectories
+                    contextMenusAPI.create({
+                      id: `${nodeMenuId}:separator`,
+                      parentId: nodeMenuId,
+                      type: 'separator',
+                      contexts: [contextType],
+                      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                    });
+
+                    // Recurse for children under the directory menu
+                    for (const child of node.children) {
+                      buildMenuForNode(child, nodeMenuId, safePath);
+                    }
+                  } else {
+                    // No children, create the directory as a direct clickable item
+                    contextMenusAPI.create({
+                      id: nodeMenuId,
+                      parentId: parentMenuId,
+                      title: `📁 ${displayName}`,
+                      contexts: [contextType],
+                      documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                    });
+                  }
+                };
+
+                // Build tree starting from root children
+                for (const child of tree.children) {
+                  buildMenuForNode(child, wsId, '/');
+                }
+              } else {
+                // No tree structure, just add root option
+                contextMenusAPI.create({
+                  id: `${wsId}:/`,
+                  parentId: wsId,
+                  title: '📁 / (root)',
+                  contexts: [contextType],
+                  documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+                });
+              }
+            } catch (treeError) {
+              console.warn(`Failed to load tree for workspace ${workspace.name || workspace.id} (${contextType}):`, treeError);
+              // Add root option as fallback
+              contextMenusAPI.create({
+                id: `${wsId}:/`,
+                parentId: wsId,
+                title: '📁 / (root)',
+                contexts: [contextType],
+                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
+              });
+            }
+          }
+        }
+      } catch (workspaceError) {
+        console.warn(`Failed to load workspaces for context menu (${contextType}):`, workspaceError);
+      }
+    };
 
     // Get all workspaces and build menu tree
     try {
@@ -2307,127 +2478,9 @@ async function setupContextMenus() {
         );
       }
 
-      const workspacesResp = await apiClient.getWorkspaces();
-      console.log('🔧 Workspaces response:', workspacesResp);
-
-      if (workspacesResp.status === 'success' && workspacesResp.payload) {
-        console.log(`🔧 Creating workspace menus for ${workspacesResp.payload.length} workspaces...`);
-
-        for (const workspace of workspacesResp.payload) {
-          const wsId = `ws:${workspace.name || workspace.id}`;
-          console.log(`🔧 Creating workspace menu for: ${workspace.name || workspace.id}`);
-
-          // Create workspace submenu
-          try {
-            contextMenusAPI.create({
-              id: wsId,
-              parentId: 'send-page-to-canvas',
-              title: workspace.name || workspace.id,
-              contexts: ['page'],
-              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-            });
-            console.log(`✅ Workspace menu created for: ${workspace.name || workspace.id}`);
-          } catch (error) {
-            console.error(`❌ Failed to create workspace menu for ${workspace.name || workspace.id}:`, error);
-            continue;
-          }
-
-          // Try to get workspace tree for this workspace
-          try {
-            const treeResp = await apiClient.getWorkspaceTree(workspace.name || workspace.id);
-            const tree = treeResp?.payload || treeResp?.data || treeResp;
-
-            if (tree && tree.children && Array.isArray(tree.children)) {
-              // Add root option
-              contextMenusAPI.create({
-                id: `${wsId}:/`,
-                parentId: wsId,
-                title: '📁 / (root)',
-                contexts: ['page'],
-                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-              });
-
-              // Build tree structure
-              const buildMenuForNode = (node, parentMenuId, currentPath) => {
-                const segment = node.name === '/' ? '' : node.name;
-                const newPath = currentPath === '/' ? `/${segment}`.replace(/\/+/g, '/') : `${currentPath}/${segment}`.replace(/\/+/g, '/');
-                const safePath = newPath === '' ? '/' : newPath;
-
-                const nodeMenuId = `${wsId}:${safePath}`;
-                const displayName = node.label || node.name;
-
-                // If this directory has children, create a submenu structure
-                if (Array.isArray(node.children) && node.children.length > 0) {
-                  // Create the directory itself as a submenu container
-                  contextMenusAPI.create({
-                    id: nodeMenuId,
-                    parentId: parentMenuId,
-                    title: `📁 ${displayName}`,
-                    contexts: ['page'],
-                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-                  });
-
-                  // Add "Insert to <directory-name>" as first option
-                  contextMenusAPI.create({
-                    id: `${nodeMenuId}:insert`,
-                    parentId: nodeMenuId,
-                    title: `📥 Insert to "${displayName}"`,
-                    contexts: ['page'],
-                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-                  });
-
-                  // Add separator before subdirectories
-                  contextMenusAPI.create({
-                    id: `${nodeMenuId}:separator`,
-                    parentId: nodeMenuId,
-                    type: 'separator',
-                    contexts: ['page'],
-                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-                  });
-
-                  // Recurse for children under the directory menu
-                  for (const child of node.children) {
-                    buildMenuForNode(child, nodeMenuId, safePath);
-                  }
-                } else {
-                  // No children, create the directory as a direct clickable item
-                  contextMenusAPI.create({
-                    id: nodeMenuId,
-                    parentId: parentMenuId,
-                    title: `📁 ${displayName}`,
-                    contexts: ['page'],
-                    documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-                  });
-                }
-              };
-
-              // Build tree starting from root children
-              for (const child of tree.children) {
-                buildMenuForNode(child, wsId, '/');
-              }
-            } else {
-              // No tree structure, just add root option
-              contextMenusAPI.create({
-                id: `${wsId}:/`,
-                parentId: wsId,
-                title: '📁 / (root)',
-                contexts: ['page'],
-                documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-              });
-            }
-          } catch (treeError) {
-            console.warn(`Failed to load tree for workspace ${workspace.name || workspace.id}:`, treeError);
-            // Add root option as fallback
-            contextMenusAPI.create({
-              id: `${wsId}:/`,
-              parentId: wsId,
-              title: '📁 / (root)',
-              contexts: ['page'],
-              documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-            });
-          }
-        }
-      }
+      // Build workspace menus for both page and link contexts
+      await buildWorkspaceMenus('send-page-to-canvas', 'page', '');
+      await buildWorkspaceMenus('send-link-to-canvas', 'link', 'link:');
     } catch (workspaceError) {
       console.warn('Failed to load workspaces for context menu:', workspaceError);
     }
@@ -2447,12 +2500,32 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
   console.log('🔧 Setting up context menu click listener...');
   contextMenusAPI.onClicked.addListener(async (info, tab) => {
     try {
-      console.log('🔧 Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url);
+      console.log('🔧 Context menu clicked:', info.menuItemId, 'for tab:', tab.id, 'URL:', tab.url, 'Link URL:', info.linkUrl);
 
       // Block context menu actions on extension pages (popup, settings, etc.)
       if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('browser-extension://'))) {
         console.log('Context menu blocked on extension page:', tab.url);
         return;
+      }
+
+      // Handle link context menu clicks (prefixed with "link:")
+      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('link:')) {
+        console.log('🔗 Link context menu clicked for URL:', info.linkUrl);
+        
+        // Strip the "link:" prefix to get the actual menu item ID
+        const actualMenuItemId = info.menuItemId.substring(5); // Remove "link:" prefix
+        
+        // Create a synthetic tab object for the link
+        const linkTab = {
+          ...tab,
+          url: info.linkUrl,
+          title: info.linkUrl // We don't have the actual page title, so use URL
+        };
+        
+        // Process the menu item as if it were a normal page context menu click
+        // We'll handle this by routing through the same logic below
+        info.menuItemId = actualMenuItemId;
+        tab = linkTab;
       }
 
       // Handle current context clicks
@@ -2480,6 +2553,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             }
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
+            // Show success notification
+            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to current context:', result.error);
           }
@@ -2527,6 +2602,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2562,6 +2639,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             }
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
+            // Show success notification
+            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to recent context:', result.error);
           }
@@ -2609,6 +2688,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2662,6 +2743,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
+              // Show success notification
+              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
