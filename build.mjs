@@ -15,6 +15,7 @@ let buildConfig = {
     'background/service-worker': 'src/background/service-worker.js',
     'popup/popup': 'src/popup/popup.js',
     'settings/settings': 'src/settings/settings.js',
+    'sidebar/sidebar': 'src/sidebar/sidebar.js',
   },
   bundle: true,
   outdir: outdir,
@@ -119,6 +120,11 @@ async function exportForBrowser(browser) {
     { src: 'src/settings/settings.html', dst: 'settings/settings.html' },
     { src: 'build/settings/settings.js', dst: 'settings/settings.js' },
     { src: 'src/settings/settings.css', dst: 'settings/settings.css' },
+
+    // Sidebar files
+    { src: 'src/sidebar/sidebar.html', dst: 'sidebar/sidebar.html' },
+    { src: 'build/sidebar/sidebar.js', dst: 'sidebar/sidebar.js' },
+    { src: 'src/sidebar/sidebar.css', dst: 'sidebar/sidebar.css' },
 
     // Manifest (browser-specific)
     { src: `manifest-${browser}.json`, dst: 'manifest.json' },
