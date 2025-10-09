@@ -54,7 +54,10 @@
 
       <!-- Tab Navigation -->
       <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="browser-to-canvas" id="browserToCanvasTab">
+        <button class="tab-btn active" data-tab="tree-tab" id="treeTabBtn" title="Context Tree">
+          Tree
+        </button>
+        <button class="tab-btn" data-tab="browser-to-canvas" id="browserToCanvasTab">
           Browser → Canvas
         </button>
         <button class="tab-btn" data-tab="canvas-to-browser" id="canvasToBrowserTab">
@@ -64,8 +67,19 @@
 
       <!-- Main Content -->
       <main class="main">
+        <!-- Tree Tab -->
+        <div class="tab-content active" id="tree-tab">
+          <div class="tree-controls">
+            <input type="text" class="tree-path-input" id="mainTreePathInput" placeholder="Enter path">
+            <button class="path-submit-btn" id="mainPathSubmitBtn" title="Go to path">✓</button>
+          </div>
+          <div class="tree-container" id="mainTreeContainer">
+            <div class="loading-state">Loading tree...</div>
+          </div>
+        </div>
+
         <!-- Browser to Canvas Tab -->
-        <div class="tab-content active" id="browser-to-canvas">
+        <div class="tab-content" id="browser-to-canvas">
           <!-- Sync Settings for Browser to Canvas -->
           <div class="sync-settings">
             <label class="checkbox-label">

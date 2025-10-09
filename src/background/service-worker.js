@@ -539,6 +539,11 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     handleInsertWorkspacePath(message.data, sendResponse);
     return true;
 
+  case 'RENAME_LAYER':
+    // Rename layer in workspace tree
+    handleRenameLayer(message.data, sendResponse);
+    return true;
+
   case 'OPEN_WORKSPACE':
     // Open a workspace by id/name
     handleOpenWorkspace(message.data, sendResponse);
@@ -1086,6 +1091,47 @@ async function handleInsertWorkspacePath(data, sendResponse) {
     }
   } catch (error) {
     console.error('Failed to insert workspace path:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+async function handleRenameLayer(data, sendResponse) {
+  try {
+    const { path, newName, workspaceIdOrName } = data;
+
+    let wsIdOrName = workspaceIdOrName;
+    if (!wsIdOrName) {
+      const ws = await browserStorage.getCurrentWorkspace();
+      wsIdOrName = ws?.name || ws?.id;
+    }
+    if (!wsIdOrName) throw new Error('No workspace selected');
+    if (!path) throw new Error('Path is required');
+    if (!newName) throw new Error('New name is required');
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+      throw new Error('Not connected to Canvas server - missing credentials');
+    }
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const response = await apiClient.renameLayer(wsIdOrName, path, newName);
+    if (response.status === 'success') {
+      // Refresh context menus since tree structure may have changed
+      console.log('🔧 Layer renamed successfully, refreshing context menus...');
+      await setupContextMenus();
+
+      sendResponse({ success: true, response: response.payload });
+    } else {
+      throw new Error(response.message || 'Failed to rename layer');
+    }
+  } catch (error) {
+    console.error('Failed to rename layer:', error);
     sendResponse({ success: false, error: error.message });
   }
 }

@@ -18,8 +18,14 @@ let toast;
 // Context menu elements - REMOVED: Popup context menus don't work properly due to popup boundaries
 
 // Tab elements
-let browserToCanvasTab, canvasToBrowserTab;
+let treeTabBtn, browserToCanvasTab, canvasToBrowserTab;
 let browserToCanvasContent, canvasToBrowserContent;
+
+// Main tree tab elements (separate from tree view)
+let mainTreeContainer, mainTreePathInput, mainPathSubmitBtn;
+let mainTreeData = null;
+let mainExpandedNodes = new Set();
+let windowGroups = new Map();
 
 // View containers and navigation
 let viewContainer;
@@ -44,7 +50,7 @@ let showingSyncedTabs = false; // Track checkbox state
 let showingAllCanvasTabs = false; // Track show all Canvas tabs checkbox state
 const selectedBrowserTabs = new Set();
 const selectedCanvasTabs = new Set();
-let currentTab = 'browser-to-canvas';
+let currentTab = 'tree-tab';
 
 // View state
 let currentView = 'main'; // 'main', 'tree', 'selection'
@@ -202,8 +208,14 @@ function initializeElements() {
   settingsBtn = document.getElementById('settingsBtn');
 
   // Tab navigation
+  treeTabBtn = document.getElementById('treeTabBtn');
   browserToCanvasTab = document.getElementById('browserToCanvasTab');
   canvasToBrowserTab = document.getElementById('canvasToBrowserTab');
+  
+  // Main tree tab elements
+  mainTreeContainer = document.getElementById('mainTreeContainer');
+  mainTreePathInput = document.getElementById('mainTreePathInput');
+  mainPathSubmitBtn = document.getElementById('mainPathSubmitBtn');
 
   // Tab content
   browserToCanvasContent = document.getElementById('browser-to-canvas');
@@ -281,8 +293,15 @@ function setupEventListeners() {
   workspacesSelectionTab.addEventListener('click', () => switchSelectionTab('workspaces'));
 
   // Tab navigation
+  treeTabBtn.addEventListener('click', () => switchTab('tree-tab'));
   browserToCanvasTab.addEventListener('click', () => switchTab('browser-to-canvas'));
   canvasToBrowserTab.addEventListener('click', () => switchTab('canvas-to-browser'));
+  
+  // Main tree tab controls
+  mainPathSubmitBtn.addEventListener('click', handleMainTreePathSubmit);
+  mainTreePathInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleMainTreePathSubmit();
+  });
 
   // Search
   searchInput.addEventListener('input', handleSearch);
@@ -352,6 +371,11 @@ function switchTab(tabName) {
     targetTab.classList.add('active');
     targetContent.classList.add('active');
     currentTab = tabName;
+
+    // Load tree data when switching to tree tab
+    if (tabName === 'tree-tab') {
+      loadMainTree();
+    }
 
     // Clear selections when switching tabs
     clearSelections();
@@ -430,6 +454,9 @@ async function loadInitialData() {
 
     // Load sync settings
     await loadSyncSettings();
+
+    // Load tree for tree tab
+    await loadMainTree();
   } catch (error) {
     console.error('Failed to load initial data:', error);
   }
@@ -837,8 +864,41 @@ function renderBrowserTabs() {
   // Clear existing content
   browserToCanvasList.textContent = '';
 
-  // Create tabs using secure DOM methods
+  // Group tabs by window
+  groupTabsByWindow();
+  const filteredWindowGroups = new Map();
   browserTabs.forEach(tab => {
+    if (!filteredWindowGroups.has(tab.windowId)) {
+      filteredWindowGroups.set(tab.windowId, []);
+    }
+    filteredWindowGroups.get(tab.windowId).push(tab);
+  });
+
+  // Render each window group
+  filteredWindowGroups.forEach((tabs, windowId) => {
+    const windowDiv = createSecureElement('div', { className: 'window-group' });
+
+    const header = createSecureElement('div', { className: 'window-header' });
+    const title = createSecureElement('div', { className: 'window-title' });
+    title.textContent = `Window ${windowId} (${tabs.length} tabs)`;
+
+    const actions = createSecureElement('div', { className: 'window-actions' });
+    const syncAllBtn = createSecureElement('button', { className: 'action-btn small secondary' }, 'Sync All');
+    syncAllBtn.onclick = () => handleSyncAllWindow(tabs);
+
+    const closeAllBtn = createSecureElement('button', { className: 'action-btn small danger' }, 'Close All');
+    closeAllBtn.onclick = () => handleCloseAllWindow(tabs);
+
+    actions.appendChild(syncAllBtn);
+    actions.appendChild(closeAllBtn);
+    header.appendChild(title);
+    header.appendChild(actions);
+    windowDiv.appendChild(header);
+
+    const tabsList = createSecureElement('div', { className: 'tab-list' });
+
+    // Create tabs using secure DOM methods
+    tabs.forEach(tab => {
     const isSynced = syncedTabIds.has(tab.id);
     const tabClass = isSynced ? 'tab-item synced' : 'tab-item';
     const isPinned = tab.isPinned || false;
@@ -939,7 +999,11 @@ function renderBrowserTabs() {
     tabElement.appendChild(tabInfo);
     tabElement.appendChild(tabActions);
 
-    browserToCanvasList.appendChild(tabElement);
+    tabsList.appendChild(tabElement);
+  });
+
+    windowDiv.appendChild(tabsList);
+    browserToCanvasList.appendChild(windowDiv);
   });
 
   // Setup checkbox listeners
@@ -3063,6 +3127,331 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.style.display = 'none';
   }, 5000);
+}
+
+// ===================================
+// MAIN TREE TAB FUNCTIONALITY
+// ===================================
+
+async function loadMainTree() {
+  if (!currentConnection.connected) {
+    mainTreeContainer.innerHTML = '<div class="empty-state">Not connected</div>';
+    return;
+  }
+
+  if (currentTab !== 'tree-tab') return; // Only load if tree tab is active
+
+  try {
+    mainTreeContainer.innerHTML = '<div class="loading-state">Loading tree...</div>';
+
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      const response = await sendMessageToBackground('GET_CONTEXT_TREE', { contextId: currentConnection.context.id });
+      if (response.success) {
+        mainTreeData = response.tree;
+        renderMainTree();
+        updateMainTreePath();
+      } else {
+        throw new Error(response.error || 'Failed to load context tree');
+      }
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+      const response = await sendMessageToBackground('GET_WORKSPACE_TREE', { workspaceIdOrName: wsId });
+      if (response.success) {
+        mainTreeData = response.tree;
+        renderMainTree();
+        updateMainTreePath();
+      } else {
+        throw new Error(response.error || 'Failed to load workspace tree');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load tree:', error);
+    mainTreeContainer.innerHTML = `<div class="empty-state">Failed to load tree: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderMainTree() {
+  if (!mainTreeData) {
+    mainTreeContainer.innerHTML = '<div class="empty-state">No tree data</div>';
+    return;
+  }
+
+  mainTreeContainer.innerHTML = '';
+  renderMainTreeNode(mainTreeData, '', 0, mainTreeContainer);
+}
+
+function renderMainTreeNode(node, parentPath, level, container) {
+  const currentPath = level === 0 ? '/' : (parentPath === '/' ? `/${node.name}` : `${parentPath}/${node.name}`);
+  const hasChildren = node.children && node.children.length > 0;
+  const isRoot = level === 0;
+  const isExpanded = mainExpandedNodes.has(currentPath);
+
+  const nodeDiv = createSecureElement('div', {
+    className: 'tree-node',
+    'data-path': currentPath,
+    'data-level': level
+  });
+
+  // Expand button
+  const expandBtn = createSecureElement('button', { className: 'expand-btn' + (isExpanded ? ' expanded' : '') });
+  expandBtn.textContent = '[+]';
+  if (!hasChildren) expandBtn.style.visibility = 'hidden';
+  expandBtn.onclick = (e) => {
+    e.stopPropagation();
+    toggleMainTreeNode(currentPath);
+  };
+
+  // Folder icon
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('folder-icon');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z');
+  svg.appendChild(path);
+
+  // Label
+  const label = createSecureElement('span', { className: 'node-label' });
+  label.textContent = isRoot ? '/' : (node.label || node.name);
+
+  // Tab count badge
+  const tabCount = createSecureElement('span', { className: 'tab-count' });
+  tabCount.style.display = 'none';
+
+  nodeDiv.appendChild(expandBtn);
+  nodeDiv.appendChild(svg);
+  nodeDiv.appendChild(label);
+  nodeDiv.appendChild(tabCount);
+
+  // Click to select path
+  nodeDiv.onclick = () => selectMainTreePath(currentPath);
+
+  container.appendChild(nodeDiv);
+
+  // Children container
+  if (hasChildren) {
+    const childrenDiv = createSecureElement('div', { className: 'tree-children' });
+    childrenDiv.style.display = isExpanded ? 'block' : 'none';
+    
+    for (const child of node.children) {
+      renderMainTreeNode(child, currentPath, level + 1, childrenDiv);
+    }
+
+    container.appendChild(childrenDiv);
+  }
+
+  // Tabs list (loaded on demand)
+  const tabsDiv = createSecureElement('div', {
+    className: 'tree-tabs-list',
+    id: `main-tabs-${currentPath.replace(/\//g, '-')}`
+  });
+  tabsDiv.style.display = 'none';
+  container.appendChild(tabsDiv);
+}
+
+async function toggleMainTreeNode(path) {
+  const node = mainTreeContainer.querySelector(`[data-path="${path}"]`);
+  if (!node) return;
+
+  const expandBtn = node.querySelector('.expand-btn');
+  const childrenDiv = node.nextElementSibling;
+  const tabsDiv = childrenDiv?.nextElementSibling;
+
+  if (mainExpandedNodes.has(path)) {
+    // Collapse
+    mainExpandedNodes.delete(path);
+    expandBtn.classList.remove('expanded');
+    if (childrenDiv) childrenDiv.style.display = 'none';
+    if (tabsDiv) tabsDiv.style.display = 'none';
+  } else {
+    // Expand
+    mainExpandedNodes.add(path);
+    expandBtn.classList.add('expanded');
+    if (childrenDiv) childrenDiv.style.display = 'block';
+    
+    // Load tabs for this path
+    await loadMainTreeTabs(path, tabsDiv);
+  }
+}
+
+async function loadMainTreeTabs(path, container) {
+  if (!container) return;
+
+  try {
+    let docs = [];
+    if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+      const response = await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', {
+        workspaceIdOrName: wsId,
+        contextSpec: path
+      });
+      if (response.success) {
+        docs = response.documents || [];
+      }
+    }
+
+    if (docs.length > 0) {
+      container.innerHTML = '';
+      container.style.display = 'block';
+
+      // Update tab count badge
+      const node = mainTreeContainer.querySelector(`[data-path="${path}"]`);
+      if (node) {
+        const badge = node.querySelector('.tab-count');
+        badge.textContent = docs.length;
+        badge.style.display = 'inline-block';
+        node.classList.add('has-tabs');
+      }
+
+      docs.forEach(doc => {
+        const tabItem = createTreeTabItem(doc);
+        container.appendChild(tabItem);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load tabs for path:', path, error);
+  }
+}
+
+function createTreeTabItem(doc) {
+  const div = createSecureElement('div', { className: 'tab-item' });
+
+  const favicon = createSecureElement('img', {
+    className: 'tab-favicon',
+    src: doc.data?.favIconUrl || '../assets/icons/logo-br_64x64.png'
+  });
+
+  const info = createSecureElement('div', { className: 'tab-info' });
+  const title = createSecureElement('div', { className: 'tab-title' }, escapeHtml(doc.data?.title || 'Untitled'));
+  const url = createSecureElement('div', { className: 'tab-url' }, escapeHtml(doc.data?.url || 'No URL'));
+  info.appendChild(title);
+  info.appendChild(url);
+
+  const actions = createSecureElement('div', { className: 'tab-actions' });
+  const openBtn = createSecureElement('button', {
+    className: 'action-btn small primary',
+    title: 'Open in browser'
+  }, '↙');
+  openBtn.onclick = async () => {
+    if (doc.data?.url) {
+      const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
+      await tabs.create({ url: doc.data.url });
+    }
+  };
+  actions.appendChild(openBtn);
+
+  div.appendChild(favicon);
+  div.appendChild(info);
+  div.appendChild(actions);
+
+  return div;
+}
+
+function selectMainTreePath(path) {
+  mainTreeContainer.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
+  const node = mainTreeContainer.querySelector(`[data-path="${path}"]`);
+  if (node) node.classList.add('selected');
+  updateMainTreePath(path);
+}
+
+function updateMainTreePath(path) {
+  const pathToShow = path || (currentConnection.mode === 'context' && currentConnection.context ? currentConnection.context.url : currentWorkspacePath) || '/';
+  
+  if (currentConnection.mode === 'context' && currentConnection.context) {
+    const workspaceName = currentConnection.context.workspaceName || currentConnection.context.workspace ||
+                         (currentConnection.workspace ? getWorkspaceName(currentConnection.workspace) : null);
+    if (workspaceName) {
+      mainTreePathInput.value = formatContextUrl(workspaceName, pathToShow);
+    } else {
+      mainTreePathInput.value = pathToShow;
+    }
+  } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+    const wsName = getWorkspaceName(currentConnection.workspace);
+    mainTreePathInput.value = formatContextUrl(wsName, pathToShow);
+  } else {
+    mainTreePathInput.value = pathToShow;
+  }
+}
+
+async function handleMainTreePathSubmit() {
+  const newPath = mainTreePathInput.value.trim() || '/';
+  
+  try {
+    const parsed = parseContextUrl(newPath);
+    const pathToSend = parsed.workspaceName ? parsed.path : newPath;
+
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      const response = await sendDirectMessageToBackground({
+        type: 'context.url.update',
+        contextId: currentConnection.context.id,
+        url: pathToSend
+      });
+      if (response.success) {
+        currentConnection.context.url = pathToSend;
+        contextUrl.textContent = mainTreePathInput.value;
+      }
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+      await sendMessageToBackground('INSERT_WORKSPACE_PATH', {
+        path: pathToSend,
+        workspaceIdOrName: wsId,
+        autoCreateLayers: true
+      });
+      currentWorkspacePath = pathToSend;
+      contextUrl.textContent = mainTreePathInput.value;
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', {
+        mode: 'explorer',
+        workspace: currentConnection.workspace,
+        workspacePath: currentWorkspacePath
+      });
+    }
+
+    await loadTabs();
+    await loadMainTree();
+  } catch (error) {
+    console.error('Failed to submit path:', error);
+    showToast('Failed to update path: ' + error.message, 'error');
+  }
+}
+
+// ===================================
+// WINDOW GROUPING FOR BROWSER TABS
+// ===================================
+
+function groupTabsByWindow() {
+  windowGroups.clear();
+  allBrowserTabs.forEach(tab => {
+    if (!windowGroups.has(tab.windowId)) {
+      windowGroups.set(tab.windowId, []);
+    }
+    windowGroups.get(tab.windowId).push(tab);
+  });
+}
+
+async function handleSyncAllWindow(tabs) {
+  const unsyncedTabs = tabs.filter(tab => !syncedTabIds.has(tab.id));
+  for (const tab of unsyncedTabs) {
+    await sendMessageToBackground('SYNC_TAB', { tabId: tab.id });
+  }
+  showToast(`Synced ${unsyncedTabs.length} tabs`, 'success');
+  await loadTabs();
+}
+
+async function handleCloseAllWindow(tabs) {
+  const browserTabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
+  if (!confirm(`Close all ${tabs.length} tabs in this window?`)) return;
+  
+  for (const tab of tabs) {
+    try {
+      await browserTabs.remove(tab.id);
+    } catch (error) {
+      console.error('Failed to close tab:', tab.id, error);
+    }
+  }
+  showToast(`Closed ${tabs.length} tabs`, 'success');
+  await loadTabs();
 }
 
 // REMOVED: Popup context menu functionality

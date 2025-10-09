@@ -55,5 +55,14 @@
       "id": "canvas-browser-extension@getcanvas.org",
       "strict_min_version": "109.0"
     }
+  },
+
+  "sidebar_action": {
+    "default_panel": "sidebar/sidebar.html",
+    "default_title": "Canvas",
+    "default_icon": {
+      "64": "assets/icons/logo-wr_64x64.png",
+      "128": "assets/icons/logo-wr_128x128.png"
+    }
   }
 }

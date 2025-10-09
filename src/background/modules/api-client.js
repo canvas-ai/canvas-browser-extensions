@@ -550,6 +550,14 @@ Firefox blocks local network requests for security reasons.
     return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths`, requestData);
   }
 
+  async renameLayer(workspaceNameOrId, path, newName) {
+    const requestData = {
+      path,
+      newName
+    };
+    return await this.put(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/layers`, requestData);
+  }
+
   // Document methods (tabs)
   async getContextDocuments(contextId, featureArray = []) {
     // Always ensure we're looking for tab documents

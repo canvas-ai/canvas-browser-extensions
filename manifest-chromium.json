@@ -49,5 +49,9 @@
       "resources": ["settings/settings.html"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
+  }
 }

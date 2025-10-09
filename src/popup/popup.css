@@ -260,18 +260,20 @@ body {
   position: sticky;
   top: 114px;
   z-index: 98;
+  gap: 2px;
+  padding: 4px;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 12px 16px;
+  padding: 10px 12px;
   background: none;
   border: none;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 500;
   color: #6c757d;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
   transition: all 0.2s ease;
 }
 
@@ -282,8 +284,8 @@ body {
 
 .tab-btn.active {
   color: #0066cc;
-  border-bottom-color: #0066cc;
   background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 /* Tab Content */
@@ -998,3 +1000,99 @@ body {
 }
 
 /* Context Menu Styles removed - popup boundaries prevent proper floating menus */
+
+/* Tree Controls in Main View */
+.tree-controls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.tree-controls .tree-path-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.tree-controls .tree-path-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.tree-controls .path-submit-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  background-color: #28a745;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-controls .path-submit-btn:hover {
+  background-color: #218838;
+}
+
+#mainTreeContainer {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Tree nodes in main view */
+.tree-node.has-tabs {
+  font-weight: 500;
+}
+
+.tree-node .tab-count {
+  font-size: 10px;
+  color: #6c757d;
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tree-tabs-list {
+  margin-left: 16px;
+  padding-left: 8px;
+  border-left: 1px solid #e1e5e9;
+}
+
+/* Window Group Styles */
+.window-group {
+  margin-bottom: 16px;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.window-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.window-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.window-actions {
+  display: flex;
+  gap: 4px;
+}

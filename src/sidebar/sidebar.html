@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Sidebar</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <img src="../assets/icons/logo-wr_64x64.png" alt="Canvas" class="logo" id="logoBtn">
+      <div class="connection-info">
+        <div class="connection-status">
+          <span class="status-dot" id="connectionStatus"></span>
+          <span class="status-text" id="connectionText">Disconnected</span>
+        </div>
+        <div class="context-info" id="contextInfo">
+          <span class="context-id" id="contextId">-</span>
+          <div class="context-url-container">
+            <span class="context-url" id="contextUrl">No context</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="selector-btn" id="selectorBtn" title="Switch Workspace/Context">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </button>
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Global Search -->
+  <div class="search-section">
+    <input type="text" id="searchInput" placeholder="Search..." class="search-input">
+  </div>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="tree-tab" id="treeTabBtn" title="Context Tree">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      </svg>
+    </button>
+    <button class="tab-btn" data-tab="browser-to-canvas" id="browserToCanvasTab" title="Browser → Canvas">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    </button>
+    <button class="tab-btn" data-tab="canvas-to-browser" id="canvasToBrowserTab" title="Canvas → Browser">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Tree Tab -->
+    <div class="tab-content active" id="tree-tab">
+      <div class="tree-controls">
+        <input type="text" class="tree-path-input" id="treePathInput" placeholder="Enter path">
+        <button class="path-submit-btn" id="pathSubmitBtn" title="Go to path">✓</button>
+      </div>
+      <div class="tree-container" id="treeContainer">
+        <div class="loading-state">Loading tree...</div>
+      </div>
+    </div>
+
+    <!-- Browser to Canvas Tab -->
+    <div class="tab-content" id="browser-to-canvas">
+      <div class="sync-settings">
+        <label class="checkbox-label">
+          <input type="checkbox" id="sendNewTabsToCanvas"> Auto-sync new tabs
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="showSyncedTabs"> Show synced tabs
+        </label>
+      </div>
+
+      <div class="tab-section">
+        <div class="section-header">
+          <div class="section-header-left">
+            <label class="checkbox-label select-all-label">
+              <input type="checkbox" id="selectAllBrowser">
+              <span class="checkmark"></span>
+            </label>
+            <h3 id="browserTabsHeader">Browser Tabs</h3>
+          </div>
+        </div>
+        <div class="tab-list" id="browserToCanvasList">
+          <div class="empty-state">No tabs</div>
+        </div>
+        <div class="bulk-actions" id="browserBulkActions" style="display: none;">
+          <button class="action-btn primary" id="syncSelectedBtn">Sync</button>
+          <button class="action-btn danger" id="closeSelectedBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas to Browser Tab -->
+    <div class="tab-content" id="canvas-to-browser">
+      <div class="sync-settings">
+        <label class="checkbox-label">
+          <input type="checkbox" id="openTabsAddedToCanvas"> Auto-open new tabs
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="showAllCanvasTabs"> Show all tabs
+        </label>
+      </div>
+
+      <div class="tab-section">
+        <div class="section-header">
+          <div class="section-header-left">
+            <label class="checkbox-label select-all-label">
+              <input type="checkbox" id="selectAllCanvas">
+              <span class="checkmark"></span>
+            </label>
+            <h3 id="canvasTabsHeader">Canvas Tabs</h3>
+          </div>
+        </div>
+        <div class="tab-list" id="canvasToBrowserList">
+          <div class="empty-state">No tabs</div>
+        </div>
+        <div class="bulk-actions" id="canvasBulkActions" style="display: none;">
+          <button class="action-btn primary" id="openSelectedBtn">Open</button>
+          <button class="action-btn warning" id="removeSelectedBtn">Remove</button>
+          <button class="action-btn danger" id="deleteSelectedBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" style="display: none;"></div>
+
+  <!-- Context Menu -->
+  <div class="context-menu" id="contextMenu" style="display: none;">
+    <div class="context-menu-item" data-action="create-subfolder">Create Subfolder</div>
+    <div class="context-menu-item" data-action="rename">Rename</div>
+  </div>
+
+  <script type="module" src="sidebar.js"></script>
+</body>
+</html>
