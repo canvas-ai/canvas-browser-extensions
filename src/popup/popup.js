@@ -10,7 +10,7 @@ let searchInput, sendNewTabsToCanvas, openTabsAddedToCanvas, showSyncedTabs, sho
 let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
-let syncSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
+let syncSelectedBtn, syncCloseSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 let selectAllBrowser, selectAllCanvas;
 let browserTabsHeader, canvasTabsHeader;
 let toast;
@@ -222,6 +222,7 @@ function initializeElements() {
   browserBulkActions = document.getElementById('browserBulkActions');
   canvasBulkActions = document.getElementById('canvasBulkActions');
   syncSelectedBtn = document.getElementById('syncSelectedBtn');
+  syncCloseSelectedBtn = document.getElementById('syncCloseSelectedBtn');
   closeSelectedBtn = document.getElementById('closeSelectedBtn');
   openSelectedBtn = document.getElementById('openSelectedBtn');
   removeSelectedBtn = document.getElementById('removeSelectedBtn');
@@ -300,6 +301,7 @@ function setupEventListeners() {
 
   // Bulk actions
   syncSelectedBtn.addEventListener('click', () => handleSyncSelected());
+  syncCloseSelectedBtn.addEventListener('click', () => handleSyncAndCloseSelected());
   closeSelectedBtn.addEventListener('click', () => handleCloseSelected());
   openSelectedBtn.addEventListener('click', () => handleOpenSelected());
   removeSelectedBtn.addEventListener('click', () => handleRemoveSelected());
@@ -815,6 +817,37 @@ function updateTabCountHeaders() {
   }
 }
 
+function updateWindowGroupVisibility() {
+  const groups = browserToCanvasList.querySelectorAll('.window-group');
+  groups.forEach(group => {
+    const items = group.querySelectorAll('.tab-item');
+    const anyVisible = Array.from(items).some(item => item.style.display !== 'none');
+    group.style.display = anyVisible ? 'block' : 'none';
+  });
+}
+
+function groupBrowserTabsByWindow(tabs) {
+  const byWindow = new Map();
+  for (const tab of tabs) {
+    const windowId = Number.isInteger(tab.windowId) ? tab.windowId : -1;
+    const list = byWindow.get(windowId) || [];
+    list.push(tab);
+    byWindow.set(windowId, list);
+  }
+
+  const groups = [];
+  for (const [windowId, windowTabs] of byWindow.entries()) {
+    groups.push({ windowId, tabs: windowTabs });
+  }
+  return groups;
+}
+
+function getUnsyncedTabIdsForWindow(windowId) {
+  return allBrowserTabs
+    .filter(tab => tab.windowId === windowId && !syncedTabIds.has(tab.id))
+    .map(tab => tab.id);
+}
+
 function renderBrowserTabs() {
   console.log('Rendering browser tabs, count:', browserTabs.length);
 
@@ -837,110 +870,163 @@ function renderBrowserTabs() {
   // Clear existing content
   browserToCanvasList.textContent = '';
 
-  // Create tabs using secure DOM methods
-  browserTabs.forEach(tab => {
-    const isSynced = syncedTabIds.has(tab.id);
-    const tabClass = isSynced ? 'tab-item synced' : 'tab-item';
-    const isPinned = tab.isPinned || false;
-
-    // Create tab element
-    const tabElement = createSecureElement('div', {
-      className: tabClass,
-      'data-tab-id': tab.id
-    });
-
-    // Create checkbox label
-    const checkboxLabel = createSecureElement('label', { className: 'tab-checkbox' });
-    const checkbox = createSecureElement('input', {
-      type: 'checkbox',
-      'data-tab-id': tab.id
-    });
-    if (isSynced) checkbox.disabled = true;
-
-    // Preserve selection state
-    if (selectedBrowserTabs.has(tab.id)) {
-      checkbox.checked = true;
-    }
-
-    const checkmark = createSecureElement('span', { className: 'checkmark' });
-    checkboxLabel.appendChild(checkbox);
-    checkboxLabel.appendChild(checkmark);
-
-    // Create favicon
-    const faviconImg = createSecureElement('img', {
-      src: tab.favIconUrl || '../assets/icons/logo-br_64x64.png',
-      className: 'tab-favicon',
-      'data-fallback': '../assets/icons/logo-br_64x64.png'
-    });
-
-    // Create tab info
-    const tabInfo = createSecureElement('div', { className: 'tab-info' });
-    const tabTitle = createSecureElement('div', { className: 'tab-title' }, escapeHtml(tab.title));
-    const tabUrl = createSecureElement('div', { className: 'tab-url' }, escapeHtml(tab.url));
-    tabInfo.appendChild(tabTitle);
-    tabInfo.appendChild(tabUrl);
-
-    // Create tab actions
-    const tabActions = createSecureElement('div', { className: 'tab-actions' });
-
-    // Pin button with secure SVG creation
-    const pinButtonClass = isPinned ? 'action-btn small pin-btn pinned' : 'action-btn small pin-btn';
-    const pinButtonTitle = isPinned ? 'Unpin tab (will close on context change)' : 'Pin tab (keep open on context change)';
-    const pinButton = createSecureElement('button', {
-      className: pinButtonClass,
-      'data-action': 'pin',
-      'data-tab-id': tab.id,
-      title: pinButtonTitle
-    });
-
-    // Create SVG for pin button securely using DOM methods
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    svg.setAttribute('width', '16');
-    svg.setAttribute('height', '16');
-    svg.setAttribute('fill', 'currentColor');
-    svg.setAttribute('viewBox', '0 0 16 16');
-
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    if (isPinned) {
-      svg.setAttribute('class', 'bi bi-pin-fill');
-      path.setAttribute('d', 'M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354');
-    } else {
-      svg.setAttribute('class', 'bi bi-pin-angle-fill');
-      path.setAttribute('d', 'M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146');
-    }
-    svg.appendChild(path);
-    pinButton.appendChild(svg);
-
-    // Sync button
-    const syncButton = createSecureElement('button', {
-      className: 'action-btn small primary',
-      'data-action': 'sync',
-      'data-tab-id': tab.id,
-      title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas (Ctrl+click to sync and close)'
-    }, '↗');
-    if (isSynced) syncButton.disabled = true;
-
-    // Close button
-    const closeButton = createSecureElement('button', {
-      className: 'action-btn small danger',
-      'data-action': 'close',
-      'data-tab-id': tab.id,
-      title: 'Close tab'
-    }, '✕');
-
-    tabActions.appendChild(pinButton);
-    tabActions.appendChild(syncButton);
-    tabActions.appendChild(closeButton);
-
-    // Assemble tab element
-    tabElement.appendChild(checkboxLabel);
-    tabElement.appendChild(faviconImg);
-    tabElement.appendChild(tabInfo);
-    tabElement.appendChild(tabActions);
-
-    browserToCanvasList.appendChild(tabElement);
+  const groups = groupBrowserTabsByWindow(browserTabs);
+  groups.sort((a, b) => {
+    const aActive = a.tabs.some(t => t.active);
+    const bActive = b.tabs.some(t => t.active);
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return a.windowId - b.windowId;
   });
+
+  for (const group of groups) {
+    const { windowId } = group;
+    const windowUnsyncedIds = getUnsyncedTabIdsForWindow(windowId);
+    const canSync = currentConnection.connected && windowUnsyncedIds.length > 0;
+    const isActiveWindow = group.tabs.some(t => t.active);
+
+    const groupElement = createSecureElement('div', {
+      className: 'window-group',
+      'data-window-id': windowId
+    });
+
+    const groupHeader = createSecureElement('div', { className: 'window-group-header' });
+    const titleText = `Window ${windowId}${isActiveWindow ? ' (current)' : ''} · ${windowUnsyncedIds.length} unsynced`;
+    const groupTitle = createSecureElement('div', { className: 'window-group-title' }, titleText);
+
+    const groupActions = createSecureElement('div', { className: 'window-group-actions' });
+    const syncWindowBtn = createSecureElement('button', {
+      className: 'action-btn small secondary',
+      'data-action': 'sync-window',
+      'data-window-id': windowId,
+      title: 'Sync all unsynced tabs in this window'
+    }, 'Sync');
+    syncWindowBtn.disabled = !canSync;
+
+    const syncCloseWindowBtn = createSecureElement('button', {
+      className: 'action-btn small warning',
+      'data-action': 'sync-close-window',
+      'data-window-id': windowId,
+      title: 'Sync all unsynced tabs in this window and close them'
+    }, 'Sync+Close');
+    syncCloseWindowBtn.disabled = !canSync;
+
+    groupActions.appendChild(syncWindowBtn);
+    groupActions.appendChild(syncCloseWindowBtn);
+
+    groupHeader.appendChild(groupTitle);
+    groupHeader.appendChild(groupActions);
+
+    const groupList = createSecureElement('div', { className: 'window-group-list' });
+
+    // Create tabs using secure DOM methods
+    group.tabs.forEach(tab => {
+      const isSynced = syncedTabIds.has(tab.id);
+      const tabClass = isSynced ? 'tab-item synced' : 'tab-item';
+      const isPinned = tab.isPinned || false;
+
+      // Create tab element
+      const tabElement = createSecureElement('div', {
+        className: tabClass,
+        'data-tab-id': tab.id
+      });
+
+      // Create checkbox label
+      const checkboxLabel = createSecureElement('label', { className: 'tab-checkbox' });
+      const checkbox = createSecureElement('input', {
+        type: 'checkbox',
+        'data-tab-id': tab.id
+      });
+      if (isSynced) checkbox.disabled = true;
+
+      // Preserve selection state
+      if (selectedBrowserTabs.has(tab.id)) {
+        checkbox.checked = true;
+      }
+
+      const checkmark = createSecureElement('span', { className: 'checkmark' });
+      checkboxLabel.appendChild(checkbox);
+      checkboxLabel.appendChild(checkmark);
+
+      // Create favicon
+      const faviconImg = createSecureElement('img', {
+        src: tab.favIconUrl || '../assets/icons/logo-br_64x64.png',
+        className: 'tab-favicon',
+        'data-fallback': '../assets/icons/logo-br_64x64.png'
+      });
+
+      // Create tab info
+      const tabInfo = createSecureElement('div', { className: 'tab-info' });
+      const tabTitle = createSecureElement('div', { className: 'tab-title' }, escapeHtml(tab.title));
+      const tabUrl = createSecureElement('div', { className: 'tab-url' }, escapeHtml(tab.url));
+      tabInfo.appendChild(tabTitle);
+      tabInfo.appendChild(tabUrl);
+
+      // Create tab actions
+      const tabActions = createSecureElement('div', { className: 'tab-actions' });
+
+      // Pin button with secure SVG creation
+      const pinButtonClass = isPinned ? 'action-btn small pin-btn pinned' : 'action-btn small pin-btn';
+      const pinButtonTitle = isPinned ? 'Unpin tab (will close on context change)' : 'Pin tab (keep open on context change)';
+      const pinButton = createSecureElement('button', {
+        className: pinButtonClass,
+        'data-action': 'pin',
+        'data-tab-id': tab.id,
+        title: pinButtonTitle
+      });
+
+      // Create SVG for pin button securely using DOM methods
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      svg.setAttribute('width', '16');
+      svg.setAttribute('height', '16');
+      svg.setAttribute('fill', 'currentColor');
+      svg.setAttribute('viewBox', '0 0 16 16');
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      if (isPinned) {
+        svg.setAttribute('class', 'bi bi-pin-fill');
+        path.setAttribute('d', 'M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5c0 .276-.224 1.5-.5 1.5s-.5-1.224-.5-1.5V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354');
+      } else {
+        svg.setAttribute('class', 'bi bi-pin-angle-fill');
+        path.setAttribute('d', 'M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146');
+      }
+      svg.appendChild(path);
+      pinButton.appendChild(svg);
+
+      // Sync button
+      const syncButton = createSecureElement('button', {
+        className: 'action-btn small primary',
+        'data-action': 'sync',
+        'data-tab-id': tab.id,
+        title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas'
+      }, '↗');
+      if (isSynced) syncButton.disabled = true;
+
+      // Close button
+      const closeButton = createSecureElement('button', {
+        className: 'action-btn small danger',
+        'data-action': 'close',
+        'data-tab-id': tab.id,
+        title: 'Close tab'
+      }, '✕');
+
+      tabActions.appendChild(pinButton);
+      tabActions.appendChild(syncButton);
+      tabActions.appendChild(closeButton);
+
+      // Assemble tab element
+      tabElement.appendChild(checkboxLabel);
+      tabElement.appendChild(faviconImg);
+      tabElement.appendChild(tabInfo);
+      tabElement.appendChild(tabActions);
+
+      groupList.appendChild(tabElement);
+    });
+
+    groupElement.appendChild(groupHeader);
+    groupElement.appendChild(groupList);
+    browserToCanvasList.appendChild(groupElement);
+  }
 
   // Setup checkbox listeners
   browserToCanvasList.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(checkbox => {
@@ -949,6 +1035,7 @@ function renderBrowserTabs() {
 
   updateTabCountHeaders();
   updateSelectAllCheckboxState();
+  updateWindowGroupVisibility();
 }
 
 function renderCanvasTabs() {
@@ -1185,6 +1272,7 @@ function applySearchResults(container, results, type) {
 
     // Show search-specific empty state
     showSearchEmptyState(container, searchInput.value);
+    if (type === 'browser') updateWindowGroupVisibility();
     return;
   }
 
@@ -1253,6 +1341,7 @@ function applySearchResults(container, results, type) {
   // Update tab count headers and select-all state after applying search results
   updateTabCountHeaders();
   updateSelectAllCheckboxState();
+  if (type === 'browser') updateWindowGroupVisibility();
 }
 
 function showSearchEmptyState(container, query) {
@@ -1390,6 +1479,7 @@ function clearSearch() {
   // Update tab count headers after clearing search
   updateTabCountHeaders();
   updateSelectAllCheckboxState();
+  if (currentTab === 'browser-to-canvas') updateWindowGroupVisibility();
 }
 
 function initializeFuseInstances() {
@@ -2334,6 +2424,16 @@ function handleBrowserTabAction(event) {
     event.stopPropagation();
 
     const action = button.dataset.action;
+    if (action === 'sync-window' || action === 'sync-close-window') {
+      const windowId = parseInt(button.dataset.windowId);
+      if (!Number.isInteger(windowId)) {
+        console.error('No windowId found for action:', action);
+        return;
+      }
+      handleSyncWindow(windowId, action === 'sync-close-window');
+      return;
+    }
+
     const tabId = parseInt(button.dataset.tabId);
 
     console.log('Action:', action, 'TabId:', tabId);
@@ -2344,12 +2444,13 @@ function handleBrowserTabAction(event) {
     }
 
     switch (action) {
-    case 'sync':
+    case 'sync': {
       console.log('Calling handleSyncTab with tabId:', tabId);
       // Check if Ctrl key was held during click
       const shouldCloseAfterSync = event.ctrlKey || event.metaKey;
       handleSyncTab(tabId, shouldCloseAfterSync);
       break;
+    }
     case 'close':
       console.log('Calling handleCloseTab with tabId:', tabId);
       handleCloseTab(tabId);
@@ -2879,6 +2980,40 @@ async function handleOpenAll() {
   }
 }
 
+async function closeTabs(tabIds) {
+  for (const tabId of tabIds) {
+    await sendMessageToBackground('CLOSE_TAB', { tabId });
+  }
+}
+
+async function handleSyncWindow(windowId, closeAfterSync = false) {
+  try {
+    const tabIds = getUnsyncedTabIdsForWindow(windowId);
+    console.log(`${closeAfterSync ? 'Syncing+closing' : 'Syncing'} window ${windowId} tabs:`, tabIds);
+
+    if (tabIds.length === 0) return;
+
+    const response = await sendMessageToBackground('SYNC_MULTIPLE_TABS', { tabIds });
+    console.log('Sync window response:', response);
+
+    if (!response.success) {
+      console.error('Failed to sync window tabs:', response.error);
+      return;
+    }
+
+    if (closeAfterSync) {
+      await closeTabs(tabIds);
+      selectedBrowserTabs.forEach(id => {
+        if (tabIds.includes(id)) selectedBrowserTabs.delete(id);
+      });
+    }
+
+    await loadTabs();
+  } catch (error) {
+    console.error('Failed to sync window tabs:', error);
+  }
+}
+
 async function handleSyncSelected() {
   try {
     const selectedIds = Array.from(selectedBrowserTabs);
@@ -2901,6 +3036,31 @@ async function handleSyncSelected() {
     }
   } catch (error) {
     console.error('Failed to sync selected tabs:', error);
+  }
+}
+
+async function handleSyncAndCloseSelected() {
+  try {
+    const selectedIds = Array.from(selectedBrowserTabs);
+    console.log('Syncing+closing selected tabs:', selectedIds);
+
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    const response = await sendMessageToBackground('SYNC_MULTIPLE_TABS', { tabIds: selectedIds });
+    console.log('Sync+close selected response:', response);
+
+    if (!response.success) {
+      console.error('Failed to sync selected tabs:', response.error);
+      return;
+    }
+
+    await closeTabs(selectedIds);
+    selectedBrowserTabs.clear();
+    await loadTabs();
+  } catch (error) {
+    console.error('Failed to sync+close selected tabs:', error);
   }
 }
 

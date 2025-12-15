@@ -2214,6 +2214,33 @@ async function setupContextMenus() {
       console.error('❌ Failed to create root context menu item (link):', error);
     }
 
+    // "Sync and close" variants
+    try {
+      contextMenusAPI.create({
+        id: 'send-page-to-canvas-close',
+        title: 'Send page to Canvas (close tab)',
+        contexts: ['page'],
+        documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
+        visible: true
+      });
+      console.log('✅ Root context menu item (page close) created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create root context menu item (page close):', error);
+    }
+
+    try {
+      contextMenusAPI.create({
+        id: 'send-link-to-canvas-close',
+        title: 'Send link to Canvas (close tab)',
+        contexts: ['link'],
+        documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
+        visible: true
+      });
+      console.log('✅ Root context menu item (link close) created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create root context menu item (link close):', error);
+    }
+
     // Get current mode and selection
     const mode = await browserStorage.getSyncMode();
     const currentContext = await browserStorage.getCurrentContext();
@@ -2221,13 +2248,13 @@ async function setupContextMenus() {
     const workspacePath = await browserStorage.getWorkspacePath();
 
     // Helper function to create menu items for both page and link contexts
-    const createMenuItemForBothContexts = (itemConfig, parentId) => {
+    const createMenuItemForBothContexts = (itemConfig, parentIdPage, parentIdLink, idPrefix = '') => {
       // Create for page context
       try {
         contextMenusAPI.create({
           ...itemConfig,
-          id: `${itemConfig.id}`,
-          parentId: `${parentId}`,
+          id: `${idPrefix}${itemConfig.id}`,
+          parentId: `${parentIdPage}`,
           contexts: ['page'],
           documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
         });
@@ -2239,8 +2266,8 @@ async function setupContextMenus() {
       try {
         contextMenusAPI.create({
           ...itemConfig,
-          id: `link:${itemConfig.id}`,
-          parentId: 'send-link-to-canvas',
+          id: `link:${idPrefix}${itemConfig.id}`,
+          parentId: `${parentIdLink}`,
           contexts: ['link'],
           documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
         });
@@ -2254,7 +2281,11 @@ async function setupContextMenus() {
       createMenuItemForBothContexts({
         id: `current-context:${currentContext.id}`,
         title: `🎯 Current Context: ${currentContext.url}`
-      }, 'send-page-to-canvas');
+      }, 'send-page-to-canvas', 'send-link-to-canvas');
+      createMenuItemForBothContexts({
+        id: `current-context:${currentContext.id}`,
+        title: `🎯 Current Context: ${currentContext.url}`
+      }, 'send-page-to-canvas-close', 'send-link-to-canvas-close', 'close:');
       console.log('✅ Current context URL menu items created');
     } else if (mode === 'explorer' && currentWorkspace) {
       try {
@@ -2263,7 +2294,11 @@ async function setupContextMenus() {
         createMenuItemForBothContexts({
           id: `current-workspace:${wsName}:${pathDisplay}`,
           title: `🎯 Current: ${wsName}${pathDisplay}`
-        }, 'send-page-to-canvas');
+        }, 'send-page-to-canvas', 'send-link-to-canvas');
+        createMenuItemForBothContexts({
+          id: `current-workspace:${wsName}:${pathDisplay}`,
+          title: `🎯 Current: ${wsName}${pathDisplay}`
+        }, 'send-page-to-canvas-close', 'send-link-to-canvas-close', 'close:');
         console.log('✅ Current workspace/path menu items created');
       } catch (error) {
         console.error('❌ Failed to create current workspace menu items:', error);
@@ -2280,7 +2315,11 @@ async function setupContextMenus() {
         createMenuItemForBothContexts({
           id: 'recent-separator',
           type: 'separator'
-        }, 'send-page-to-canvas');
+        }, 'send-page-to-canvas', 'send-link-to-canvas');
+        createMenuItemForBothContexts({
+          id: 'recent-separator',
+          type: 'separator'
+        }, 'send-page-to-canvas-close', 'send-link-to-canvas-close', 'close:');
 
         // Filter out current context/workspace from recent destinations to avoid duplication
         const filteredRecent = recentDestinations.filter(dest => {
@@ -2315,7 +2354,11 @@ async function setupContextMenus() {
               createMenuItemForBothContexts({
                 id: menuId,
                 title: title
-              }, 'send-page-to-canvas');
+              }, 'send-page-to-canvas', 'send-link-to-canvas');
+              createMenuItemForBothContexts({
+                id: menuId,
+                title: title
+              }, 'send-page-to-canvas-close', 'send-link-to-canvas-close', 'close:');
             }
           } catch (error) {
             console.error('❌ Failed to create recent destination menu item:', error);
@@ -2335,7 +2378,11 @@ async function setupContextMenus() {
       createMenuItemForBothContexts({
         id: 'workspaces-separator',
         type: 'separator'
-      }, 'send-page-to-canvas');
+      }, 'send-page-to-canvas', 'send-link-to-canvas');
+      createMenuItemForBothContexts({
+        id: 'workspaces-separator',
+        type: 'separator'
+      }, 'send-page-to-canvas-close', 'send-link-to-canvas-close', 'close:');
     }
 
     // Helper function to build workspace tree for a given parent menu ID and context
@@ -2481,6 +2528,8 @@ async function setupContextMenus() {
       // Build workspace menus for both page and link contexts
       await buildWorkspaceMenus('send-page-to-canvas', 'page', '');
       await buildWorkspaceMenus('send-link-to-canvas', 'link', 'link:');
+      await buildWorkspaceMenus('send-page-to-canvas-close', 'page', 'close:');
+      await buildWorkspaceMenus('send-link-to-canvas-close', 'link', 'link:close:');
     } catch (workspaceError) {
       console.warn('Failed to load workspaces for context menu:', workspaceError);
     }
@@ -2528,6 +2577,13 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
         tab = linkTab;
       }
 
+      // Handle "close tab after send" prefix
+      let closeAfterSend = false;
+      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('close:')) {
+        closeAfterSend = true;
+        info.menuItemId = info.menuItemId.substring(6);
+      }
+
       // Handle current context clicks
       if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('current-context:')) {
         const contextId = info.menuItemId.replace('current-context:', '');
@@ -2542,6 +2598,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           
           if (result.success) {
             console.log(`Tab synced to current context ${contextId} via context menu`);
+            if (closeAfterSend) {
+              await tabManager.closeTab(tab.id);
+            }
             // Track as recent destination
             if (currentContext) {
               await browserStorage.addRecentDestination({
@@ -2590,6 +2649,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
               tabManager.markTabAsSynced(tab.id, docId);
               console.log(`Tab synced to current workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              if (closeAfterSend) {
+                await tabManager.closeTab(tab.id);
+              }
               
               // Track as recent destination
               await browserStorage.addRecentDestination({
@@ -2626,6 +2688,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           
           if (result.success) {
             console.log(`Tab synced to recent context ${contextId} via context menu`);
+            if (closeAfterSend) {
+              await tabManager.closeTab(tab.id);
+            }
             // Update recent destination timestamp
             const recentDestinations = await browserStorage.getRecentDestinations();
             const existingDest = recentDestinations.find(d => d.contextId === contextId);
@@ -2676,6 +2741,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
               tabManager.markTabAsSynced(tab.id, docId);
               console.log(`Tab synced to recent workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              if (closeAfterSend) {
+                await tabManager.closeTab(tab.id);
+              }
               
               // Update recent destination timestamp
               await browserStorage.addRecentDestination({
@@ -2731,6 +2799,9 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
               tabManager.markTabAsSynced(tab.id, docId);
               console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              if (closeAfterSend) {
+                await tabManager.closeTab(tab.id);
+              }
               
               // Track as recent destination
               await browserStorage.addRecentDestination({
