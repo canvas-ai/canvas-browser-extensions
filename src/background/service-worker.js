@@ -609,6 +609,11 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     handleCloseTab(message.data, sendResponse);
     return true;
 
+  case 'CLOSE_WINDOW':
+    // Close a browser window (all its tabs)
+    handleCloseWindow(message.data, sendResponse);
+    return true;
+
   case 'FOCUS_TAB':
     // Focus browser tab
     handleFocusTab(message.data, sendResponse);
@@ -1286,6 +1291,22 @@ async function handleCloseTab(data, sendResponse) {
       success: false,
       error: error.message
     });
+  }
+}
+
+async function handleCloseWindow(data, sendResponse) {
+  try {
+    const { windowId } = data || {};
+    if (!Number.isInteger(windowId)) {
+      throw new Error('Window ID is required');
+    }
+
+    console.log('Closing window:', windowId);
+    await windowsAPI.remove(windowId);
+    sendResponse({ success: true });
+  } catch (error) {
+    console.error('Failed to close window:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
@@ -2200,18 +2221,18 @@ async function setupContextMenus() {
       return;
     }
 
-    // Also create "Send link to Canvas" for link context menus
+    // "Sync and close" variants
     try {
       contextMenusAPI.create({
-        id: 'send-link-to-canvas',
-        title: 'Send link to Canvas',
-        contexts: ['link'],
+        id: 'send-page-to-canvas-close',
+        title: 'Send page to Canvas (close tab)',
+        contexts: ['page'],
         documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*'],
         visible: true
       });
-      console.log('✅ Root context menu item (link) created successfully');
+      console.log('✅ Root context menu item (page close) created successfully');
     } catch (error) {
-      console.error('❌ Failed to create root context menu item (link):', error);
+      console.error('❌ Failed to create root context menu item (page close):', error);
     }
 
     // Get current mode and selection
@@ -2220,50 +2241,44 @@ async function setupContextMenus() {
     const currentWorkspace = await browserStorage.getCurrentWorkspace();
     const workspacePath = await browserStorage.getWorkspacePath();
 
-    // Helper function to create menu items for both page and link contexts
-    const createMenuItemForBothContexts = (itemConfig, parentId) => {
-      // Create for page context
+    // Helper function to create menu items for page context
+    const createPageMenuItem = (itemConfig, parentIdPage, idPrefix = '') => {
       try {
         contextMenusAPI.create({
           ...itemConfig,
-          id: `${itemConfig.id}`,
-          parentId: `${parentId}`,
+          id: `${idPrefix}${itemConfig.id}`,
+          parentId: `${parentIdPage}`,
           contexts: ['page'],
           documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
         });
       } catch (error) {
         console.error(`❌ Failed to create page context menu item ${itemConfig.id}:`, error);
       }
-      
-      // Create for link context
-      try {
-        contextMenusAPI.create({
-          ...itemConfig,
-          id: `link:${itemConfig.id}`,
-          parentId: 'send-link-to-canvas',
-          contexts: ['link'],
-          documentUrlPatterns: ['http://*/*', 'https://*/*', 'file://*/*']
-        });
-      } catch (error) {
-        console.error(`❌ Failed to create link context menu item ${itemConfig.id}:`, error);
-      }
     };
 
     // Add current context URL as first item (for better UX)
     if (mode === 'context' && currentContext?.url) {
-      createMenuItemForBothContexts({
+      createPageMenuItem({
         id: `current-context:${currentContext.id}`,
         title: `🎯 Current Context: ${currentContext.url}`
       }, 'send-page-to-canvas');
+      createPageMenuItem({
+        id: `current-context:${currentContext.id}`,
+        title: `🎯 Current Context: ${currentContext.url}`
+      }, 'send-page-to-canvas-close', 'close:');
       console.log('✅ Current context URL menu items created');
     } else if (mode === 'explorer' && currentWorkspace) {
       try {
         const wsName = currentWorkspace.name || currentWorkspace.id;
         const pathDisplay = workspacePath && workspacePath !== '/' ? workspacePath : '/';
-        createMenuItemForBothContexts({
+        createPageMenuItem({
           id: `current-workspace:${wsName}:${pathDisplay}`,
           title: `🎯 Current: ${wsName}${pathDisplay}`
         }, 'send-page-to-canvas');
+        createPageMenuItem({
+          id: `current-workspace:${wsName}:${pathDisplay}`,
+          title: `🎯 Current: ${wsName}${pathDisplay}`
+        }, 'send-page-to-canvas-close', 'close:');
         console.log('✅ Current workspace/path menu items created');
       } catch (error) {
         console.error('❌ Failed to create current workspace menu items:', error);
@@ -2277,10 +2292,14 @@ async function setupContextMenus() {
         console.log('🔧 Adding recent destinations:', recentDestinations.length);
         
         // Add separator before recent destinations
-        createMenuItemForBothContexts({
+        createPageMenuItem({
           id: 'recent-separator',
           type: 'separator'
         }, 'send-page-to-canvas');
+        createPageMenuItem({
+          id: 'recent-separator',
+          type: 'separator'
+        }, 'send-page-to-canvas-close', 'close:');
 
         // Filter out current context/workspace from recent destinations to avoid duplication
         const filteredRecent = recentDestinations.filter(dest => {
@@ -2312,10 +2331,14 @@ async function setupContextMenus() {
             }
 
             if (title && menuId) {
-              createMenuItemForBothContexts({
+              createPageMenuItem({
                 id: menuId,
                 title: title
               }, 'send-page-to-canvas');
+              createPageMenuItem({
+                id: menuId,
+                title: title
+              }, 'send-page-to-canvas-close', 'close:');
             }
           } catch (error) {
             console.error('❌ Failed to create recent destination menu item:', error);
@@ -2332,10 +2355,14 @@ async function setupContextMenus() {
     if (mode === 'context' && currentContext?.url || 
         mode === 'explorer' && currentWorkspace ||
         (await browserStorage.getRecentDestinations()).length > 0) {
-      createMenuItemForBothContexts({
+      createPageMenuItem({
         id: 'workspaces-separator',
         type: 'separator'
       }, 'send-page-to-canvas');
+      createPageMenuItem({
+        id: 'workspaces-separator',
+        type: 'separator'
+      }, 'send-page-to-canvas-close', 'close:');
     }
 
     // Helper function to build workspace tree for a given parent menu ID and context
@@ -2478,9 +2505,9 @@ async function setupContextMenus() {
         );
       }
 
-      // Build workspace menus for both page and link contexts
+      // Build workspace menus for page context
       await buildWorkspaceMenus('send-page-to-canvas', 'page', '');
-      await buildWorkspaceMenus('send-link-to-canvas', 'link', 'link:');
+      await buildWorkspaceMenus('send-page-to-canvas-close', 'page', 'close:');
     } catch (workspaceError) {
       console.warn('Failed to load workspaces for context menu:', workspaceError);
     }
@@ -2508,25 +2535,42 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
         return;
       }
 
-      // Handle link context menu clicks (prefixed with "link:")
-      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('link:')) {
-        console.log('🔗 Link context menu clicked for URL:', info.linkUrl);
-        
-        // Strip the "link:" prefix to get the actual menu item ID
-        const actualMenuItemId = info.menuItemId.substring(5); // Remove "link:" prefix
-        
-        // Create a synthetic tab object for the link
-        const linkTab = {
-          ...tab,
-          url: info.linkUrl,
-          title: info.linkUrl // We don't have the actual page title, so use URL
-        };
-        
-        // Process the menu item as if it were a normal page context menu click
-        // We'll handle this by routing through the same logic below
-        info.menuItemId = actualMenuItemId;
-        tab = linkTab;
+      // Handle "close tab after send" prefix
+      let closeAfterSend = false;
+      if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('close:')) {
+        closeAfterSend = true;
+        info.menuItemId = info.menuItemId.substring(6);
       }
+
+      // If the user has multi-selected tabs in Chrome (highlighted), send all of them.
+      // Fallback to the clicked tab when selection is not available.
+      let selectedTabs = [tab];
+      try {
+        if (tab?.windowId !== undefined) {
+          const highlighted = await tabsAPI.query({ windowId: tab.windowId, highlighted: true });
+          if (Array.isArray(highlighted) && highlighted.length > 1) {
+            selectedTabs = highlighted;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to query highlighted tabs (falling back to single tab):', e?.message || e);
+      }
+
+      const closeSelectedTabsSafely = async () => {
+        try {
+          if (!closeAfterSend) return;
+
+          // Simple safety: if we'd close everything, open a blank tab first.
+          if (await syncEngine.wouldLeaveEmptyBrowser(selectedTabs)) {
+            const safeUrl = (typeof chrome !== 'undefined') ? 'chrome://newtab/' : 'about:blank';
+            await tabManager.openTab(safeUrl, { active: false });
+          }
+
+          await tabManager.closeTabs(selectedTabs.map(t => t.id));
+        } catch (e) {
+          console.warn('Failed to close selected tabs:', e?.message || e);
+        }
+      };
 
       // Handle current context clicks
       if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('current-context:')) {
@@ -2537,11 +2581,14 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           const browserIdentity = await browserStorage.getBrowserIdentity();
           const currentContext = await browserStorage.getCurrentContext();
 
-          // Sync tab to current context
-          const result = await tabManager.syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings);
+          // Sync selected tabs to current context
+          const result = selectedTabs.length > 1
+            ? await tabManager.syncMultipleTabs(selectedTabs, apiClient, contextId, browserIdentity, syncSettings)
+            : await tabManager.syncTabToCanvas(selectedTabs[0], apiClient, contextId, browserIdentity, syncSettings);
           
           if (result.success) {
             console.log(`Tab synced to current context ${contextId} via context menu`);
+            await closeSelectedTabsSafely();
             // Track as recent destination
             if (currentContext) {
               await browserStorage.addRecentDestination({
@@ -2554,7 +2601,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
             // Show success notification
-            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
+            const title = selectedTabs.length > 1 ? `${selectedTabs.length} tabs` : (selectedTabs[0].title || selectedTabs[0].url);
+            await showNotification('Sent to Canvas', `"${title}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to current context:', result.error);
           }
@@ -2575,21 +2623,17 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             const syncSettings = await browserStorage.getSyncSettings();
             const browserIdentity = await browserStorage.getBrowserIdentity();
 
-            // Convert tab to document format
-            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
-
-            // Sync tab to current workspace and path
-            const response = await apiClient.insertWorkspaceDocument(
-              workspaceName,
-              document,
-              contextSpec || '/',
-              document.featureArray
-            );
+            const documents = selectedTabs.map(t => tabManager.convertTabToDocument(t, browserIdentity, syncSettings));
+            const response = documents.length > 1
+              ? await apiClient.insertWorkspaceDocuments(workspaceName, documents, contextSpec || '/', documents[0].featureArray)
+              : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              tabManager.markTabAsSynced(tab.id, docId);
+              // Best-effort: mark tabs as synced (ids can be mismatched in batch response, but UI uses URL comparison anyway)
+              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to current workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              await closeSelectedTabsSafely();
               
               // Track as recent destination
               await browserStorage.addRecentDestination({
@@ -2603,7 +2647,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification
-              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
+              const title = selectedTabs.length > 1 ? `${selectedTabs.length} tabs` : (selectedTabs[0].title || selectedTabs[0].url);
+              await showNotification('Sent to Canvas', `"${title}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2621,11 +2666,14 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           const syncSettings = await browserStorage.getSyncSettings();
           const browserIdentity = await browserStorage.getBrowserIdentity();
 
-          // Sync tab to recent context
-          const result = await tabManager.syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings);
+          // Sync selected tabs to recent context
+          const result = selectedTabs.length > 1
+            ? await tabManager.syncMultipleTabs(selectedTabs, apiClient, contextId, browserIdentity, syncSettings)
+            : await tabManager.syncTabToCanvas(selectedTabs[0], apiClient, contextId, browserIdentity, syncSettings);
           
           if (result.success) {
             console.log(`Tab synced to recent context ${contextId} via context menu`);
+            await closeSelectedTabsSafely();
             // Update recent destination timestamp
             const recentDestinations = await browserStorage.getRecentDestinations();
             const existingDest = recentDestinations.find(d => d.contextId === contextId);
@@ -2640,7 +2688,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             // Refresh context menus to update recent destinations list
             await setupContextMenus();
             // Show success notification
-            await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to Canvas`);
+            const title = selectedTabs.length > 1 ? `${selectedTabs.length} tabs` : (selectedTabs[0].title || selectedTabs[0].url);
+            await showNotification('Sent to Canvas', `"${title}" was sent to Canvas`);
           } else {
             console.error('Failed to sync tab to recent context:', result.error);
           }
@@ -2661,21 +2710,16 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             const syncSettings = await browserStorage.getSyncSettings();
             const browserIdentity = await browserStorage.getBrowserIdentity();
 
-            // Convert tab to document format
-            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
-
-            // Sync tab to recent workspace and path
-            const response = await apiClient.insertWorkspaceDocument(
-              workspaceName,
-              document,
-              contextSpec || '/',
-              document.featureArray
-            );
+            const documents = selectedTabs.map(t => tabManager.convertTabToDocument(t, browserIdentity, syncSettings));
+            const response = documents.length > 1
+              ? await apiClient.insertWorkspaceDocuments(workspaceName, documents, contextSpec || '/', documents[0].featureArray)
+              : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              tabManager.markTabAsSynced(tab.id, docId);
+              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to recent workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              await closeSelectedTabsSafely();
               
               // Update recent destination timestamp
               await browserStorage.addRecentDestination({
@@ -2689,7 +2733,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification
-              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
+              const title = selectedTabs.length > 1 ? `${selectedTabs.length} tabs` : (selectedTabs[0].title || selectedTabs[0].url);
+              await showNotification('Sent to Canvas', `"${title}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }
@@ -2716,21 +2761,16 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
             const syncSettings = await browserStorage.getSyncSettings();
             const browserIdentity = await browserStorage.getBrowserIdentity();
 
-            // Convert tab to document format
-            const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
-
-            // Sync tab to specific workspace and path
-            const response = await apiClient.insertWorkspaceDocument(
-              workspaceName,
-              document,
-              contextSpec || '/',
-              document.featureArray
-            );
+            const documents = selectedTabs.map(t => tabManager.convertTabToDocument(t, browserIdentity, syncSettings));
+            const response = documents.length > 1
+              ? await apiClient.insertWorkspaceDocuments(workspaceName, documents, contextSpec || '/', documents[0].featureArray)
+              : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
               const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              tabManager.markTabAsSynced(tab.id, docId);
+              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
+              await closeSelectedTabsSafely();
               
               // Track as recent destination
               await browserStorage.addRecentDestination({
@@ -2744,7 +2784,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification
-              await showNotification('Sent to Canvas', `"${tab.title || tab.url}" was sent to ${workspaceName}${contextSpec}`);
+              const title = selectedTabs.length > 1 ? `${selectedTabs.length} tabs` : (selectedTabs[0].title || selectedTabs[0].url);
+              await showNotification('Sent to Canvas', `"${title}" was sent to ${workspaceName}${contextSpec}`);
             } else {
               console.error('Failed to sync tab via context menu:', response.message);
             }

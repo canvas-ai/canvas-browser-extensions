@@ -303,13 +303,8 @@ export class ContextIntegration {
       return false;
     }
 
-    try {
-      // This would typically check with API, but for now return true if we have an ID
-      return true;
-    } catch (error) {
-      console.error('ContextIntegration: Context validation failed:', error);
-      return false;
-    }
+    // This would typically check with API, but for now return true if we have an ID
+    return true;
   }
 
   // Event handling

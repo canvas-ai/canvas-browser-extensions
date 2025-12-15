@@ -402,6 +402,52 @@ body {
   min-height: 0;
 }
 
+/* Window grouping (unsynced tabs per window) */
+.window-group {
+  margin-bottom: 10px;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.window-group:last-child {
+  margin-bottom: 0;
+}
+
+.window-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.window-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.window-group-list .tab-item {
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.window-group-list .tab-item:last-child {
+  border-bottom: none;
+}
+
 .tab-item {
   display: flex;
   align-items: center;
