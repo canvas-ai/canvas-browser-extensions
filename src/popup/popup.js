@@ -910,8 +910,16 @@ function renderBrowserTabs() {
     }, 'Sync+Close');
     syncCloseWindowBtn.disabled = !canSync;
 
+    const closeWindowBtn = createSecureElement('button', {
+      className: 'action-btn small danger',
+      'data-action': 'close-window',
+      'data-window-id': windowId,
+      title: 'Close this window'
+    }, 'Close');
+
     groupActions.appendChild(syncWindowBtn);
     groupActions.appendChild(syncCloseWindowBtn);
+    groupActions.appendChild(closeWindowBtn);
 
     groupHeader.appendChild(groupTitle);
     groupHeader.appendChild(groupActions);
@@ -2424,13 +2432,17 @@ function handleBrowserTabAction(event) {
     event.stopPropagation();
 
     const action = button.dataset.action;
-    if (action === 'sync-window' || action === 'sync-close-window') {
+    if (action === 'sync-window' || action === 'sync-close-window' || action === 'close-window') {
       const windowId = parseInt(button.dataset.windowId);
       if (!Number.isInteger(windowId)) {
         console.error('No windowId found for action:', action);
         return;
       }
-      handleSyncWindow(windowId, action === 'sync-close-window');
+      if (action === 'close-window') {
+        handleCloseWindow(windowId);
+      } else {
+        handleSyncWindow(windowId, action === 'sync-close-window');
+      }
       return;
     }
 
@@ -3011,6 +3023,23 @@ async function handleSyncWindow(windowId, closeAfterSync = false) {
     await loadTabs();
   } catch (error) {
     console.error('Failed to sync window tabs:', error);
+  }
+}
+
+async function handleCloseWindow(windowId) {
+  try {
+    console.log('Closing window:', windowId);
+    const response = await sendMessageToBackground('CLOSE_WINDOW', { windowId });
+    console.log('Close window response:', response);
+    if (response?.success) {
+      // Window is gone; refresh list state.
+      selectedBrowserTabs.clear();
+      await loadTabs();
+    } else {
+      console.error('Failed to close window:', response?.error);
+    }
+  } catch (error) {
+    console.error('Failed to close window:', error);
   }
 }
 
