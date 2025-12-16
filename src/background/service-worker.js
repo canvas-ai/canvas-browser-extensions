@@ -75,17 +75,23 @@ async function initializeExtension() {
         connectionSettings.apiToken || ''
       );
 
-      // Test connection if we're supposed to be connected
-      if (connectionSettings.connected && connectionSettings.apiToken) {
-        console.log('Testing saved connection...');
+      // Autoconnect on startup: if we have a saved token, try to reconnect even if
+      // the persisted `connected` flag is false (it can get out of sync).
+      if (connectionSettings.apiToken) {
+        console.log('Testing saved credentials for autoconnect...');
         const testResult = await apiClient.testConnection();
+
         if (!testResult.success || !testResult.authenticated) {
-          console.warn('Saved connection failed, marking as disconnected');
+          console.warn('Saved credentials failed, marking as disconnected');
           await browserStorage.setConnectionSettings({ connected: false });
         } else {
-          console.log('Saved connection is valid');
+          console.log('Saved credentials are valid');
 
-          // Initialize WebSocket connection
+          if (!connectionSettings.connected) {
+            await browserStorage.setConnectionSettings({ connected: true });
+          }
+
+          // Initialize WebSocket connection (will no-op until a context/workspace is selected)
           await initializeWebSocket();
         }
       }
