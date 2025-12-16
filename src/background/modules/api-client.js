@@ -514,11 +514,22 @@ Firefox blocks local network requests for security reasons.
     if (Array.isArray(featureArray)) {
       for (const f of featureArray) url.searchParams.append('featureArray', f);
     }
-    const response = await fetch(url.toString(), {
-      method: 'DELETE',
-      headers: this.buildHeaders(),
-      body: JSON.stringify(Array.isArray(documentIds) ? documentIds : [documentIds])
-    });
+    const ids = (Array.isArray(documentIds) ? documentIds : [documentIds]).map(String);
+
+    const doRequest = async (body) => {
+      const resp = await fetch(url.toString(), {
+        method: 'DELETE',
+        headers: this.buildHeaders(),
+        body: JSON.stringify(body)
+      });
+      return resp;
+    };
+
+    // Prefer the object shape used by other batch endpoints; fallback to legacy array if needed.
+    let response = await doRequest({ documentIds: ids });
+    if (!response.ok && response.status === 400) {
+      response = await doRequest(ids);
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return await response.json();
   }
@@ -531,11 +542,22 @@ Firefox blocks local network requests for security reasons.
     if (Array.isArray(featureArray)) {
       for (const f of featureArray) url.searchParams.append('featureArray', f);
     }
-    const response = await fetch(url.toString(), {
-      method: 'DELETE',
-      headers: this.buildHeaders(),
-      body: JSON.stringify(Array.isArray(documentIds) ? documentIds : [documentIds])
-    });
+    const ids = (Array.isArray(documentIds) ? documentIds : [documentIds]).map(String);
+
+    const doRequest = async (body) => {
+      const resp = await fetch(url.toString(), {
+        method: 'DELETE',
+        headers: this.buildHeaders(),
+        body: JSON.stringify(body)
+      });
+      return resp;
+    };
+
+    // Prefer the object shape used by other batch endpoints; fallback to legacy array if needed.
+    let response = await doRequest({ documentIds: ids });
+    if (!response.ok && response.status === 400) {
+      response = await doRequest(ids);
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return await response.json();
   }

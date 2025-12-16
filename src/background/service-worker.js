@@ -797,6 +797,21 @@ async function handleConnect(data, sendResponse) {
       throw new Error('Missing required connection parameters');
     }
 
+    // If the user is switching servers, clear context/workspace selection to avoid stale bindings.
+    const previousConnection = await browserStorage.getConnectionSettings();
+    const prevServerUrl = (previousConnection?.serverUrl || '').replace(/\/$/, '');
+    const nextServerUrl = (data.serverUrl || '').replace(/\/$/, '');
+    const serverChanged = !!prevServerUrl && (prevServerUrl !== nextServerUrl || previousConnection?.apiBasePath !== data.apiBasePath);
+    if (serverChanged) {
+      console.log('Server changed - resetting context/workspace selection');
+      if (webSocketClient.isConnected()) webSocketClient.disconnect();
+      await browserStorage.setCurrentContext(null);
+      await browserStorage.setCurrentWorkspace(null);
+      await browserStorage.setWorkspacePath('/');
+      await browserStorage.setSyncMode('explorer');
+      await browserStorage.setUserInfo(null);
+    }
+
 
 
     // Initialize API client
@@ -1568,6 +1583,21 @@ async function handleSaveSettings(data, sendResponse) {
 
     // Save connection settings
     if (data.connectionSettings) {
+      // If server changes, reset selection/bindings (stale context URLs are worse than doing nothing).
+      const previousConnection = await browserStorage.getConnectionSettings();
+      const prevServerUrl = (previousConnection?.serverUrl || '').replace(/\/$/, '');
+      const nextServerUrl = (data.connectionSettings?.serverUrl || '').replace(/\/$/, '');
+      const serverChanged = !!prevServerUrl && (prevServerUrl !== nextServerUrl || previousConnection?.apiBasePath !== data.connectionSettings?.apiBasePath);
+      if (serverChanged) {
+        console.log('Server changed via settings - resetting context/workspace selection');
+        if (webSocketClient.isConnected()) webSocketClient.disconnect();
+        await browserStorage.setCurrentContext(null);
+        await browserStorage.setCurrentWorkspace(null);
+        await browserStorage.setWorkspacePath('/');
+        await browserStorage.setSyncMode('explorer');
+        await browserStorage.setUserInfo(null);
+      }
+
       await browserStorage.setConnectionSettings(data.connectionSettings);
       console.log('Connection settings saved');
     }
