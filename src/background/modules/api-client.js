@@ -11,6 +11,37 @@ export class CanvasApiClient {
     this.connected = false;
   }
 
+  // ---- Utilities ---------------------------------------------------------
+
+  /**
+   * Normalize document IDs for SynapsD-backed workspace operations.
+   * SynapsD's batch remove/delete expects numbers (strings will fail and trigger 400s).
+   */
+  normalizeDocumentIds(documentIds) {
+    const raw = Array.isArray(documentIds) ? documentIds : [documentIds];
+    const ids = raw.map((v) => {
+      if (typeof v === 'number') return v;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return NaN;
+      return n;
+    });
+    const bad = ids.find((n) => !Number.isFinite(n));
+    if (bad !== undefined) {
+      throw new Error(`Invalid document ID(s): expected numbers (or numeric strings), got ${JSON.stringify(raw)}`);
+    }
+    return ids;
+  }
+
+  async fetchDeleteWithJson(url, body) {
+    const resp = await fetch(url, {
+      method: 'DELETE',
+      headers: this.buildHeaders(),
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    return await resp.json();
+  }
+
   // Initialize client with connection settings
   initialize(serverUrl, apiBasePath, apiToken) {
     this.baseUrl = serverUrl.replace(/\/$/, ''); // Remove trailing slash
@@ -514,24 +545,8 @@ Firefox blocks local network requests for security reasons.
     if (Array.isArray(featureArray)) {
       for (const f of featureArray) url.searchParams.append('featureArray', f);
     }
-    const ids = (Array.isArray(documentIds) ? documentIds : [documentIds]).map(String);
-
-    const doRequest = async (body) => {
-      const resp = await fetch(url.toString(), {
-        method: 'DELETE',
-        headers: this.buildHeaders(),
-        body: JSON.stringify(body)
-      });
-      return resp;
-    };
-
-    // Prefer the object shape used by other batch endpoints; fallback to legacy array if needed.
-    let response = await doRequest({ documentIds: ids });
-    if (!response.ok && response.status === 400) {
-      response = await doRequest(ids);
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    return await response.json();
+    const ids = this.normalizeDocumentIds(documentIds);
+    return await this.fetchDeleteWithJson(url.toString(), ids);
   }
 
   async deleteWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
@@ -542,24 +557,8 @@ Firefox blocks local network requests for security reasons.
     if (Array.isArray(featureArray)) {
       for (const f of featureArray) url.searchParams.append('featureArray', f);
     }
-    const ids = (Array.isArray(documentIds) ? documentIds : [documentIds]).map(String);
-
-    const doRequest = async (body) => {
-      const resp = await fetch(url.toString(), {
-        method: 'DELETE',
-        headers: this.buildHeaders(),
-        body: JSON.stringify(body)
-      });
-      return resp;
-    };
-
-    // Prefer the object shape used by other batch endpoints; fallback to legacy array if needed.
-    let response = await doRequest({ documentIds: ids });
-    if (!response.ok && response.status === 400) {
-      response = await doRequest(ids);
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    return await response.json();
+    const ids = this.normalizeDocumentIds(documentIds);
+    return await this.fetchDeleteWithJson(url.toString(), ids);
   }
 
   // Workspace tree operations
@@ -659,12 +658,22 @@ Firefox blocks local network requests for security reasons.
   }
 
   async removeDocument(contextId, documentId) {
-    return await this.delete(`/contexts/${contextId}/documents/${documentId}/remove`);
+    // Server route: DELETE /contexts/:id/documents/remove (body: [ids], optional featureArray query)
+    const endpoint = `/contexts/${contextId}/documents/remove`;
+    const url = new URL(this.buildUrl(endpoint));
+    const ids = this.normalizeDocumentIds([documentId]);
+    return await this.fetchDeleteWithJson(url.toString(), ids);
   }
 
-  async removeDocuments(contextId, documentIds) {
-    const data = { documentIds };
-    return await this.post(`/contexts/${contextId}/documents/remove-batch`, data);
+  async removeDocuments(contextId, documentIds, featureArray = []) {
+    // Server route: DELETE /contexts/:id/documents/remove (body: [ids], featureArray query)
+    const endpoint = `/contexts/${contextId}/documents/remove`;
+    const url = new URL(this.buildUrl(endpoint));
+    if (Array.isArray(featureArray)) {
+      for (const f of featureArray) url.searchParams.append('featureArray', f);
+    }
+    const ids = this.normalizeDocumentIds(documentIds);
+    return await this.fetchDeleteWithJson(url.toString(), ids);
   }
 
   async deleteDocument(contextId, documentId) {
@@ -672,8 +681,11 @@ Firefox blocks local network requests for security reasons.
   }
 
   async deleteDocuments(contextId, documentIds) {
-    const data = { documentIds };
-    return await this.post(`/contexts/${contextId}/documents/delete-batch`, data);
+    // Server route: DELETE /contexts/:id/documents (body: [ids]) - direct DB deletion (owner-only)
+    const endpoint = `/contexts/${contextId}/documents`;
+    const url = new URL(this.buildUrl(endpoint));
+    const ids = this.normalizeDocumentIds(documentIds);
+    return await this.fetchDeleteWithJson(url.toString(), ids);
   }
 }
 
