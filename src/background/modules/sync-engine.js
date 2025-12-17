@@ -578,7 +578,8 @@ export class SyncEngine {
       }
 
       const browserIdentity = await browserStorage.getBrowserIdentity();
-      const result = await tabManager.syncMultipleTabs(tabs, apiClient, contextId, browserIdentity);
+      const syncSettings = await browserStorage.getSyncSettings();
+      const result = await tabManager.syncMultipleTabs(tabs, apiClient, contextId, browserIdentity, syncSettings);
 
       if (result.success) {
         this.lastSyncTime = new Date().toISOString();
@@ -715,7 +716,7 @@ export class SyncEngine {
       }
 
       // Compare and identify sync needs
-      const comparison = tabManager.compareWithCanvasDocuments(browserTabs, canvasDocuments);
+      const comparison = tabManager.compareWithCanvasDocuments(browserTabs, canvasDocuments, syncSettings);
 
       console.log('SyncEngine: Sync comparison:', {
         browserToCanvas: comparison.browserToCanvas.length,
@@ -727,7 +728,7 @@ export class SyncEngine {
       if (syncSettings.sendNewTabsToCanvas && comparison.browserToCanvas.length > 0) {
         console.log('SyncEngine: Auto-syncing browser tabs to Canvas...');
         const browserIdentity = await browserStorage.getBrowserIdentity();
-        await tabManager.syncMultipleTabs(comparison.browserToCanvas, apiClient, contextId, browserIdentity);
+        await tabManager.syncMultipleTabs(comparison.browserToCanvas, apiClient, contextId, browserIdentity, syncSettings);
       }
 
       // Open Canvas tabs in browser (if auto-open enabled)

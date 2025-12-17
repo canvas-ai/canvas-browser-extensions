@@ -46,6 +46,7 @@ export class BrowserStorage {
         closeTabsRemovedFromCanvas: false,   // Close tabs when removed from Canvas Server
         sendNewTabsToCanvas: false,          // Send newly opened browser tabs to Canvas Server
         removeClosedTabsFromCanvas: false,   // Remove closed browser tabs from Canvas Server
+        removeUtmParameters: true,           // Strip utm_* query params from URLs before syncing
         contextChangeBehavior: 'keep-only'  // How to handle context changes: 'close-open-new', 'save-close-open-new', 'keep-open-new', 'keep-only'
       },
       [this.KEYS.CURRENT_CONTEXT]: null,

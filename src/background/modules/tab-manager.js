@@ -14,6 +14,7 @@ export class TabManager {
 
   // Convert browser tab to Canvas document format (based on PAYLOAD.md format)
   convertTabToDocument(tab, browserIdentity, syncSettings = {}) {
+    const normalizedUrl = normalizeTabUrl(tab.url, syncSettings);
     const document = {
       schema: 'data/abstraction/tab',
       schemaVersion: '2.0',
@@ -29,7 +30,7 @@ export class TabManager {
         incognito: tab.incognito,
         audible: tab.audible,
         mutedInfo: tab.mutedInfo,
-        url: tab.url,
+        url: normalizedUrl,
         title: tab.title,
         favIconUrl: tab.favIconUrl,
         timestamp: new Date().toISOString()
@@ -360,15 +361,16 @@ export class TabManager {
   }
 
   // Find duplicate tabs by URL
-  async findDuplicateTabs(url) {
+  async findDuplicateTabs(url, syncSettings = {}) {
     const allTabs = await this.getAllTabs();
-    return allTabs.filter(tab => tab.url === url);
+    const needle = normalizeTabUrl(url, syncSettings);
+    return allTabs.filter(tab => normalizeTabUrl(tab.url, syncSettings) === needle);
   }
 
   // Canvas Integration Methods
 
   // Compare browser tabs with Canvas documents to determine sync state
-  compareWithCanvasDocuments(browserTabs, canvasDocuments) {
+  compareWithCanvasDocuments(browserTabs, canvasDocuments, syncSettings = {}) {
     const result = {
       browserToCanvas: [], // Browser tabs not in Canvas (need syncing)
       canvasToBrowser: [], // Canvas docs not open in browser
@@ -382,14 +384,14 @@ export class TabManager {
     // Index browser tabs by URL
     browserTabs.forEach(tab => {
       if (this.shouldSyncTab(tab)) {
-        browserTabsByUrl.set(tab.url, tab);
+        browserTabsByUrl.set(normalizeTabUrl(tab.url, syncSettings), tab);
       }
     });
 
     // Index Canvas documents by URL
     canvasDocuments.forEach(doc => {
       if (doc.schema === 'data/abstraction/tab' && doc.data?.url) {
-        canvasDocsByUrl.set(doc.data.url, doc);
+        canvasDocsByUrl.set(normalizeTabUrl(doc.data.url, syncSettings), doc);
       }
     });
 
@@ -424,9 +426,9 @@ export class TabManager {
   }
 
   // Get tabs that need syncing to Canvas
-  async getTabsToSync(canvasDocuments = []) {
+  async getTabsToSync(canvasDocuments = [], syncSettings = {}) {
     const browserTabs = await this.getSyncableTabs();
-    const comparison = this.compareWithCanvasDocuments(browserTabs, canvasDocuments);
+    const comparison = this.compareWithCanvasDocuments(browserTabs, canvasDocuments, syncSettings);
     return comparison.browserToCanvas;
   }
 
@@ -654,12 +656,12 @@ export class TabManager {
 
       // Fallback to individual sync if batch fails
       console.log('🔄 TabManager.syncMultipleTabs: Falling back to individual sync...');
-      return await this.syncMultipleTabsIndividually(tabs, apiClient, contextId, browserIdentity);
+      return await this.syncMultipleTabsIndividually(tabs, apiClient, contextId, browserIdentity, syncSettings);
     }
   }
 
   // Fallback method for individual tab syncing
-  async syncMultipleTabsIndividually(tabs, apiClient, contextId, browserIdentity) {
+  async syncMultipleTabsIndividually(tabs, apiClient, contextId, browserIdentity, syncSettings = {}) {
     console.log(`🔄 TabManager.syncMultipleTabsIndividually: Starting individual sync of ${tabs.length} tabs`);
 
     const results = [];
@@ -669,7 +671,7 @@ export class TabManager {
       console.log(`🔧 TabManager.syncMultipleTabsIndividually: Syncing tab ${i + 1}/${tabs.length}: ${tab.title}`);
 
       try {
-        const result = await this.syncTabToCanvas(tab, apiClient, contextId, browserIdentity);
+        const result = await this.syncTabToCanvas(tab, apiClient, contextId, browserIdentity, syncSettings);
         console.log(`🔧 TabManager.syncMultipleTabsIndividually: Tab ${i + 1} result:`, result);
         results.push({
           tab,
@@ -737,3 +739,26 @@ export class TabManager {
 // Create singleton instance
 export const tabManager = new TabManager();
 export default tabManager;
+
+// Utilities (keep at bottom)
+function normalizeTabUrl(rawUrl, syncSettings = {}) {
+  const removeUtmParameters = syncSettings?.removeUtmParameters !== false;
+  if (!removeUtmParameters || !rawUrl || typeof rawUrl !== 'string') return rawUrl;
+
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return rawUrl;
+
+    // Remove utm_* query params (case-insensitive), keep everything else (e.g. hgtid).
+    const keys = [];
+    for (const [key] of url.searchParams) {
+      if (key.toLowerCase().startsWith('utm_')) keys.push(key);
+    }
+    for (const key of keys) url.searchParams.delete(key);
+
+    const s = url.toString();
+    return s.endsWith('?') ? s.slice(0, -1) : s;
+  } catch {
+    return rawUrl;
+  }
+}

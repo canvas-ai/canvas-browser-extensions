@@ -11,6 +11,7 @@ let explorerSettings, workspaceSelect;
 let contextSettings, contextSelect, bindContextBtn;
 let currentContext, boundContextId, boundContextUrl;
 let openTabsAddedToCanvas, closeTabsRemovedFromCanvas, sendNewTabsToCanvas, removeClosedTabsFromCanvas;
+let removeUtmParameters;
 let syncOnlyCurrentBrowser, syncOnlyTaggedTabs, syncTagFilter;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
 let toast;
@@ -82,6 +83,7 @@ function initializeElements() {
   closeTabsRemovedFromCanvas = document.getElementById('closeTabsRemovedFromCanvas');
   sendNewTabsToCanvas = document.getElementById('sendNewTabsToCanvas');
   removeClosedTabsFromCanvas = document.getElementById('removeClosedTabsFromCanvas');
+  removeUtmParameters = document.getElementById('removeUtmParameters');
 
   // Sync filtering options
   syncOnlyCurrentBrowser = document.getElementById('syncOnlyCurrentBrowser');
@@ -177,6 +179,7 @@ async function loadSettings() {
         closeTabsRemovedFromCanvas: savedSyncSettings.closeTabsRemovedFromCanvas || false,
         sendNewTabsToCanvas: savedSyncSettings.sendNewTabsToCanvas || false,
         removeClosedTabsFromCanvas: savedSyncSettings.removeClosedTabsFromCanvas || false,
+        removeUtmParameters: savedSyncSettings.removeUtmParameters ?? true,
         syncOnlyCurrentBrowser: savedSyncSettings.syncOnlyCurrentBrowser || false,
         syncOnlyTaggedTabs: savedSyncSettings.syncOnlyTaggedTabs || false,
         syncTagFilter: savedSyncSettings.syncTagFilter || ''
@@ -242,6 +245,7 @@ function populateForm() {
   closeTabsRemovedFromCanvas.checked = settings.syncSettings.closeTabsRemovedFromCanvas;
   sendNewTabsToCanvas.checked = settings.syncSettings.sendNewTabsToCanvas;
   removeClosedTabsFromCanvas.checked = settings.syncSettings.removeClosedTabsFromCanvas;
+  if (removeUtmParameters) removeUtmParameters.checked = settings.syncSettings.removeUtmParameters ?? true;
 
   // Sync filtering options
   syncOnlyCurrentBrowser.checked = settings.syncSettings.syncOnlyCurrentBrowser;
@@ -723,6 +727,7 @@ async function handleSaveSettings() {
         closeTabsRemovedFromCanvas: closeTabsRemovedFromCanvas.checked,
         sendNewTabsToCanvas: sendNewTabsToCanvas.checked,
         removeClosedTabsFromCanvas: removeClosedTabsFromCanvas.checked,
+        removeUtmParameters: removeUtmParameters?.checked ?? true,
         syncOnlyCurrentBrowser: syncOnlyCurrentBrowser.checked,
         syncOnlyTaggedTabs: syncOnlyTaggedTabs.checked,
         syncTagFilter: syncTagFilter.value.trim()
