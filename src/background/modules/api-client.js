@@ -322,8 +322,8 @@ This is a Firefox security feature, not an extension bug.
             pingData = { message: 'Server responded but not with JSON' };
           }
 
-          // Continue to authentication test if we have a token
-          if (!this.apiToken) {
+          // Continue to authentication test if we have a user token
+          if (!this.userToken) {
             return {
               success: true,
               connected: true,
@@ -373,8 +373,8 @@ This is a Firefox security feature, not an extension bug.
 
           console.log('✅ XMLHttpRequest succeeded:', pingData);
 
-          // Continue to authentication test if we have a token
-          if (!this.apiToken) {
+          // Continue to authentication test if we have a user token
+          if (!this.userToken) {
             return {
               success: true,
               connected: true,
@@ -451,8 +451,8 @@ Firefox blocks local network requests for security reasons.
           pingData = { message: 'Server responded but not with JSON' };
         }
 
-        // After successful ping, test authentication if we have a token
-        if (!this.apiToken) {
+        // After successful ping, test authentication if we have a user token
+        if (!this.userToken) {
           return {
             success: true,
             connected: true,
