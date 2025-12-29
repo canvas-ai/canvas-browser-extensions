@@ -2,6 +2,7 @@
 // Handles real-time communication with Canvas server via socket.io
 
 import { io } from 'socket.io-client';
+import { browserStorage } from './browser-storage.js';
 
 export class WebSocketClient {
   constructor() {
@@ -32,7 +33,14 @@ export class WebSocketClient {
       console.log('WebSocketClient: Starting connection to', serverUrl);
 
       this.serverUrl = serverUrl;
-      this.apiToken = apiToken;
+      // Prefer device token if present (works with new device token auth),
+      // fallback to user token (API token / JWT).
+      try {
+        const settings = await browserStorage.getConnectionSettings();
+        this.apiToken = settings?.deviceToken || apiToken;
+      } catch (_) {
+        this.apiToken = apiToken;
+      }
       this.contextId = contextId;
       this.shouldReconnect = true;
 

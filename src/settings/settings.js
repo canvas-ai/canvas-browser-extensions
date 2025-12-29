@@ -3,6 +3,7 @@
 
 // DOM elements
 let browserIdentity, serverUrl, apiBasePath, apiToken;
+let deviceId, deviceToken;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let connectionStatus, statusDot, statusText, statusDetails;
 let userInfo, userName, userServer;
@@ -50,6 +51,8 @@ function initializeElements() {
   serverUrl = document.getElementById('serverUrl');
   apiBasePath = document.getElementById('apiBasePath');
   apiToken = document.getElementById('apiToken');
+  deviceId = document.getElementById('deviceId');
+  deviceToken = document.getElementById('deviceToken');
 
   // Connection controls
 
@@ -172,6 +175,8 @@ async function loadSettings() {
         serverUrl: savedConnectionSettings.serverUrl || 'https://my.cnvs.ai',
         apiBasePath: savedConnectionSettings.apiBasePath || '/rest/v2',
         apiToken: savedConnectionSettings.apiToken || '',
+        deviceId: savedConnectionSettings.deviceId || '',
+        deviceToken: savedConnectionSettings.deviceToken || '',
         connected: savedConnectionSettings.connected || false
       },
       syncSettings: {
@@ -239,6 +244,8 @@ function populateForm() {
   apiBasePath.value = settings.connectionSettings.apiBasePath;
   apiToken.value = settings.connectionSettings.apiToken;
   browserIdentity.value = settings.browserIdentity;
+  if (deviceId) deviceId.value = settings.connectionSettings.deviceId || '';
+  if (deviceToken) deviceToken.value = settings.connectionSettings.deviceToken || '';
 
   // Sync settings
   openTabsAddedToCanvas.checked = settings.syncSettings.openTabsAddedToCanvas;
@@ -284,7 +291,9 @@ async function handleTestConnection() {
     const connectionData = {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
-      apiToken: apiToken.value.trim()
+      apiToken: apiToken.value.trim(),
+      deviceId: deviceId?.value?.trim?.() || '',
+      deviceToken: deviceToken?.value?.trim?.() || ''
     };
 
     console.log('Testing connection with:', connectionData);
@@ -347,6 +356,8 @@ async function handleConnect() {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
       apiToken: apiToken.value.trim(),
+      deviceId: deviceId?.value?.trim?.() || '',
+      deviceToken: deviceToken?.value?.trim?.() || '',
       browserIdentity: browserIdentity.value.trim()
     };
 
@@ -720,6 +731,9 @@ async function handleSaveSettings() {
         serverUrl: serverUrl.value.trim(),
         apiBasePath: apiBasePath.value.trim(),
         apiToken: apiToken.value.trim(),
+        // Preserve auto-managed device token/id unless user overrides it explicitly.
+        deviceId: (deviceId?.value?.trim?.() || settings.connectionSettings.deviceId || '').trim(),
+        deviceToken: (deviceToken?.value?.trim?.() || settings.connectionSettings.deviceToken || '').trim(),
         connected: isConnected
       },
       syncSettings: {
@@ -842,7 +856,7 @@ function updateConnectionStatus(connected) {
     // Show user info if available
     if (settings.user && userInfo && userName && userServer) {
       userName.textContent = settings.user.name || settings.user.email || 'User';
-      
+
       // Extract server URL without protocol
       const serverUrlValue = settings.connectionSettings.serverUrl;
       let displayServerUrl = serverUrlValue;
@@ -855,7 +869,7 @@ function updateConnectionStatus(connected) {
           displayServerUrl = serverUrlValue.replace(/^https?:\/\//, '');
         }
       }
-      
+
       userServer.textContent = `@${displayServerUrl}`;
       userInfo.style.display = 'block';
     } else if (userInfo) {

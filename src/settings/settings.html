@@ -52,6 +52,25 @@
           <small class="help-text">Generate this token from the Canvas web interface</small>
         </div>
 
+        <details class="form-group" style="margin-top: 12px;">
+          <summary style="cursor: pointer;">Advanced: Device token (optional)</summary>
+          <div style="margin-top: 12px;">
+            <div class="form-group">
+              <label for="deviceId">Device ID</label>
+              <input type="text" id="deviceId" placeholder="auto"
+                     class="input-field">
+              <small class="help-text">Leave blank to auto-manage (recommended)</small>
+            </div>
+
+            <div class="form-group">
+              <label for="deviceToken">Device Token</label>
+              <input type="password" id="deviceToken" placeholder="auto (canvas-...)"
+                     class="input-field">
+              <small class="help-text">Leave blank and the extension will register a device token automatically</small>
+            </div>
+          </div>
+        </details>
+
         <div class="form-actions">
           <button type="button" id="testConnectionBtn" class="btn secondary">Test Connection</button>
           <button type="button" id="connectBtn" class="btn primary">Connect</button>
