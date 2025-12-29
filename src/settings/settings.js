@@ -726,14 +726,17 @@ async function handleSaveSettings() {
     }
 
     // Collect all settings
+    const deviceIdValue = deviceId?.value?.trim?.();
+    const deviceTokenValue = deviceToken?.value?.trim?.();
+
     const allSettings = {
       connectionSettings: {
         serverUrl: serverUrl.value.trim(),
         apiBasePath: apiBasePath.value.trim(),
         apiToken: apiToken.value.trim(),
         // Preserve auto-managed device token/id unless user overrides it explicitly.
-        deviceId: (deviceId?.value?.trim?.() || settings.connectionSettings.deviceId || '').trim(),
-        deviceToken: (deviceToken?.value?.trim?.() || settings.connectionSettings.deviceToken || '').trim(),
+        deviceId: (deviceIdValue ?? settings.connectionSettings.deviceId ?? '').trim(),
+        deviceToken: (deviceTokenValue ?? settings.connectionSettings.deviceToken ?? '').trim(),
         connected: isConnected
       },
       syncSettings: {
