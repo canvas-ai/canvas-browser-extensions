@@ -8,7 +8,8 @@
     "tabs",
     "storage",
     "contextMenus",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
 
   "host_permissions": [
@@ -33,6 +34,10 @@
       "64": "assets/icons/logo-wr_64x64.png",
       "128": "assets/icons/logo-wr_128x128.png"
     }
+  },
+
+  "side_panel": {
+    "default_path": "popup/popup.html"
   },
 
   "icons": {

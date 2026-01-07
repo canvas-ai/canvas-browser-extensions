@@ -34,6 +34,15 @@
     }
   },
 
+  "sidebar_action": {
+    "default_panel": "popup/popup.html",
+    "default_title": "Canvas Browser Extension",
+    "default_icon": {
+      "64": "assets/icons/logo-wr_64x64.png",
+      "128": "assets/icons/logo-wr_128x128.png"
+    }
+  },
+
   "icons": {
     "64": "assets/icons/logo-wr_64x64.png",
     "128": "assets/icons/logo-wr_128x128.png"

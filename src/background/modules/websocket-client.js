@@ -2,6 +2,7 @@
 // Handles real-time communication with Canvas server via socket.io
 
 import { io } from 'socket.io-client';
+
 import { browserStorage } from './browser-storage.js';
 
 export class WebSocketClient {
