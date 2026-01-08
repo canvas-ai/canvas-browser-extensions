@@ -478,56 +478,6 @@ async function debugAutoSyncStatus() {
   }
 }
 
-async function handleOpenSidebar(sendResponse) {
-  try {
-    await openSidebarOrPanel();
-    sendResponse({ success: true });
-  } catch (error) {
-    console.error('Failed to open sidebar/panel:', error);
-    sendResponse({ success: false, error: error?.message || String(error) });
-  }
-}
-
-async function openSidebarOrPanel() {
-  // Chromium side panel
-  if (typeof chrome !== 'undefined' && chrome.sidePanel?.open) {
-    const [activeTab] = await tabsAPI.query({ active: true, currentWindow: true });
-
-    if (chrome.sidePanel?.setOptions && activeTab?.id != null) {
-      try {
-        await chrome.sidePanel.setOptions({ tabId: activeTab.id, path: 'popup/popup.html', enabled: true });
-      } catch (e) {
-        console.warn('sidePanel.setOptions failed (non-fatal):', e?.message || e);
-      }
-    }
-
-    try {
-      if (activeTab?.id != null) {
-        await chrome.sidePanel.open({ tabId: activeTab.id });
-        return;
-      }
-    } catch (e) {
-      console.warn('sidePanel.open(tabId) failed (retrying with windowId):', e?.message || e);
-    }
-
-    const win = await windowsAPI.getCurrent();
-    await chrome.sidePanel.open({ windowId: win.id });
-    return;
-  }
-
-  // Firefox sidebar (and any browser that supports sidebarAction)
-  const sidebarAction =
-    (typeof browser !== 'undefined' && browser.sidebarAction) ||
-    (typeof chrome !== 'undefined' && chrome.sidebarAction);
-
-  if (sidebarAction?.open) {
-    await sidebarAction.open();
-    return;
-  }
-
-  throw new Error('Sidebar/side panel API not available');
-}
-
 // Message handling for popup/settings communication
 runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message.type, message);
@@ -550,10 +500,6 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (message.type) {
-  case 'OPEN_SIDEBAR':
-    handleOpenSidebar(sendResponse);
-    return true;
-
   case 'GET_CONNECTION_STATUS':
     // Return current connection status from storage
     handleGetConnectionStatus(sendResponse);

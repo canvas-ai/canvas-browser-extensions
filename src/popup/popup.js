@@ -1187,11 +1187,37 @@ async function openSettingsPage() {
 
 async function handleDockClick() {
   try {
-    const response = await sendMessageToBackground('OPEN_SIDEBAR');
-    if (!response?.success) {
-      showToast(response?.error || 'Failed to open sidebar', 'error');
+    // Chrome/Chromium: must be called directly from a user gesture.
+    if (typeof chrome !== 'undefined' && chrome.sidePanel?.open) {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (chrome.sidePanel?.setOptions && activeTab?.id != null) {
+        await chrome.sidePanel.setOptions({ tabId: activeTab.id, path: 'popup/popup.html', enabled: true });
+      }
+
+      if (activeTab?.id != null) {
+        await chrome.sidePanel.open({ tabId: activeTab.id });
+      } else {
+        const win = await chrome.windows.getCurrent();
+        await chrome.sidePanel.open({ windowId: win.id });
+      }
+
+      closePopupIfPossible();
       return;
     }
+
+    // Firefox: open sidebar directly (also user gesture friendly).
+    const sidebarAction =
+      (typeof browser !== 'undefined' && browser.sidebarAction) ||
+      (typeof chrome !== 'undefined' && chrome.sidebarAction);
+
+    if (sidebarAction?.open) {
+      await sidebarAction.open();
+      closePopupIfPossible();
+      return;
+    }
+
+    showToast('Sidebar/side panel not supported in this browser', 'warning');
     closePopupIfPossible();
   } catch (error) {
     console.error('Failed to open sidebar:', error);
