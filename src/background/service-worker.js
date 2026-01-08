@@ -12,9 +12,9 @@ console.log('🚀 Canvas Extension Service Worker loaded and starting...');
 console.log('🚀 Service Worker: Registering tab event listeners...');
 
 // Browser compatibility
-const runtimeAPI = (typeof chrome !== 'undefined') ? chrome.runtime : browser.runtime;
-const tabsAPI = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
-const windowsAPI = (typeof chrome !== 'undefined') ? chrome.windows : browser.windows;
+const runtimeAPI = (typeof browser !== 'undefined' && browser.runtime) ? browser.runtime : chrome.runtime;
+const tabsAPI = (typeof browser !== 'undefined' && browser.tabs) ? browser.tabs : chrome.tabs;
+const windowsAPI = (typeof browser !== 'undefined' && browser.windows) ? browser.windows : chrome.windows;
 
 // Service worker installation and activation
 runtimeAPI.onInstalled.addListener(async (details) => {
@@ -277,13 +277,16 @@ function setupWebSocketEventHandlers() {
 function broadcastToPopup(type, data) {
   // Browser extensions can send messages to popup if it's open
   try {
-    runtimeAPI.sendMessage({
+    const result = runtimeAPI.sendMessage({
       type: 'BACKGROUND_EVENT',
       eventType: type,
       data: data
-    }).catch(() => {
-      // Popup might not be open, ignore errors
     });
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {
+        // UI might not be open, ignore errors
+      });
+    }
   } catch (error) {
     // Ignore - popup not open
   }
@@ -294,14 +297,22 @@ function refreshTabLists() {
   broadcastToPopup('tabs.refresh', {});
 }
 
+let refreshTabsDebounce = null;
+function scheduleRefreshTabLists() {
+  clearTimeout(refreshTabsDebounce);
+  refreshTabsDebounce = setTimeout(refreshTabLists, 250);
+}
+
 // Tab event listeners for synchronization
 tabsAPI.onCreated.addListener(async (tab) => {
   console.log('🆕 TAB EVENT: Tab created detected!', tab.id, tab.url);
+  scheduleRefreshTabLists();
   // Note: Auto-sync logic moved to onUpdated listener for reliable page load detection
 });
 
 tabsAPI.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   console.log('🔄 TAB EVENT: Tab updated detected!', tabId, changeInfo);
+  if (changeInfo.status === 'complete' || changeInfo.url) scheduleRefreshTabLists();
 
   // Handle auto-sync when page is fully loaded OR when URL changes
   if (changeInfo.status === 'complete' && tab.url) {
@@ -422,6 +433,7 @@ tabsAPI.onRemoved.addListener(async (tabId, removeInfo) => {
 
   // Clean up tracking
   tabManager.unmarkTabAsSynced(tabId);
+  scheduleRefreshTabLists();
 });
 
 tabsAPI.onActivated.addListener(async (activeInfo) => {
