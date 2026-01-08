@@ -75,6 +75,7 @@ const fuseConfig = {
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
+  document.body.dataset.host = isPopupView() ? 'popup' : 'panel';
   initializeElements();
   setupEventListeners();
   await loadInitialData();

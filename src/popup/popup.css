@@ -8,13 +8,30 @@
 }
 
 body {
-  width: 452px;
-  height: 640px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   font-size: 14px;
   color: #333;
   background: #fff;
   overflow: hidden;
+}
+
+/* Explicit sizing: popup is fixed, side panel/sidebar is fluid */
+body[data-host="popup"] {
+  width: 452px;
+  min-width: 452px;
+  max-width: 452px;
+  height: 640px;
+  min-height: 640px;
+  max-height: 640px;
+}
+
+body[data-host="panel"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 100vh;
+  min-height: 0;
+  max-height: 100vh;
 }
 
 /* View Container for sliding animations */
