@@ -8,7 +8,7 @@ import FuzzySearch from './fuse.js';
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
 let searchInput, sendNewTabsToCanvas, openTabsAddedToCanvas, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
-let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, logoBtn, selectorBtn;
+let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, dockBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
 let syncSelectedBtn, syncCloseSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 let selectAllBrowser, selectAllCanvas;
@@ -75,10 +75,30 @@ const fuseConfig = {
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
+  document.body.dataset.host = isPopupView() ? 'popup' : 'panel';
   initializeElements();
   setupEventListeners();
   await loadInitialData();
 });
+
+function isPopupView() {
+  try {
+    const ext = (typeof browser !== 'undefined' && browser.extension) ? browser.extension : chrome.extension;
+    if (ext?.getViews) {
+      const popups = ext.getViews({ type: 'popup' });
+      return Array.isArray(popups) && popups.includes(window);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Fallback: our popup is fixed-size; side panel/sidebar typically isn't.
+  return window.innerWidth <= 520 && window.innerHeight <= 720;
+}
+
+function closePopupIfPossible() {
+  if (isPopupView()) window.close();
+}
 
 // Listen for messages from service worker (cross-browser compatible)
 const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
@@ -200,6 +220,8 @@ function initializeElements() {
   showAllCanvasTabs = document.getElementById('showAllCanvasTabs');
   selectorBtn = document.getElementById('selectorBtn');
   settingsBtn = document.getElementById('settingsBtn');
+  dockBtn = document.getElementById('dockBtn');
+  if (dockBtn && !isPopupView()) dockBtn.style.display = 'none';
 
   // Tab navigation
   browserToCanvasTab = document.getElementById('browserToCanvasTab');
@@ -266,6 +288,7 @@ function setupEventListeners() {
 
   // Settings button
   settingsBtn.addEventListener('click', openSettingsPage);
+  dockBtn?.addEventListener('click', handleDockClick);
 
   // Context URL click - navigate to tree view
   contextUrl.addEventListener('click', handleContextUrlClick);
@@ -1157,9 +1180,49 @@ async function openSettingsPage() {
     const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
     const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
     await tabs.create({ url: runtime.getURL('settings/settings.html') });
-    window.close();
+    closePopupIfPossible();
   } catch (error) {
     console.error('Failed to open settings page:', error);
+  }
+}
+
+async function handleDockClick() {
+  try {
+    // Chrome/Chromium: must be called directly from a user gesture.
+    if (typeof chrome !== 'undefined' && chrome.sidePanel?.open) {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (chrome.sidePanel?.setOptions && activeTab?.id != null) {
+        await chrome.sidePanel.setOptions({ tabId: activeTab.id, path: 'popup/popup.html', enabled: true });
+      }
+
+      if (activeTab?.id != null) {
+        await chrome.sidePanel.open({ tabId: activeTab.id });
+      } else {
+        const win = await chrome.windows.getCurrent();
+        await chrome.sidePanel.open({ windowId: win.id });
+      }
+
+      closePopupIfPossible();
+      return;
+    }
+
+    // Firefox: open sidebar directly (also user gesture friendly).
+    const sidebarAction =
+      (typeof browser !== 'undefined' && browser.sidebarAction) ||
+      (typeof chrome !== 'undefined' && chrome.sidebarAction);
+
+    if (sidebarAction?.open) {
+      await sidebarAction.open();
+      closePopupIfPossible();
+      return;
+    }
+
+    showToast('Sidebar/side panel not supported in this browser', 'warning');
+    closePopupIfPossible();
+  } catch (error) {
+    console.error('Failed to open sidebar:', error);
+    showToast(`Failed to open sidebar: ${error.message}`, 'error');
   }
 }
 
@@ -1202,7 +1265,7 @@ async function openCanvasWebUI() {
         console.log('Opening Canvas webui at:', targetUrl);
         const tabs = (typeof browser !== 'undefined') ? browser.tabs : chrome.tabs;
         await tabs.create({ url: targetUrl });
-        window.close();
+        closePopupIfPossible();
       } else {
         console.error('No server URL configured');
         // Could show a toast message here

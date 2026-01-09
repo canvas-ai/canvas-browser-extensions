@@ -12,9 +12,9 @@ console.log('🚀 Canvas Extension Service Worker loaded and starting...');
 console.log('🚀 Service Worker: Registering tab event listeners...');
 
 // Browser compatibility
-const runtimeAPI = (typeof chrome !== 'undefined') ? chrome.runtime : browser.runtime;
-const tabsAPI = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
-const windowsAPI = (typeof chrome !== 'undefined') ? chrome.windows : browser.windows;
+const runtimeAPI = (typeof browser !== 'undefined' && browser.runtime) ? browser.runtime : chrome.runtime;
+const tabsAPI = (typeof browser !== 'undefined' && browser.tabs) ? browser.tabs : chrome.tabs;
+const windowsAPI = (typeof browser !== 'undefined' && browser.windows) ? browser.windows : chrome.windows;
 
 // Service worker installation and activation
 runtimeAPI.onInstalled.addListener(async (details) => {
@@ -277,13 +277,16 @@ function setupWebSocketEventHandlers() {
 function broadcastToPopup(type, data) {
   // Browser extensions can send messages to popup if it's open
   try {
-    runtimeAPI.sendMessage({
+    const result = runtimeAPI.sendMessage({
       type: 'BACKGROUND_EVENT',
       eventType: type,
       data: data
-    }).catch(() => {
-      // Popup might not be open, ignore errors
     });
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {
+        // UI might not be open, ignore errors
+      });
+    }
   } catch (error) {
     // Ignore - popup not open
   }
@@ -294,14 +297,22 @@ function refreshTabLists() {
   broadcastToPopup('tabs.refresh', {});
 }
 
+let refreshTabsDebounce = null;
+function scheduleRefreshTabLists() {
+  clearTimeout(refreshTabsDebounce);
+  refreshTabsDebounce = setTimeout(refreshTabLists, 250);
+}
+
 // Tab event listeners for synchronization
 tabsAPI.onCreated.addListener(async (tab) => {
   console.log('🆕 TAB EVENT: Tab created detected!', tab.id, tab.url);
+  scheduleRefreshTabLists();
   // Note: Auto-sync logic moved to onUpdated listener for reliable page load detection
 });
 
 tabsAPI.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   console.log('🔄 TAB EVENT: Tab updated detected!', tabId, changeInfo);
+  if (changeInfo.status === 'complete' || changeInfo.url) scheduleRefreshTabLists();
 
   // Handle auto-sync when page is fully loaded OR when URL changes
   if (changeInfo.status === 'complete' && tab.url) {
@@ -422,6 +433,7 @@ tabsAPI.onRemoved.addListener(async (tabId, removeInfo) => {
 
   // Clean up tracking
   tabManager.unmarkTabAsSynced(tabId);
+  scheduleRefreshTabLists();
 });
 
 tabsAPI.onActivated.addListener(async (activeInfo) => {
@@ -484,11 +496,14 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
 
   // Add debug command
   if (message.type === 'DEBUG_AUTO_SYNC_STATUS') {
-    debugAutoSyncStatus().then(status => {
-      sendResponse({ success: true, status });
-    }).catch(error => {
-      sendResponse({ success: false, error: error.message });
-    });
+    (async () => {
+      try {
+        const status = await debugAutoSyncStatus();
+        sendResponse({ success: true, status });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true;
   }
 
@@ -2196,7 +2211,7 @@ async function handleUpdateContextUrl(message, sendResponse) {
 async function showNotification(title, message) {
   try {
     const notificationsAPI = (typeof chrome !== 'undefined' && chrome.notifications) ? chrome.notifications : browser.notifications;
-    
+
     if (!notificationsAPI) {
       console.warn('Notifications API not available');
       return;
@@ -2326,7 +2341,7 @@ async function setupContextMenus() {
       const recentDestinations = await browserStorage.getRecentDestinations();
       if (recentDestinations.length > 0) {
         console.log('🔧 Adding recent destinations:', recentDestinations.length);
-        
+
         // Add separator before recent destinations
         createPageMenuItem({
           id: 'recent-separator',
@@ -2356,7 +2371,7 @@ async function setupContextMenus() {
           try {
             let title = '';
             let menuId = '';
-            
+
             if (dest.type === 'context') {
               title = `📋 Recent: ${dest.title}`;
               menuId = `recent-context:${dest.contextId}`;
@@ -2380,7 +2395,7 @@ async function setupContextMenus() {
             console.error('❌ Failed to create recent destination menu item:', error);
           }
         }
-        
+
         console.log('✅ Recent destinations menu items created');
       }
     } catch (error) {
@@ -2388,7 +2403,7 @@ async function setupContextMenus() {
     }
 
     // Add separator before workspace list
-    if (mode === 'context' && currentContext?.url || 
+    if (mode === 'context' && currentContext?.url ||
         mode === 'explorer' && currentWorkspace ||
         (await browserStorage.getRecentDestinations()).length > 0) {
       createPageMenuItem({
@@ -2621,7 +2636,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           const result = selectedTabs.length > 1
             ? await tabManager.syncMultipleTabs(selectedTabs, apiClient, contextId, browserIdentity, syncSettings)
             : await tabManager.syncTabToCanvas(selectedTabs[0], apiClient, contextId, browserIdentity, syncSettings);
-          
+
           if (result.success) {
             console.log(`Tab synced to current context ${contextId} via context menu`);
             await closeSelectedTabsSafely();
@@ -2646,7 +2661,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           console.error('Exception syncing tab to current context:', e);
         }
       }
-      
+
       // Handle current workspace clicks
       else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('current-workspace:')) {
         const parts = info.menuItemId.replace('current-workspace:', '').split(':');
@@ -2670,7 +2685,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to current workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
-              
+
               // Track as recent destination
               await browserStorage.addRecentDestination({
                 id: `workspace:${workspaceName}:${contextSpec}`,
@@ -2679,7 +2694,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
-              
+
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification
@@ -2693,7 +2708,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           }
         }
       }
-      
+
       // Handle recent context clicks
       else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('recent-context:')) {
         const contextId = info.menuItemId.replace('recent-context:', '');
@@ -2706,7 +2721,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           const result = selectedTabs.length > 1
             ? await tabManager.syncMultipleTabs(selectedTabs, apiClient, contextId, browserIdentity, syncSettings)
             : await tabManager.syncTabToCanvas(selectedTabs[0], apiClient, contextId, browserIdentity, syncSettings);
-          
+
           if (result.success) {
             console.log(`Tab synced to recent context ${contextId} via context menu`);
             await closeSelectedTabsSafely();
@@ -2733,7 +2748,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           console.error('Exception syncing tab to recent context:', e);
         }
       }
-      
+
       // Handle recent workspace clicks
       else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('recent-workspace:')) {
         const parts = info.menuItemId.replace('recent-workspace:', '').split(':');
@@ -2756,7 +2771,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to recent workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
-              
+
               // Update recent destination timestamp
               await browserStorage.addRecentDestination({
                 id: `workspace:${workspaceName}:${contextSpec}`,
@@ -2765,7 +2780,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
-              
+
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification
@@ -2779,7 +2794,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
           }
         }
       }
-      
+
       // Handle workspace path selection (format: "ws:workspaceName:/path/to/folder" or "ws:workspaceName:/path/to/folder:insert")
       else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('ws:')) {
         const parts = info.menuItemId.split(':');
@@ -2807,7 +2822,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
               console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
-              
+
               // Track as recent destination
               await browserStorage.addRecentDestination({
                 id: `workspace:${workspaceName}:${contextSpec}`,
@@ -2816,7 +2831,7 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
                 contextSpec: contextSpec,
                 title: `${workspaceName}${contextSpec}`
               });
-              
+
               // Refresh context menus to update recent destinations list
               await setupContextMenus();
               // Show success notification

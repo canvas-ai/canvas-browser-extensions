@@ -82,7 +82,7 @@ export class CanvasApiClient {
     const payload = {
       name: identity || 'browser',
       hostname: identity || 'browser',
-      type: 'browser',
+      type: 'browser'
     };
 
     const url = `${this.baseUrl}${this.apiBasePath}/auth/devices/register`;
@@ -92,7 +92,7 @@ export class CanvasApiClient {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'X-App-Name': this.appKey,
-        'Authorization': `Bearer ${this.userToken}`,
+        'Authorization': `Bearer ${this.userToken}`
       },
       body: JSON.stringify(payload)
     });
@@ -109,7 +109,7 @@ export class CanvasApiClient {
 
     await browserStorage.setConnectionSettings({
       deviceToken: this.deviceToken,
-      deviceId: this.deviceId,
+      deviceId: this.deviceId
     });
 
     return this.deviceToken;
@@ -120,7 +120,7 @@ export class CanvasApiClient {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-App-Name': this.appKey,
+      'X-App-Name': this.appKey
     };
 
     const useDevice = this.shouldUseDeviceToken(method, endpoint);
