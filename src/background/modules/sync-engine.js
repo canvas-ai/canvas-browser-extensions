@@ -869,10 +869,17 @@ export class SyncEngine {
         console.log('SyncEngine: Will fetch documents from backend for context:', newContextId);
       }
 
+      const closeTabsForContextChange = async () => {
+        // In context mode we can preserve tabs that are already part of the target context.
+        // This matches the desired UX: close tabs not in context (except pinned), not "nuke everything".
+        if (mode === 'context' && newContextId) return await this.closeTabsNotInContext(newContextId);
+        return await this.closeCurrentTabs();
+      };
+
       switch (actualBehavior) {
       case 'close-open-new':
         if (shouldFetchDocuments) {
-          await this.closeCurrentTabs();
+          await closeTabsForContextChange();
           await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
         }
         break;
@@ -884,7 +891,7 @@ export class SyncEngine {
           await this.syncAllBrowserTabsToWorkspace(currentWorkspace, workspacePath);
         }
         if (shouldFetchDocuments) {
-          await this.closeCurrentTabs();
+          await closeTabsForContextChange();
           await this.fetchAndOpenNewTabs(mode, newContextId, currentWorkspace, workspacePath);
         }
         break;

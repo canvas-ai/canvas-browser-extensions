@@ -181,15 +181,26 @@ export class WebSocketClient {
 
   // Handle context events
   _handleContextEvent(eventName, payload) {
-    console.log('WebSocketClient: Context event:', eventName, payload);
+    // Normalize payload shape across server versions.
+    // Some events use `id`, others use `contextId`. Downstream expects both.
+    const normalized = (payload && typeof payload === 'object')
+      ? { ...payload }
+      : payload;
 
-    // If our context changed, we might need to rejoin
-    if (eventName === 'context.url.set' && payload.contextId === this.contextId) {
-      console.log('WebSocketClient: Our context URL changed');
-      this.emit('context.changed', payload);
+    if (normalized && typeof normalized === 'object') {
+      if (normalized.id == null && normalized.contextId != null) normalized.id = normalized.contextId;
+      if (normalized.contextId == null && normalized.id != null) normalized.contextId = normalized.id;
     }
 
-    this.emit(eventName, payload);
+    console.log('WebSocketClient: Context event:', eventName, normalized);
+
+    // If our context changed, we might need to rejoin
+    if (eventName === 'context.url.set' && normalized?.contextId === this.contextId) {
+      console.log('WebSocketClient: Our context URL changed');
+      this.emit('context.changed', normalized);
+    }
+
+    this.emit(eventName, normalized);
   }
 
   // Handle disconnection

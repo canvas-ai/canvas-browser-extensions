@@ -23,7 +23,7 @@ const currentUser = null;
 let availableContexts = [];
 let availableWorkspaces = [];
 let settings = {};
-let isBoundToContext = false;
+let git  = false;
 let currentMode = 'explorer';
 
 // Initialize settings page

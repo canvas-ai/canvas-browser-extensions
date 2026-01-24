@@ -431,9 +431,48 @@ tabsAPI.onRemoved.addListener(async (tabId, removeInfo) => {
   console.log('❌ TAB EVENT: Tab removed detected!', tabId, removeInfo);
   console.log('Tab removed:', tabId);
 
+  // Capture any known Canvas document mapping before cleanup.
+  const syncedTabData = tabManager.getSyncedTabData(tabId);
+
   // Clean up tracking
   tabManager.unmarkTabAsSynced(tabId);
   scheduleRefreshTabLists();
+
+  // Optionally remove the corresponding Canvas document when the browser tab is closed.
+  try {
+    const syncSettings = await browserStorage.getSyncSettings();
+    if (!syncSettings?.removeClosedTabsFromCanvas) return;
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (!connectionSettings?.connected || !connectionSettings?.apiToken) return;
+
+    const documentId = syncedTabData?.documentId;
+    if (!documentId) return;
+
+    if (!apiClient.apiToken) {
+      apiClient.initialize(
+        connectionSettings.serverUrl,
+        connectionSettings.apiBasePath,
+        connectionSettings.apiToken
+      );
+    }
+
+    const mode = await browserStorage.getSyncMode();
+    if (mode === 'context') {
+      const currentContext = await browserStorage.getCurrentContext();
+      if (!currentContext?.id) return;
+      await apiClient.removeDocument(currentContext.id, documentId);
+    } else {
+      const workspace = await browserStorage.getCurrentWorkspace();
+      if (!workspace?.id && !workspace?.name) return;
+      const wsId = workspace.name || workspace.id;
+      const workspacePath = await browserStorage.getWorkspacePath();
+      await apiClient.removeWorkspaceDocuments(wsId, [documentId], workspacePath || '/', ['data/abstraction/tab']);
+    }
+  } catch (error) {
+    // Non-fatal: we always prefer closing the browser tab over perfect remote state.
+    console.warn('Failed to remove closed tab from Canvas:', error?.message || error);
+  }
 });
 
 tabsAPI.onActivated.addListener(async (activeInfo) => {

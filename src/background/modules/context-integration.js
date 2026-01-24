@@ -146,10 +146,9 @@ export class ContextIntegration {
         console.log('ContextIntegration: Context URL changed from', oldUrl, 'to', data.url);
       }
 
-      // Treat context URL change as a context switch to respect user's context change behavior
-      if (syncEngine.isInitialized) {
-        await syncEngine.handleContextUrlChange(this.currentContextId, data.url);
-      }
+      // SyncEngine already subscribes to `context.url.set` and performs the
+      // open/close/reindex behavior. Keeping this module focused on state updates
+      // avoids double-applying context-change behavior.
     }
   }
 
