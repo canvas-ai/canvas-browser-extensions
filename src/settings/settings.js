@@ -19,6 +19,7 @@ let toast;
 
 // State
 let isConnected = false;
+let isBoundToContext = false;
 const currentUser = null;
 let availableContexts = [];
 let availableWorkspaces = [];
