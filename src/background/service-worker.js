@@ -533,14 +533,32 @@ async function debugAutoSyncStatus() {
 runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message.type, message);
 
+  // Always respond exactly once for async handlers. This prevents:
+  // "A listener indicated an asynchronous response ... but the message channel closed..."
+  let responded = false;
+  const respond = (payload) => {
+    if (responded) return;
+    responded = true;
+    try {
+      sendResponse(payload);
+    } catch (e) {
+      // Channel may already be closed; avoid crashing the SW.
+      console.warn('Failed to sendResponse (channel closed?):', e);
+    }
+  };
+  const run = (p) => Promise.resolve(p).catch((error) => {
+    console.error('Unhandled message handler error:', error);
+    respond({ success: false, error: error?.message || String(error) });
+  });
+
   // Add debug command
   if (message.type === 'DEBUG_AUTO_SYNC_STATUS') {
     (async () => {
       try {
         const status = await debugAutoSyncStatus();
-        sendResponse({ success: true, status });
+        respond({ success: true, status });
       } catch (error) {
-        sendResponse({ success: false, error: error.message });
+        respond({ success: false, error: error.message });
       }
     })();
     return true;
@@ -549,184 +567,184 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   // Add ping test
   if (message.type === 'PING') {
     console.log('🏓 Service Worker: PING received');
-    sendResponse({ success: true, message: 'PONG from service worker' });
+    respond({ success: true, message: 'PONG from service worker' });
     return true;
   }
 
   switch (message.type) {
   case 'GET_CONNECTION_STATUS':
     // Return current connection status from storage
-    handleGetConnectionStatus(sendResponse);
+    run(handleGetConnectionStatus(respond));
     return true;
 
   case 'TEST_CONNECTION':
     // Test connection to Canvas server
-    handleTestConnection(message.data, sendResponse);
+    run(handleTestConnection(message.data, respond));
     return true; // Keep message channel open for async response
 
   case 'CONNECT':
     // Connect to Canvas server
-    handleConnect(message.data, sendResponse);
+    run(handleConnect(message.data, respond));
     return true;
 
   case 'DISCONNECT':
     // Disconnect from Canvas server
-    handleDisconnect(sendResponse);
+    run(handleDisconnect(respond));
     return true;
 
   case 'GET_CONTEXTS':
     // Get available contexts from Canvas server
-    handleGetContexts(sendResponse);
+    run(handleGetContexts(respond));
     return true;
 
   case 'GET_WORKSPACES':
     // Get available workspaces from Canvas server
-    handleGetWorkspaces(sendResponse);
+    run(handleGetWorkspaces(respond));
     return true;
 
   case 'GET_CONTEXT_TREE':
     // Get context tree
-    handleGetContextTree(message.data, sendResponse);
+    run(handleGetContextTree(message.data, respond));
     return true;
 
   case 'GET_WORKSPACE_TREE':
     // Get workspace tree
-    handleGetWorkspaceTree(message.data, sendResponse);
+    run(handleGetWorkspaceTree(message.data, respond));
     return true;
 
   case 'INSERT_WORKSPACE_PATH':
     // Insert path in workspace tree
-    handleInsertWorkspacePath(message.data, sendResponse);
+    run(handleInsertWorkspacePath(message.data, respond));
     return true;
 
   case 'OPEN_WORKSPACE':
     // Open a workspace by id/name
-    handleOpenWorkspace(message.data, sendResponse);
+    run(handleOpenWorkspace(message.data, respond));
     return true;
 
   case 'BIND_CONTEXT':
     // Bind to a specific context
-    handleBindContext(message.data, sendResponse);
+    run(handleBindContext(message.data, respond));
     return true;
 
   case 'SAVE_SETTINGS':
     // Save all extension settings
-    handleSaveSettings(message.data, sendResponse);
+    run(handleSaveSettings(message.data, respond));
     return true;
 
   case 'GET_SYNC_SETTINGS':
     // Get sync settings only
-    handleGetSyncSettings(sendResponse);
+    run(handleGetSyncSettings(respond));
     return true;
 
   case 'SET_SYNC_SETTINGS':
     // Set sync settings only
-    handleSetSyncSettings(message.data, sendResponse);
+    run(handleSetSyncSettings(message.data, respond));
     return true;
 
   case 'GET_TABS':
     // Get browser tabs or canvas tabs
-    handleGetTabs(message.data, sendResponse);
+    run(handleGetTabs(message.data, respond));
     return true;
 
   case 'GET_ALL_TABS':
     // Get all browser tabs (both synced and unsynced)
-    handleGetAllTabs(message.data, sendResponse);
+    run(handleGetAllTabs(message.data, respond));
     return true;
 
   case 'GET_CANVAS_DOCUMENTS':
     // Get Canvas documents for current context
-    handleGetCanvasDocuments(message.data, sendResponse);
+    run(handleGetCanvasDocuments(message.data, respond));
     return true;
 
   case 'GET_WORKSPACE_DOCUMENTS':
     // Get documents for current workspace (explorer mode)
-    handleGetWorkspaceDocuments(message.data, sendResponse);
+    run(handleGetWorkspaceDocuments(message.data, respond));
     return true;
 
   case 'SYNC_TAB':
     // Sync a single tab to Canvas
-    handleSyncTab(message.data, sendResponse);
+    run(handleSyncTab(message.data, respond));
     return true;
 
   case 'SYNC_MULTIPLE_TABS':
     // Sync multiple tabs to Canvas
-    handleSyncMultipleTabs(message.data, sendResponse);
+    run(handleSyncMultipleTabs(message.data, respond));
     return true;
 
   case 'OPEN_CANVAS_DOCUMENT':
     // Open Canvas document as browser tab
-    handleOpenCanvasDocument(message.data, sendResponse);
+    run(handleOpenCanvasDocument(message.data, respond));
     return true;
 
   case 'REMOVE_CANVAS_DOCUMENT':
     // Remove Canvas document
-    handleRemoveCanvasDocument(message.data, sendResponse);
+    run(handleRemoveCanvasDocument(message.data, respond));
     return true;
 
   case 'CLOSE_TAB':
     // Close browser tab
-    handleCloseTab(message.data, sendResponse);
+    run(handleCloseTab(message.data, respond));
     return true;
 
   case 'CLOSE_WINDOW':
     // Close a browser window (all its tabs)
-    handleCloseWindow(message.data, sendResponse);
+    run(handleCloseWindow(message.data, respond));
     return true;
 
   case 'FOCUS_TAB':
     // Focus browser tab
-    handleFocusTab(message.data, sendResponse);
+    run(handleFocusTab(message.data, respond));
     return true;
 
   case 'TOGGLE_PIN_TAB':
     // Toggle pin state of a tab
-    handleTogglePinTab(message.data, sendResponse);
+    run(handleTogglePinTab(message.data, respond));
     return true;
 
   case 'GET_PINNED_TABS':
     // Get list of pinned tab IDs
-    handleGetPinnedTabs(message.data, sendResponse);
+    run(handleGetPinnedTabs(message.data, respond));
     return true;
 
   case 'GET_CONNECTION_SETTINGS':
     // Get connection settings
-    handleGetConnectionSettings(message.data, sendResponse);
+    run(handleGetConnectionSettings(message.data, respond));
     return true;
 
   case 'GET_MODE_AND_SELECTION':
     // Get current sync mode and selection (context/workspace)
-    handleGetModeAndSelection(sendResponse);
+    run(handleGetModeAndSelection(respond));
     return true;
 
   case 'SET_MODE_AND_SELECTION':
     // Set current sync mode and selection
-    handleSetModeAndSelection(message.data, sendResponse);
+    run(handleSetModeAndSelection(message.data, respond));
     return true;
 
   case 'OPEN_TAB':
     // Open a Canvas tab in browser
-    handleOpenTab(message.data, sendResponse);
+    run(handleOpenTab(message.data, respond));
     return true;
 
   case 'REMOVE_FROM_CONTEXT':
     // Remove tab from context
-    handleRemoveFromContext(message.data, sendResponse);
+    run(handleRemoveFromContext(message.data, respond));
     return true;
 
   case 'DELETE_FROM_DATABASE':
     // Delete tab from database completely
-    handleDeleteFromDatabase(message.data, sendResponse);
+    run(handleDeleteFromDatabase(message.data, respond));
     return true;
 
   case 'context.url.update':
     // Update context URL
-    handleUpdateContextUrl(message, sendResponse);
+    run(handleUpdateContextUrl(message, respond));
     return true;
 
   default:
     console.warn('Unknown message type:', message.type);
-    sendResponse({ error: 'Unknown message type' });
+    respond({ success: false, error: 'Unknown message type' });
   }
 });
 
