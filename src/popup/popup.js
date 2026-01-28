@@ -729,12 +729,12 @@ async function loadPinStates() {
     const pinResponse = await sendMessageToBackground('GET_PINNED_TABS');
 
     if (pinResponse.success) {
-      const pinnedTabIds = new Set(pinResponse.pinnedTabs || []);
-      console.log('Pinned tab IDs:', Array.from(pinnedTabIds));
+      const pinnedUrls = new Set(pinResponse.pinnedTabs || []);
+      console.log('Pinned tab URLs:', Array.from(pinnedUrls));
 
       // Add pin state to each tab
       allBrowserTabs.forEach(tab => {
-        tab.isPinned = pinnedTabIds.has(tab.id);
+        tab.isPinned = pinnedUrls.has(tab.url);
       });
     } else {
       console.error('Failed to get pinned tabs:', pinResponse.error);

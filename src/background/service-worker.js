@@ -1444,15 +1444,19 @@ async function handleTogglePinTab(data, sendResponse) {
 
     console.log('Toggling pin state for tab:', tabId);
 
-    // Check current pin state
-    const isPinned = await browserStorage.isTabPinned(tabId);
+    const tab = await tabManager.getTab(tabId);
+    const url = tab?.url;
+    if (!url) throw new Error('Tab URL not available');
+
+    // Check current pin state (by URL so it survives restarts)
+    const isPinned = await browserStorage.isTabUrlPinned(url);
 
     if (isPinned) {
-      await browserStorage.unpinTab(tabId);
-      console.log('Tab unpinned:', tabId);
+      await browserStorage.unpinTabUrl(url);
+      console.log('Tab unpinned:', url);
     } else {
-      await browserStorage.pinTab(tabId);
-      console.log('Tab pinned:', tabId);
+      await browserStorage.pinTabUrl(url);
+      console.log('Tab pinned:', url);
     }
 
     sendResponse({
@@ -1473,8 +1477,8 @@ async function handleGetPinnedTabs(data, sendResponse) {
   try {
     console.log('Getting pinned tabs');
 
-    const pinnedTabs = await browserStorage.getPinnedTabs();
-    const pinnedTabsArray = Array.from(pinnedTabs);
+    const pinnedUrls = await browserStorage.getPinnedTabUrls();
+    const pinnedTabsArray = Array.from(pinnedUrls);
 
     console.log('Retrieved pinned tabs:', pinnedTabsArray);
 

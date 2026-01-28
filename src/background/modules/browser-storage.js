@@ -52,7 +52,8 @@ export class BrowserStorage {
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
       [this.KEYS.BROWSER_IDENTITY]: '',
-      [this.KEYS.PINNED_TABS]: new Set(),
+      // Stored as array in browser storage (Set can't be serialized)
+      [this.KEYS.PINNED_TABS]: [],
       [this.KEYS.USER_INFO]: null, // { id, name, email, userType, status }
       [this.KEYS.RECENT_DESTINATIONS]: [] // Array of recent destinations: [{ id, title, type: 'workspace'|'context', workspaceName?, contextSpec?, timestamp }]
     };
@@ -220,35 +221,36 @@ export class BrowserStorage {
   }
 
   // Pinned Tabs Management
-  async getPinnedTabs() {
-    const pinnedTabsData = await this.get(this.KEYS.PINNED_TABS);
-    // Convert array back to Set if needed
-    return pinnedTabsData instanceof Set ? pinnedTabsData : new Set(pinnedTabsData || []);
+  // IMPORTANT: We store pinned tabs by URL (NOT tabId) so pins survive browser restarts.
+  async getPinnedTabUrls() {
+    const pinnedData = await this.get(this.KEYS.PINNED_TABS);
+    const arr = Array.isArray(pinnedData) ? pinnedData : (pinnedData ? Array.from(pinnedData) : []);
+    // Migration safety: older versions stored numeric tabIds; ignore non-strings.
+    return new Set(arr.filter(v => typeof v === 'string' && v.length));
   }
 
-  async setPinnedTabs(pinnedTabIds) {
-    // Convert Set to array for storage
-    const pinnedTabsArray = pinnedTabIds instanceof Set ? Array.from(pinnedTabIds) : pinnedTabIds;
-    return await this.set(this.KEYS.PINNED_TABS, pinnedTabsArray);
+  async setPinnedTabUrls(pinnedUrls) {
+    const arr = pinnedUrls instanceof Set ? Array.from(pinnedUrls) : (Array.isArray(pinnedUrls) ? pinnedUrls : []);
+    return await this.set(this.KEYS.PINNED_TABS, arr.filter(v => typeof v === 'string' && v.length));
   }
 
-  async pinTab(tabId) {
-    const pinnedTabs = await this.getPinnedTabs();
-    pinnedTabs.add(tabId);
-    console.log('Pinning tab:', tabId);
-    return await this.setPinnedTabs(pinnedTabs);
+  async pinTabUrl(url) {
+    const pinned = await this.getPinnedTabUrls();
+    pinned.add(url);
+    console.log('Pinning tab URL:', url);
+    return await this.setPinnedTabUrls(pinned);
   }
 
-  async unpinTab(tabId) {
-    const pinnedTabs = await this.getPinnedTabs();
-    pinnedTabs.delete(tabId);
-    console.log('Unpinning tab:', tabId);
-    return await this.setPinnedTabs(pinnedTabs);
+  async unpinTabUrl(url) {
+    const pinned = await this.getPinnedTabUrls();
+    pinned.delete(url);
+    console.log('Unpinning tab URL:', url);
+    return await this.setPinnedTabUrls(pinned);
   }
 
-  async isTabPinned(tabId) {
-    const pinnedTabs = await this.getPinnedTabs();
-    return pinnedTabs.has(tabId);
+  async isTabUrlPinned(url) {
+    const pinned = await this.getPinnedTabUrls();
+    return pinned.has(url);
   }
 
   // User Info

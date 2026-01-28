@@ -981,14 +981,14 @@ export class SyncEngine {
 
       console.log('SyncEngine: Context URLs:', Array.from(contextUrls));
 
-      // Get pinned tabs to avoid closing them
-      const pinnedTabs = await browserStorage.getPinnedTabs();
-      console.log('SyncEngine: Pinned tabs:', Array.from(pinnedTabs));
+      // Get pinned tabs (by URL) to avoid closing them
+      const pinnedUrls = await browserStorage.getPinnedTabUrls();
+      console.log('SyncEngine: Pinned tabs (URLs):', Array.from(pinnedUrls));
 
       // Collect tabs that would be closed (not in context and not pinned)
       const tabsToClose = [];
       for (const tab of browserTabs) {
-        if (!contextUrls.has(tab.url) && !pinnedTabs.has(tab.id)) {
+        if (!contextUrls.has(tab.url) && !pinnedUrls.has(tab.url)) {
           tabsToClose.push(tab);
         }
       }
@@ -1011,7 +1011,7 @@ export class SyncEngine {
       for (const tab of browserTabs) {
         if (contextUrls.has(tab.url)) {
           console.log('SyncEngine: Keeping tab in context:', tab.title, tab.url);
-        } else if (pinnedTabs.has(tab.id)) {
+        } else if (pinnedUrls.has(tab.url)) {
           console.log('SyncEngine: Keeping pinned tab (not closing):', tab.title, tab.url);
         }
       }
@@ -1053,12 +1053,12 @@ export class SyncEngine {
   // Helper: Close current tabs (with safety to prevent browser exit)
   async closeCurrentTabs() {
     const browserTabs = await tabManager.getSyncableTabs();
-    const pinnedTabs = await browserStorage.getPinnedTabs();
+    const pinnedUrls = await browserStorage.getPinnedTabUrls();
 
     // Collect tabs to close (don't close pinned tabs)
     const tabsToClose = [];
     for (const tab of browserTabs) {
-      if (!pinnedTabs.has(tab.id)) {
+      if (!pinnedUrls.has(tab.url)) {
         tabsToClose.push(tab);
       }
     }
