@@ -556,8 +556,8 @@ Firefox blocks local network requests for security reasons.
   }
 
   // Workspace lifecycle
-  async openWorkspace(workspaceNameOrId) {
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/open`, {});
+  async startWorkspace(workspaceNameOrId) {
+    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/start`, {});
   }
 
   // Workspace tree
@@ -702,7 +702,7 @@ Firefox blocks local network requests for security reasons.
       documents,
       featureArray: enhancedFeatureArray
     };
-    return await this.post(`/contexts/${contextId}/documents/batch`, data);
+    return await this.post(`/contexts/${contextId}/documents`, data);
   }
 
   async updateDocument(contextId, documentId, document, featureArray = []) {
@@ -716,11 +716,12 @@ Firefox blocks local network requests for security reasons.
       }
     }
 
+    const doc = typeof document === 'object' ? { ...document, id: documentId } : { id: documentId };
     const data = {
-      document,
+      documents: [doc],
       featureArray: enhancedFeatureArray
     };
-    return await this.put(`/contexts/${contextId}/documents/${documentId}`, data);
+    return await this.put(`/contexts/${contextId}/documents`, data);
   }
 
   async removeDocument(contextId, documentId) {

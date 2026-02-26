@@ -1211,9 +1211,9 @@ async function handleOpenWorkspace(data, sendResponse) {
       );
     }
 
-    const resp = await apiClient.openWorkspace(wsIdOrName);
+    const resp = await apiClient.startWorkspace(wsIdOrName);
     if (resp.status !== 'success') {
-      throw new Error(resp.message || 'Failed to open workspace');
+      throw new Error(resp.message || 'Failed to start workspace');
     }
 
     await browserStorage.setSyncMode('explorer');
