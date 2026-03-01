@@ -16,6 +16,10 @@ A browser extension for seamlessly syncing browser tabs with Canvas server. Exte
 
 ![Screenshot 4](assets/screenshots/screenshot4.png)
 
+![Screenshot 5](assets/screenshots/screenshot5.png)
+
+![Screenshot 6](assets/screenshots/screenshot6.png)
+
 ## Installation
 
 ### Method 1: Browser Store Installation (Recommended)
