@@ -4,13 +4,30 @@
 // Import FuzzySearch for fuzzy search
 import FuzzySearch from './fuse.js';
 
+// SVG icon paths for action buttons
+const ICON = {
+  sync: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  syncTo: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 14 12 11 15 14"/><line x1="12" y1="11" x2="12" y2="17"/>',
+  syncClose: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+};
+
+function createSvgIcon(pathsStr, size = 14) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${pathsStr}</svg>`,
+    'image/svg+xml'
+  );
+  return document.importNode(doc.documentElement, true);
+}
+
 // DOM elements
 let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
 let searchInput, sendNewTabsToCanvas, openTabsAddedToCanvas, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
-let syncAllBtn, closeAllBtn, openAllBtn, settingsBtn, dockBtn, logoBtn, selectorBtn;
+let syncAllBtn, syncToAllBtn, closeAllBtn, openAllBtn, settingsBtn, dockBtn, logoBtn, selectorBtn;
 let browserBulkActions, canvasBulkActions;
-let syncSelectedBtn, syncCloseSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
+let syncSelectedBtn, syncToSelectedBtn, syncCloseSelectedBtn, closeSelectedBtn, openSelectedBtn, removeSelectedBtn, deleteSelectedBtn;
 let selectAllBrowser, selectAllCanvas;
 let browserTabsHeader, canvasTabsHeader;
 let toast;
@@ -33,6 +50,9 @@ let treeTitle, treeSubtitle, treeContainer;
 let selectionBackBtn, contextsSelectionTab, workspacesSelectionTab;
 let contextsList, workspacesList;
 
+// Sync To panel elements
+let syncToOverlay, syncToTree, syncToConfirmBtn, syncToPanelClose, syncToCount;
+
 // State
 let currentConnection = { connected: false, context: null, mode: 'explorer', workspace: null };
 let currentWorkspacePath = '/';
@@ -51,6 +71,10 @@ let currentView = 'main'; // 'main', 'tree', 'selection'
 let treeData = null; // Store tree data from API
 let selectedPath = '/'; // Currently selected tree path
 let currentSelectionTab = 'contexts'; // 'contexts' or 'workspaces'
+
+// Sync To state
+let syncToPendingTabIds = [];
+const syncToSelectedPaths = new Set();
 
 // Fuzzy search instances
 let browserTabsFuse = null;
@@ -237,6 +261,7 @@ function initializeElements() {
 
   // Action buttons
   syncAllBtn = document.getElementById('syncAllBtn');
+  syncToAllBtn = document.getElementById('syncToAllBtn');
   closeAllBtn = document.getElementById('closeAllBtn');
   openAllBtn = document.getElementById('openAllBtn');
 
@@ -244,6 +269,7 @@ function initializeElements() {
   browserBulkActions = document.getElementById('browserBulkActions');
   canvasBulkActions = document.getElementById('canvasBulkActions');
   syncSelectedBtn = document.getElementById('syncSelectedBtn');
+  syncToSelectedBtn = document.getElementById('syncToSelectedBtn');
   syncCloseSelectedBtn = document.getElementById('syncCloseSelectedBtn');
   closeSelectedBtn = document.getElementById('closeSelectedBtn');
   openSelectedBtn = document.getElementById('openSelectedBtn');
@@ -274,7 +300,12 @@ function initializeElements() {
   contextsList = document.getElementById('contextsList');
   workspacesList = document.getElementById('workspacesList');
 
-  // Context menu elements - REMOVED
+  // Sync To panel elements
+  syncToOverlay = document.getElementById('syncToOverlay');
+  syncToTree = document.getElementById('syncToTree');
+  syncToConfirmBtn = document.getElementById('syncToConfirmBtn');
+  syncToPanelClose = document.getElementById('syncToPanelClose');
+  syncToCount = document.getElementById('syncToCount');
 
   toast = document.getElementById('toast');
 }
@@ -319,13 +350,19 @@ function setupEventListeners() {
 
   // Action buttons
   syncAllBtn.addEventListener('click', () => handleSyncAll());
+  syncToAllBtn.addEventListener('click', () => handleSyncToAll());
   closeAllBtn.addEventListener('click', () => handleCloseAll());
   openAllBtn.addEventListener('click', () => handleOpenAll());
 
   // Bulk actions
   syncSelectedBtn.addEventListener('click', () => handleSyncSelected());
+  syncToSelectedBtn.addEventListener('click', () => handleSyncToSelected());
   syncCloseSelectedBtn.addEventListener('click', () => handleSyncAndCloseSelected());
   closeSelectedBtn.addEventListener('click', () => handleCloseSelected());
+
+  // Sync To panel
+  syncToPanelClose.addEventListener('click', () => closeSyncToPanel());
+  syncToConfirmBtn.addEventListener('click', () => handleSyncToConfirm());
   openSelectedBtn.addEventListener('click', () => handleOpenSelected());
   removeSelectedBtn.addEventListener('click', () => handleRemoveSelected());
   deleteSelectedBtn.addEventListener('click', () => handleDeleteSelected());
@@ -917,30 +954,44 @@ function renderBrowserTabs() {
     const groupTitle = createSecureElement('div', { className: 'window-group-title' }, titleText);
 
     const groupActions = createSecureElement('div', { className: 'window-group-actions' });
+
     const syncWindowBtn = createSecureElement('button', {
-      className: 'action-btn small secondary',
+      className: 'action-btn icon-btn small secondary',
       'data-action': 'sync-window',
       'data-window-id': windowId,
       title: 'Sync all unsynced tabs in this window'
-    }, 'Sync');
+    });
+    syncWindowBtn.appendChild(createSvgIcon(ICON.sync, 12));
     syncWindowBtn.disabled = !canSync;
 
+    const syncToWindowBtn = createSecureElement('button', {
+      className: 'action-btn icon-btn small primary',
+      'data-action': 'sync-to-window',
+      'data-window-id': windowId,
+      title: 'Sync window tabs to specific paths...'
+    });
+    syncToWindowBtn.appendChild(createSvgIcon(ICON.syncTo, 12));
+    syncToWindowBtn.disabled = !canSync;
+
     const syncCloseWindowBtn = createSecureElement('button', {
-      className: 'action-btn small warning',
+      className: 'action-btn icon-btn small warning',
       'data-action': 'sync-close-window',
       'data-window-id': windowId,
-      title: 'Sync all unsynced tabs in this window and close them'
-    }, 'Sync+Close');
+      title: 'Sync and close all unsynced tabs in this window'
+    });
+    syncCloseWindowBtn.appendChild(createSvgIcon(ICON.syncClose, 12));
     syncCloseWindowBtn.disabled = !canSync;
 
     const closeWindowBtn = createSecureElement('button', {
-      className: 'action-btn small danger',
+      className: 'action-btn icon-btn small danger',
       'data-action': 'close-window',
       'data-window-id': windowId,
       title: 'Close this window'
-    }, 'Close');
+    });
+    closeWindowBtn.appendChild(createSvgIcon(ICON.close, 12));
 
     groupActions.appendChild(syncWindowBtn);
+    groupActions.appendChild(syncToWindowBtn);
     groupActions.appendChild(syncCloseWindowBtn);
     groupActions.appendChild(closeWindowBtn);
 
@@ -1026,23 +1077,36 @@ function renderBrowserTabs() {
 
       // Sync button
       const syncButton = createSecureElement('button', {
-        className: 'action-btn small primary',
+        className: 'action-btn icon-btn small primary',
         'data-action': 'sync',
         'data-tab-id': tab.id,
-        title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas'
-      }, '↗');
+        title: isSynced ? 'Already synced to Canvas' : 'Sync to Canvas (Ctrl+click: sync & close)'
+      });
+      syncButton.appendChild(createSvgIcon(ICON.sync, 12));
       if (isSynced) syncButton.disabled = true;
+
+      // Sync To button
+      const syncToButton = createSecureElement('button', {
+        className: 'action-btn icon-btn small primary',
+        'data-action': 'sync-to',
+        'data-tab-id': tab.id,
+        title: 'Sync to specific paths...'
+      });
+      syncToButton.appendChild(createSvgIcon(ICON.syncTo, 12));
+      if (isSynced) syncToButton.disabled = true;
 
       // Close button
       const closeButton = createSecureElement('button', {
-        className: 'action-btn small danger',
+        className: 'action-btn icon-btn small danger',
         'data-action': 'close',
         'data-tab-id': tab.id,
         title: 'Close tab'
-      }, '✕');
+      });
+      closeButton.appendChild(createSvgIcon(ICON.close, 12));
 
       tabActions.appendChild(pinButton);
       tabActions.appendChild(syncButton);
+      tabActions.appendChild(syncToButton);
       tabActions.appendChild(closeButton);
 
       // Assemble tab element
@@ -2495,7 +2559,7 @@ function handleBrowserTabAction(event) {
     event.stopPropagation();
 
     const action = button.dataset.action;
-    if (action === 'sync-window' || action === 'sync-close-window' || action === 'close-window') {
+    if (action === 'sync-window' || action === 'sync-close-window' || action === 'close-window' || action === 'sync-to-window') {
       const windowId = parseInt(button.dataset.windowId);
       if (!Number.isInteger(windowId)) {
         console.error('No windowId found for action:', action);
@@ -2503,6 +2567,9 @@ function handleBrowserTabAction(event) {
       }
       if (action === 'close-window') {
         handleCloseWindow(windowId);
+      } else if (action === 'sync-to-window') {
+        const tabIds = getUnsyncedTabIdsForWindow(windowId);
+        if (tabIds.length > 0) openSyncToPanel(tabIds);
       } else {
         handleSyncWindow(windowId, action === 'sync-close-window');
       }
@@ -2521,11 +2588,13 @@ function handleBrowserTabAction(event) {
     switch (action) {
     case 'sync': {
       console.log('Calling handleSyncTab with tabId:', tabId);
-      // Check if Ctrl key was held during click
       const shouldCloseAfterSync = event.ctrlKey || event.metaKey;
       handleSyncTab(tabId, shouldCloseAfterSync);
       break;
     }
+    case 'sync-to':
+      openSyncToPanel([tabId]);
+      break;
     case 'close':
       console.log('Calling handleCloseTab with tabId:', tabId);
       handleCloseTab(tabId);
@@ -3317,7 +3386,181 @@ function showToast(message, type = 'info') {
   }, 5000);
 }
 
-// REMOVED: Popup context menu functionality
-// Context menus in extension popups are constrained by popup boundaries and can't float properly.
-// This causes issues with submenu expansion, especially in Firefox.
-// Alternative UI approaches will be implemented for popup-based workspace selection.
+// ===================================
+// SYNC TO PANEL
+// ===================================
+
+function handleSyncToAll() {
+  const tabIds = browserTabs.filter(t => !syncedTabIds.has(t.id)).map(t => t.id);
+  if (tabIds.length > 0) openSyncToPanel(tabIds);
+}
+
+function handleSyncToSelected() {
+  const tabIds = Array.from(selectedBrowserTabs);
+  if (tabIds.length > 0) openSyncToPanel(tabIds);
+}
+
+async function openSyncToPanel(tabIds) {
+  syncToPendingTabIds = tabIds;
+  syncToSelectedPaths.clear();
+  updateSyncToConfirmBtn();
+
+  try {
+    if (currentConnection.mode === 'context' && currentConnection.context) {
+      const response = await sendMessageToBackground('GET_CONTEXT_TREE', { contextId: currentConnection.context.id });
+      if (response.success) treeData = response.tree;
+    } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+      const wsId = currentConnection.workspace.name || currentConnection.workspace.id;
+      const response = await sendMessageToBackground('GET_WORKSPACE_TREE', { workspaceIdOrName: wsId });
+      if (response.success) treeData = response.tree;
+    }
+  } catch (error) {
+    console.error('Failed to load tree for Sync To:', error);
+  }
+
+  renderSyncToTree();
+  syncToOverlay.classList.add('open');
+}
+
+function closeSyncToPanel() {
+  syncToOverlay.classList.remove('open');
+  syncToPendingTabIds = [];
+  syncToSelectedPaths.clear();
+}
+
+function updateSyncToConfirmBtn() {
+  const count = syncToSelectedPaths.size;
+  syncToCount.textContent = `${count} path${count !== 1 ? 's' : ''} selected`;
+  syncToConfirmBtn.disabled = count === 0;
+  syncToConfirmBtn.textContent = count > 0 ? `Sync to ${count} path${count !== 1 ? 's' : ''}` : 'Sync';
+}
+
+async function handleSyncToConfirm() {
+  const paths = Array.from(syncToSelectedPaths);
+  const tabIds = syncToPendingTabIds;
+  if (paths.length === 0 || tabIds.length === 0) return;
+
+  closeSyncToPanel();
+
+  try {
+    for (const path of paths) {
+      const response = await sendMessageToBackground('SYNC_MULTIPLE_TABS', { tabIds, contextSpec: path });
+      if (!response.success) {
+        console.error(`Failed to sync to path ${path}:`, response.error);
+      }
+    }
+    showToast(`Synced ${tabIds.length} tab(s) to ${paths.length} path(s)`, 'success');
+    await loadTabs();
+  } catch (error) {
+    console.error('Sync To failed:', error);
+    showToast('Sync To failed: ' + error.message, 'error');
+  }
+}
+
+function renderSyncToTree() {
+  if (!treeData) {
+    const emptyDiv = createSecureElement('div', { className: 'empty-state' }, 'No tree data available');
+    syncToTree.textContent = '';
+    syncToTree.appendChild(emptyDiv);
+    return;
+  }
+
+  const html = renderSyncToTreeNode(treeData, '', 0);
+  syncToTree.textContent = '';
+  setSecureHtml(syncToTree, html);
+  setupSyncToTreeListeners();
+}
+
+function renderSyncToTreeNode(node, parentPath, level) {
+  const currentPath = level === 0 ? '/' : (parentPath === '/' ? `/${node.name}` : `${parentPath}/${node.name}`);
+  const hasChildren = node.children && node.children.length > 0;
+  const isChecked = syncToSelectedPaths.has(currentPath);
+  const isRoot = level === 0;
+
+  let html = '';
+
+  if (isRoot) {
+    html += `
+      <div class="tree-node ${isChecked ? 'checked' : ''}" data-path="/" style="padding-left: 4px">
+        <input type="checkbox" class="tree-checkbox" data-path="/" ${isChecked ? 'checked' : ''}>
+        <div class="expand-btn"></div>
+        <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        ${node.color && node.color !== '#fff' ? `<div class="color-indicator" style="background-color: ${node.color}"></div>` : ''}
+        <span class="node-label">/</span>
+      </div>
+    `;
+  }
+
+  if (hasChildren) {
+    if (isRoot) html += '<div class="tree-children">';
+
+    for (const child of node.children) {
+      const childPath = currentPath === '/' ? `/${child.name}` : `${currentPath}/${child.name}`;
+      const childChecked = syncToSelectedPaths.has(childPath);
+      const childHasChildren = child.children && child.children.length > 0;
+
+      html += `
+        <div class="tree-node ${childChecked ? 'checked' : ''}" data-path="${childPath}" style="padding-left: ${(level + 1) * 20 + 4}px">
+          <input type="checkbox" class="tree-checkbox" data-path="${childPath}" ${childChecked ? 'checked' : ''}>
+          <button class="expand-btn" ${!childHasChildren ? 'style="visibility: hidden;"' : ''}>
+            ${childHasChildren ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' : ''}
+          </button>
+          <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          ${child.color && child.color !== '#fff' ? `<div class="color-indicator" style="background-color: ${child.color}"></div>` : ''}
+          <span class="node-label">${child.label || child.name}</span>
+        </div>
+      `;
+
+      if (childHasChildren) {
+        html += '<div class="tree-children" style="display: none;">';
+        html += renderSyncToTreeNode(child, currentPath, level + 1);
+        html += '</div>';
+      }
+    }
+
+    if (isRoot) html += '</div>';
+  }
+
+  return html;
+}
+
+function setupSyncToTreeListeners() {
+  syncToTree.addEventListener('click', (event) => {
+    const expandBtn = event.target.closest('.expand-btn');
+    if (expandBtn && expandBtn.querySelector('svg')) {
+      event.stopPropagation();
+      const node = expandBtn.closest('.tree-node');
+      const children = node.nextElementSibling;
+      if (children && children.classList.contains('tree-children')) {
+        const isExpanded = children.style.display !== 'none';
+        children.style.display = isExpanded ? 'none' : 'block';
+        expandBtn.querySelector('svg').style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+      }
+      return;
+    }
+
+    const treeNode = event.target.closest('.tree-node');
+    if (!treeNode) return;
+
+    const path = treeNode.dataset.path;
+    const cb = treeNode.querySelector('.tree-checkbox');
+    if (!cb) return;
+
+    if (!event.target.closest('.tree-checkbox')) {
+      cb.checked = !cb.checked;
+    }
+
+    if (cb.checked) {
+      syncToSelectedPaths.add(path);
+      treeNode.classList.add('checked');
+    } else {
+      syncToSelectedPaths.delete(path);
+      treeNode.classList.remove('checked');
+    }
+    updateSyncToConfirmBtn();
+  });
+}

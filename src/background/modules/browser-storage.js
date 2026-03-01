@@ -201,23 +201,31 @@ export class BrowserStorage {
     let identity = await this.get(this.KEYS.BROWSER_IDENTITY);
 
     if (!identity) {
-      // Generate browser identity if not set
-      const userAgent = navigator.userAgent;
-      const timestamp = Date.now();
-
-      if (userAgent.includes('Firefox')) {
-        identity = `firefox-${timestamp}`;
-      } else if (userAgent.includes('Chrome')) {
-        identity = `chrome-${timestamp}`;
-      } else {
-        identity = `browser-${timestamp}`;
-      }
-
+      identity = this.detectBrowserIdentity();
       await this.set(this.KEYS.BROWSER_IDENTITY, identity);
       console.log('Generated new browser identity:', identity);
     }
 
     return identity;
+  }
+
+  detectBrowserIdentity() {
+    const ua = navigator.userAgent;
+
+    let browserName = 'browser';
+    if (ua.includes('Firefox')) browserName = 'firefox';
+    else if (ua.includes('Edg/') || ua.includes('Edg ')) browserName = 'edge';
+    else if (ua.includes('Chrome')) browserName = 'chrome';
+    else if (ua.includes('Safari')) browserName = 'safari';
+
+    let os = 'unknown';
+    if (ua.includes('Android')) os = 'android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'ios';
+    else if (ua.includes('Linux')) os = 'linux';
+    else if (ua.includes('Mac OS X') || ua.includes('Macintosh')) os = 'mac';
+    else if (ua.includes('Windows')) os = 'windows';
+
+    return `${browserName}@${os}`;
   }
 
   // Pinned Tabs Management

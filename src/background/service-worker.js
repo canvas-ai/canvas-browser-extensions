@@ -2043,15 +2043,18 @@ async function handleSyncMultipleTabs(data, sendResponse) {
     }
 
     let result;
-    if (mode === 'context') {
+    if (mode === 'context' && !contextSpec) {
       console.log('🔧 Calling tabManager.syncMultipleTabs (context mode)...');
       const targetContextId = contextId || currentContext?.id;
       if (!targetContextId) throw new Error('No context selected');
       result = await tabManager.syncMultipleTabs(tabs, apiClient, targetContextId, browserIdentity, syncSettings);
     } else {
-      console.log('🔧 Syncing multiple tabs to workspace (explorer mode)...');
-      const wsId = currentWorkspace?.name || currentWorkspace?.id;
+      // Explorer mode, or context mode with explicit contextSpec (Sync To)
+      const wsId = contextSpec
+        ? (currentContext?.workspaceName || currentWorkspace?.name || currentWorkspace?.id)
+        : (currentWorkspace?.name || currentWorkspace?.id);
       if (!wsId) throw new Error('No workspace selected');
+      console.log(`🔧 Syncing multiple tabs to workspace ${wsId} at path ${contextSpec || workspacePath || '/'}...`);
       const docs = tabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity, syncSettings));
       const resp = await apiClient.insertWorkspaceDocuments(wsId, docs, contextSpec || workspacePath || '/', docs[0]?.featureArray || []);
       if (resp.status === 'success') {

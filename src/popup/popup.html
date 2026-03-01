@@ -91,17 +91,33 @@
                 <h3 id="browserTabsHeader">Unsynced Browser Tabs</h3>
               </div>
               <div class="section-actions">
-                <button class="action-btn secondary" id="syncAllBtn">Sync All</button>
-                <button class="action-btn danger" id="closeAllBtn">Close All</button>
+                <button class="action-btn icon-btn secondary" id="syncAllBtn" title="Sync all to current path">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </button>
+                <button class="action-btn icon-btn primary" id="syncToAllBtn" title="Sync all to specific paths...">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 14 12 11 15 14"/><line x1="12" y1="11" x2="12" y2="17"/></svg>
+                </button>
+                <button class="action-btn icon-btn danger" id="closeAllBtn" title="Close all">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>
             </div>
             <div class="tab-list" id="browserToCanvasList">
               <div class="empty-state">No unsynced tabs</div>
             </div>
             <div class="bulk-actions" id="browserBulkActions" style="display: none;">
-              <button class="action-btn primary" id="syncSelectedBtn">Sync Selected</button>
-              <button class="action-btn warning" id="syncCloseSelectedBtn">Sync+Close Selected</button>
-              <button class="action-btn danger" id="closeSelectedBtn">Close Selected</button>
+              <button class="action-btn icon-btn primary" id="syncSelectedBtn" title="Sync selected">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </button>
+              <button class="action-btn icon-btn primary" id="syncToSelectedBtn" title="Sync selected to specific paths...">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 14 12 11 15 14"/><line x1="12" y1="11" x2="12" y2="17"/></svg>
+              </button>
+              <button class="action-btn icon-btn warning" id="syncCloseSelectedBtn" title="Sync and close selected">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </button>
+              <button class="action-btn icon-btn danger" id="closeSelectedBtn" title="Close selected">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -218,6 +234,27 @@
       </main>
     </div>
 
+  </div>
+
+  <!-- Sync To Panel (slide-in overlay) -->
+  <div class="sync-to-overlay" id="syncToOverlay">
+    <div class="sync-to-panel">
+      <div class="sync-to-header">
+        <h3>Sync To</h3>
+        <button class="back-btn" id="syncToPanelClose" title="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="sync-to-tree" id="syncToTree">
+        <div class="loading-state">Loading tree...</div>
+      </div>
+      <div class="sync-to-footer">
+        <span class="sync-to-count" id="syncToCount">0 paths selected</span>
+        <button class="action-btn primary" id="syncToConfirmBtn" disabled>Sync</button>
+      </div>
+    </div>
   </div>
 
   <div class="toast" id="toast" style="display: none;"></div>
