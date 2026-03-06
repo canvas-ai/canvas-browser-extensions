@@ -28,6 +28,43 @@ export class WebSocketClient {
     console.log('WebSocketClient initialized');
   }
 
+  extractDocumentIds(payload = {}) {
+    if (Array.isArray(payload.documentIds) && payload.documentIds.length > 0) {
+      return payload.documentIds;
+    }
+
+    if (Array.isArray(payload.result)) {
+      return payload.result;
+    }
+
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      return payload.items
+        .map((item) => (typeof item === 'object' ? item?.id : item))
+        .filter((id) => id !== undefined && id !== null);
+    }
+
+    return [];
+  }
+
+  normalizeWorkspaceDocumentEvent(eventName, payload = {}) {
+    const eventMap = {
+      'workspace.documents.inserted': 'tree.document.inserted.batch',
+      'workspace.documents.updated': 'tree.document.updated.batch',
+      'workspace.documents.removed': 'tree.document.removed.batch',
+      'workspace.documents.deleted': 'tree.document.deleted.batch'
+    };
+
+    return {
+      type: eventMap[eventName] || eventName,
+      workspaceId: payload.workspaceId,
+      workspaceName: payload.workspaceName,
+      contextSpec: payload.contextSpec || '/',
+      documentIds: this.extractDocumentIds(payload),
+      timestamp: payload.timestamp,
+      sourceEvent: eventName
+    };
+  }
+
   // Initialize WebSocket connection using proper socket.io client
   async connect(serverUrl, apiToken, contextId = null) {
     try {
@@ -39,7 +76,7 @@ export class WebSocketClient {
       try {
         const settings = await browserStorage.getConnectionSettings();
         this.apiToken = settings?.deviceToken || apiToken;
-      } catch (_) {
+      } catch {
         this.apiToken = apiToken;
       }
       this.contextId = contextId;
@@ -120,6 +157,13 @@ export class WebSocketClient {
         this.socket.on('document.removed.batch', (payload) => this._handleDocumentEvent('document.removed.batch', payload));
         this.socket.on('document.deleted.batch', (payload) => this._handleDocumentEvent('document.deleted.batch', payload));
 
+        // Workspace document events use a different namespace/payload shape.
+        // Normalize them so the sync engine can keep one code path.
+        this.socket.on('workspace.documents.inserted', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.inserted', payload));
+        this.socket.on('workspace.documents.updated', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.updated', payload));
+        this.socket.on('workspace.documents.removed', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.removed', payload));
+        this.socket.on('workspace.documents.deleted', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.deleted', payload));
+
         // Context events
         this.socket.on('context.created', (payload) => this._handleContextEvent('context.created', payload));
         this.socket.on('context.updated', (payload) => this._handleContextEvent('context.updated', payload));
@@ -177,6 +221,16 @@ export class WebSocketClient {
 
     // Emit original event as well
     this.emit(eventName, payload);
+  }
+
+  _handleWorkspaceDocumentEvent(eventName, payload) {
+    const normalized = this.normalizeWorkspaceDocumentEvent(eventName, payload);
+    console.log('WebSocketClient: Workspace document event:', eventName, normalized);
+
+    this.emit(eventName, payload);
+    if (normalized.type !== eventName) {
+      this.emit(normalized.type, normalized);
+    }
   }
 
   // Handle context events

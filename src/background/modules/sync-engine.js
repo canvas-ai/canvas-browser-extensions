@@ -24,6 +24,7 @@ export class SyncEngine {
     this.syncIntervalMs = 30000; // 30 seconds
     this.pendingTabOpens = new Set(); // Track URLs being opened to prevent duplicates
     this.pendingFetches = new Map(); // Track pending document fetches to prevent duplicates
+    this.webSocketHandlersSetup = false;
   }
 
   // Initialize sync engine
@@ -34,7 +35,10 @@ export class SyncEngine {
       // Load sync settings
       const syncSettings = await browserStorage.getSyncSettings();
       const connectionSettings = await browserStorage.getConnectionSettings();
+      const mode = await browserStorage.getSyncMode();
       const currentContext = await browserStorage.getCurrentContext();
+      const currentWorkspace = await browserStorage.getCurrentWorkspace();
+      const workspacePath = await browserStorage.getWorkspacePath();
 
       // Check if we can initialize
       if (!connectionSettings.connected || !connectionSettings.apiToken) {
@@ -42,8 +46,13 @@ export class SyncEngine {
         return false;
       }
 
-      if (!currentContext?.id) {
+      if (mode === 'context' && !currentContext?.id) {
         console.log('SyncEngine: Cannot initialize - no context bound');
+        return false;
+      }
+
+      if (mode === 'explorer' && !currentWorkspace?.id && !currentWorkspace?.name) {
+        console.log('SyncEngine: Cannot initialize - no workspace selected');
         return false;
       }
 
@@ -60,7 +69,11 @@ export class SyncEngine {
       this.setupWebSocketHandlers();
 
       // Perform initial sync
-      await this.performFullSync(currentContext.id);
+      if (mode === 'context') {
+        await this.performFullSync(currentContext.id);
+      } else {
+        await this.performExplorerFullSync(currentWorkspace, workspacePath);
+      }
 
       // Start auto-sync if enabled
       if (syncSettings.sendNewTabsToCanvas) {
@@ -78,6 +91,9 @@ export class SyncEngine {
 
   // Setup WebSocket event handlers
   setupWebSocketHandlers() {
+    if (this.webSocketHandlersSetup) return;
+    this.webSocketHandlersSetup = true;
+
     // Listen for real-time document events
     webSocketClient.on('tab.event', async (eventData) => {
       await this.handleWebSocketEvent(eventData);
@@ -233,7 +249,7 @@ export class SyncEngine {
     for (const document of documents) {
       if (document.schema === 'data/abstraction/tab' && document.data?.url) {
         // Check if we should open this tab (filter by browser identity if enabled)
-        if (syncSettings.syncOnlyThisBrowser) {
+        if (this.isBrowserScopedSyncEnabled(syncSettings)) {
           const browserIdentity = await browserStorage.getBrowserIdentity();
           const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
 
@@ -287,8 +303,6 @@ export class SyncEngine {
       // We need to fetch the documents to check if they're tab documents
       const mode = await browserStorage.getSyncMode();
       const currentWorkspace = await browserStorage.getCurrentWorkspace();
-      const workspacePath = await browserStorage.getWorkspacePath();
-
       if (mode === 'explorer' && currentWorkspace) {
         console.log('SyncEngine: Fetching documents for tree event in explorer mode');
 
@@ -308,7 +322,7 @@ export class SyncEngine {
               console.log('SyncEngine: Found tab document from tree event:', document.data.title);
 
               // Check if we should open this tab (filter by browser identity if enabled)
-              if (syncSettings.syncOnlyThisBrowser) {
+              if (this.isBrowserScopedSyncEnabled(syncSettings)) {
                 const browserIdentity = await browserStorage.getBrowserIdentity();
                 const hasOurFeature = document.featureArray?.includes(`tag/${browserIdentity}`);
 
@@ -399,6 +413,17 @@ export class SyncEngine {
             await tabManager.closeTab(tab.id);
           }
         }
+      } else if (documentIds.length > 0) {
+        const trackedTabIds = tabManager.getTrackedTabIdsByDocumentIds(documentIds);
+        if (trackedTabIds.length === 0) {
+          console.log('SyncEngine: No tracked tabs found for removed document IDs');
+          return;
+        }
+
+        console.log('SyncEngine: Closing tracked tabs for removed document IDs:', trackedTabIds);
+        for (const tabId of trackedTabIds) {
+          await tabManager.closeTab(tabId);
+        }
       } else {
         console.log('SyncEngine: No URLs found in removal event, cannot close tabs');
       }
@@ -408,7 +433,7 @@ export class SyncEngine {
   }
 
   // Handle remote document updated
-  async handleRemoteDocumentUpdated(eventData, syncSettings) {
+  async handleRemoteDocumentUpdated(eventData, _syncSettings) {
     console.log('SyncEngine: Document updated:', eventData);
     // For now, just log - we could update tab titles/URLs in the future
   }
@@ -429,13 +454,20 @@ export class SyncEngine {
       } else {
         // Workspace mode: check if event relates to our current workspace and path
         const eventWorkspaceId = eventData.workspaceId || eventData.id;
+        const eventWorkspaceName = eventData.workspaceName;
 
         // For tree events, contextSpec is directly in the event data
         // For regular document events, it might be nested or default to '/'
         const eventContextSpec = eventData.contextSpec || '/';
 
         // Check workspace match
-        const workspaceMatch = eventWorkspaceId === (currentWorkspace?.id || currentWorkspace?.name);
+        const workspaceMatch = (
+          (currentWorkspace?.id && eventWorkspaceId === currentWorkspace.id) ||
+          (currentWorkspace?.name && (
+            eventWorkspaceId === currentWorkspace.name ||
+            eventWorkspaceName === currentWorkspace.name
+          ))
+        );
 
         // Check path match (document events should include contextSpec)
         // For tree events, we get exact contextSpec, so we can do precise matching
@@ -444,6 +476,7 @@ export class SyncEngine {
         console.log('SyncEngine: Event relevance check:', {
           eventType: eventData.type,
           eventWorkspaceId,
+          eventWorkspaceName,
           currentWorkspaceId: currentWorkspace?.id,
           currentWorkspaceName: currentWorkspace?.name,
           eventContextSpec,
@@ -701,7 +734,7 @@ export class SyncEngine {
       const featureArray = ['data/abstraction/tab'];
 
       // Filter by browser identity if enabled
-      if (syncSettings.syncOnlyThisBrowser) {
+      if (this.isBrowserScopedSyncEnabled(syncSettings)) {
         const browserIdentity = await browserStorage.getBrowserIdentity();
         featureArray.push(`tag/${browserIdentity}`);
       }
@@ -767,6 +800,63 @@ export class SyncEngine {
     } catch (error) {
       console.error('SyncEngine: Incremental sync failed:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  async performExplorerFullSync(workspace, workspacePath = '/') {
+    try {
+      console.log('SyncEngine: Performing explorer synchronization...');
+
+      this.syncInProgress = true;
+
+      const wsId = workspace?.name || workspace?.id;
+      if (!wsId) {
+        throw new Error('No workspace selected');
+      }
+
+      const browserTabs = await tabManager.getSyncableTabs();
+      const syncSettings = await browserStorage.getSyncSettings();
+      const featureArray = ['data/abstraction/tab'];
+
+      if (this.isBrowserScopedSyncEnabled(syncSettings)) {
+        const browserIdentity = await browserStorage.getBrowserIdentity();
+        featureArray.push(`tag/${browserIdentity}`);
+      }
+
+      const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', featureArray);
+      const canvasDocuments = (response.status === 'success') ? (response.payload || []) : [];
+      const comparison = tabManager.compareWithCanvasDocuments(browserTabs, canvasDocuments, syncSettings);
+
+      console.log('SyncEngine: Explorer sync comparison:', {
+        browserToCanvas: comparison.browserToCanvas.length,
+        canvasToBrowser: comparison.canvasToBrowser.length,
+        synced: comparison.synced.length,
+        workspace: wsId,
+        workspacePath: workspacePath || '/'
+      });
+
+      if (syncSettings.sendNewTabsToCanvas && comparison.browserToCanvas.length > 0) {
+        const browserIdentity = await browserStorage.getBrowserIdentity();
+        const documents = comparison.browserToCanvas.map(tab => tabManager.convertTabToDocument(tab, browserIdentity, syncSettings));
+        await apiClient.insertWorkspaceDocuments(wsId, documents, workspacePath || '/', documents[0]?.featureArray || []);
+      }
+
+      if (syncSettings.openTabsAddedToCanvas && comparison.canvasToBrowser.length > 0) {
+        await this.openTabsWithRateLimit(comparison.canvasToBrowser);
+      }
+
+      this.lastSyncTime = new Date().toISOString();
+      return {
+        success: true,
+        browserToCanvas: comparison.browserToCanvas.length,
+        canvasToBrowser: comparison.canvasToBrowser.length,
+        synced: comparison.synced.length
+      };
+    } catch (error) {
+      console.error('SyncEngine: Explorer sync failed:', error);
+      return { success: false, error: error.message };
+    } finally {
+      this.syncInProgress = false;
     }
   }
 
@@ -847,6 +937,10 @@ export class SyncEngine {
     } else {
       return 'keep-only';
     }
+  }
+
+  isBrowserScopedSyncEnabled(syncSettings) {
+    return !!(syncSettings?.syncOnlyCurrentBrowser || syncSettings?.syncOnlyThisBrowser);
   }
 
   // Execute context change behavior based on settings
@@ -957,7 +1051,7 @@ export class SyncEngine {
       const featureArray = ['data/abstraction/tab'];
 
       // Filter by browser identity if enabled
-      if (syncSettings.syncOnlyThisBrowser) {
+      if (this.isBrowserScopedSyncEnabled(syncSettings)) {
         const browserIdentity = await browserStorage.getBrowserIdentity();
         featureArray.push(`tag/${browserIdentity}`);
       }
@@ -1121,7 +1215,7 @@ export class SyncEngine {
         const syncSettings = await browserStorage.getSyncSettings();
         const featureArray = ['data/abstraction/tab'];
 
-        if (syncSettings.syncOnlyThisBrowser) {
+        if (this.isBrowserScopedSyncEnabled(syncSettings)) {
           const browserIdentity = await browserStorage.getBrowserIdentity();
           featureArray.push(`tag/${browserIdentity}`);
         }

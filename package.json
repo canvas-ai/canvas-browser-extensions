@@ -1,6 +1,6 @@
 {
   "name": "canvas-browser-extension",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Canvas Browser Extension for seamless tab synchronization",
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "build:dev": "cross-env NODE_ENV='dev' node build.mjs",
     "clean": "rimraf build packages",
     "lint": "eslint src/ --ext .js,.mjs",
-    "lint:fix": "eslint src/ --ext .js,.mjs --fix"
+    "lint:fix": "eslint src/ --ext .js,.mjs --fix",
+    "smoke": "node scripts/smoke.mjs"
   },
   "keywords": [
     "browser-extension",

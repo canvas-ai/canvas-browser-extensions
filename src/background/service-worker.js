@@ -15,6 +15,7 @@ console.log('🚀 Service Worker: Registering tab event listeners...');
 const runtimeAPI = (typeof browser !== 'undefined' && browser.runtime) ? browser.runtime : chrome.runtime;
 const tabsAPI = (typeof browser !== 'undefined' && browser.tabs) ? browser.tabs : chrome.tabs;
 const windowsAPI = (typeof browser !== 'undefined' && browser.windows) ? browser.windows : chrome.windows;
+let webSocketHandlersInitialized = false;
 
 // Service worker installation and activation
 runtimeAPI.onInstalled.addListener(async (details) => {
@@ -142,6 +143,13 @@ async function initializeWebSocket() {
     // Initialize sync engine
     await syncEngine.initialize();
 
+    if (mode === 'explorer' && currentWorkspace) {
+      const wsId = currentWorkspace.id || currentWorkspace.name;
+      if (wsId) {
+        await apiClient.ensureWorkspaceStarted(wsId);
+      }
+    }
+
     // Connect to WebSocket
     const success = await webSocketClient.connect(
       connectionSettings.serverUrl,
@@ -173,6 +181,9 @@ async function initializeWebSocket() {
 
 // Setup WebSocket event handlers for real-time sync
 function setupWebSocketEventHandlers() {
+  if (webSocketHandlersInitialized) return;
+  webSocketHandlersInitialized = true;
+
   console.log('Setting up WebSocket event handlers...');
 
   // Connection state changes
@@ -1280,6 +1291,26 @@ async function handleSetModeAndSelection(data, sendResponse) {
 
     // Update context menus after mode/selection change
     await setupContextMenus();
+
+    const connectionSettings = await browserStorage.getConnectionSettings();
+    if (connectionSettings.connected && connectionSettings.apiToken) {
+      if (!apiClient.apiToken) {
+        apiClient.initialize(
+          connectionSettings.serverUrl,
+          connectionSettings.apiBasePath,
+          connectionSettings.apiToken
+        );
+      }
+
+      if (mode === 'explorer' && workspace) {
+        const wsId = workspace.id || workspace.name;
+        if (wsId) {
+          await apiClient.ensureWorkspaceStarted(wsId);
+        }
+      }
+
+      await initializeWebSocket();
+    }
 
     sendResponse({ success: true });
   } catch (error) {

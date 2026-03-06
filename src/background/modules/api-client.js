@@ -9,12 +9,22 @@ export class CanvasApiClient {
     this.apiBasePath = '/rest/v2';
     this.userToken = null;
     this.deviceToken = null;
+    this.deviceTokenPromise = null;
     this.deviceId = null;
     this.connected = false;
     this.appKey = 'canvas-extension';
+    this.startedWorkspaces = new Set();
   }
 
   // ---- Utilities ---------------------------------------------------------
+
+  get apiToken() {
+    return this.userToken;
+  }
+
+  set apiToken(value) {
+    this.userToken = value;
+  }
 
   /**
    * Normalize document IDs for SynapsD-backed workspace operations.
@@ -47,9 +57,19 @@ export class CanvasApiClient {
 
   // Initialize client with connection settings
   initialize(serverUrl, apiBasePath, apiToken) {
-    this.baseUrl = serverUrl.replace(/\/$/, ''); // Remove trailing slash
+    const normalizedBaseUrl = serverUrl.replace(/\/$/, '');
+    const connectionChanged = this.baseUrl !== normalizedBaseUrl || this.userToken !== apiToken;
+
+    this.baseUrl = normalizedBaseUrl; // Remove trailing slash
     this.apiBasePath = apiBasePath;
     this.userToken = apiToken;
+
+    if (connectionChanged) {
+      this.deviceToken = null;
+      this.deviceTokenPromise = null;
+      this.deviceId = null;
+      this.startedWorkspaces.clear();
+    }
   }
 
   // Build full API URL
@@ -64,13 +84,27 @@ export class CanvasApiClient {
     return /\/(contexts|workspaces)\/[^/]+\/documents\b/.test(endpoint);
   }
 
+  isBrowserScopedSyncEnabled(syncSettings) {
+    return !!(syncSettings?.syncOnlyCurrentBrowser || syncSettings?.syncOnlyThisBrowser);
+  }
+
+  async ensureWorkspaceStarted(workspaceNameOrId) {
+    const workspaceKey = encodeURIComponent(workspaceNameOrId);
+    if (this.startedWorkspaces.has(workspaceKey)) return;
+
+    await this.post(`/workspaces/${workspaceKey}/start`, {});
+    this.startedWorkspaces.add(workspaceKey);
+  }
+
   async ensureDeviceToken() {
     if (this.deviceToken) return this.deviceToken;
+    if (this.deviceTokenPromise) return this.deviceTokenPromise;
 
     const settings = await browserStorage.getConnectionSettings();
     const storedToken = settings?.deviceToken;
     const storedId = settings?.deviceId;
-    if (storedToken) {
+    const storedTokenServerUrl = settings?.deviceTokenServerUrl;
+    if (storedToken && storedTokenServerUrl === this.baseUrl) {
       this.deviceToken = storedToken;
       this.deviceId = storedId || null;
       return storedToken;
@@ -78,41 +112,50 @@ export class CanvasApiClient {
 
     if (!this.userToken) throw new Error('No user token available to register device');
 
-    const identity = await browserStorage.getBrowserIdentity();
-    const payload = {
-      name: identity || 'browser',
-      hostname: identity || 'browser',
-      type: 'browser'
-    };
+    this.deviceTokenPromise = (async () => {
+      const identity = await browserStorage.getBrowserIdentity();
+      const payload = {
+        name: identity || 'browser',
+        hostname: identity || 'browser',
+        type: 'browser'
+      };
 
-    const url = `${this.baseUrl}${this.apiBasePath}/auth/devices/register`;
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-App-Name': this.appKey,
-        'Authorization': `Bearer ${this.userToken}`
-      },
-      body: JSON.stringify(payload)
-    });
+      const url = `${this.baseUrl}${this.apiBasePath}/auth/devices/register`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-App-Name': this.appKey,
+          'Authorization': `Bearer ${this.userToken}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-    const data = await resp.json();
-    const body = data?.payload || data?.data || data;
-    const token = body?.token;
-    const deviceId = body?.deviceId;
-    if (!token) throw new Error('Device registration did not return a device token');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      const data = await resp.json();
+      const body = data?.payload || data?.data || data;
+      const token = body?.token;
+      const deviceId = body?.deviceId;
+      if (!token) throw new Error('Device registration did not return a device token');
 
-    this.deviceToken = token;
-    this.deviceId = deviceId || null;
+      this.deviceToken = token;
+      this.deviceId = deviceId || null;
 
-    await browserStorage.setConnectionSettings({
-      deviceToken: this.deviceToken,
-      deviceId: this.deviceId
-    });
+      await browserStorage.setConnectionSettings({
+        deviceToken: this.deviceToken,
+        deviceId: this.deviceId,
+        deviceTokenServerUrl: this.baseUrl
+      });
 
-    return this.deviceToken;
+      return this.deviceToken;
+    })();
+
+    try {
+      return await this.deviceTokenPromise;
+    } finally {
+      this.deviceTokenPromise = null;
+    }
   }
 
   // Build request headers
@@ -352,7 +395,7 @@ This is a Firefox security feature, not an extension bug.
                 try {
                   const data = JSON.parse(xhr.responseText);
                   resolve(data);
-                } catch (e) {
+                } catch {
                   resolve({ message: 'Server responded but not with JSON' });
                 }
               } else {
@@ -562,10 +605,12 @@ Firefox blocks local network requests for security reasons.
 
   // Workspace tree
   async getWorkspaceTree(workspaceNameOrId) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     return await this.get(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree`);
   }
 
   async getWorkspaceDocuments(workspaceNameOrId, contextSpec = '/', featureArray = []) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     const enhancedFeatureArray = [...featureArray];
     if (!enhancedFeatureArray.includes('data/abstraction/tab')) {
       enhancedFeatureArray.unshift('data/abstraction/tab');
@@ -586,6 +631,7 @@ Firefox blocks local network requests for security reasons.
   }
 
   async insertWorkspaceDocument(workspaceNameOrId, document, contextSpec = '/', featureArray = []) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     const data = {
       contextSpec,
       featureArray,
@@ -595,6 +641,7 @@ Firefox blocks local network requests for security reasons.
   }
 
   async insertWorkspaceDocuments(workspaceNameOrId, documents, contextSpec = '/', featureArray = []) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     const data = {
       contextSpec,
       featureArray,
@@ -604,6 +651,7 @@ Firefox blocks local network requests for security reasons.
   }
 
   async removeWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     // DELETE /workspaces/:id/documents/remove with body and query
     const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents/remove`;
     const url = new URL(this.buildUrl(endpoint));
@@ -616,6 +664,7 @@ Firefox blocks local network requests for security reasons.
   }
 
   async deleteWorkspaceDocuments(workspaceNameOrId, documentIds, contextSpec = '/', featureArray = []) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     // DELETE /workspaces/:id/documents with body and query
     const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`;
     const url = new URL(this.buildUrl(endpoint));
@@ -629,6 +678,7 @@ Firefox blocks local network requests for security reasons.
 
   // Workspace tree operations
   async insertWorkspacePath(workspaceNameOrId, path, data = null, autoCreateLayers = true) {
+    await this.ensureWorkspaceStarted(workspaceNameOrId);
     const requestData = {
       path,
       data,
@@ -647,7 +697,7 @@ Firefox blocks local network requests for security reasons.
 
     // Get sync settings to check if we should filter by browser instance
     const syncSettings = await browserStorage.getSyncSettings();
-    if (syncSettings.syncOnlyThisBrowser) {
+    if (this.isBrowserScopedSyncEnabled(syncSettings)) {
       const browserIdentity = await browserStorage.getBrowserIdentity();
       if (browserIdentity) {
         const browserTag = `tag/${browserIdentity}`;

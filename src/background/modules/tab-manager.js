@@ -355,6 +355,19 @@ export class TabManager {
     return this.trackedTabs.get(tabId);
   }
 
+  getTrackedTabIdsByDocumentIds(documentIds = []) {
+    const wanted = new Set((Array.isArray(documentIds) ? documentIds : [documentIds]).filter((id) => id !== undefined && id !== null));
+    if (wanted.size === 0) return [];
+
+    const matches = [];
+    for (const [tabId, tabData] of this.trackedTabs.entries()) {
+      if (wanted.has(tabData?.documentId)) {
+        matches.push(tabId);
+      }
+    }
+    return matches;
+  }
+
   // Generate hash for tab (for duplicate detection)
   generateTabHash(tab) {
     return `${tab.url}|${tab.title}`;
