@@ -235,6 +235,35 @@ function setupWebSocketEventHandlers() {
     broadcastToPopup('websocket.disconnected', {});
   });
 
+  const refreshPopupOnDocumentEvent = (eventType) => {
+    webSocketClient.on(eventType, (data) => {
+      console.log(`WebSocket document event: ${eventType}`, data);
+      refreshTabLists();
+      broadcastToPopup(eventType, data);
+    });
+  };
+
+  [
+    'document.inserted',
+    'document.updated',
+    'document.removed',
+    'document.deleted',
+    'document.removed.batch',
+    'document.deleted.batch',
+    'tree.document.inserted',
+    'tree.document.inserted.batch',
+    'tree.document.updated',
+    'tree.document.updated.batch',
+    'tree.document.removed',
+    'tree.document.removed.batch',
+    'tree.document.deleted',
+    'tree.document.deleted.batch',
+    'workspace.documents.inserted',
+    'workspace.documents.updated',
+    'workspace.documents.removed',
+    'workspace.documents.deleted'
+  ].forEach(refreshPopupOnDocumentEvent);
+
   // Workspace tree changes
   webSocketClient.on('workspace.tree.updated', async (data) => {
     console.log('Workspace tree updated:', data);
