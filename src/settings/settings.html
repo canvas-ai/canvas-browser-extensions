@@ -215,6 +215,21 @@
           <button type="button" id="resetSettingsBtn" class="btn secondary">Reset to Defaults</button>
         </div>
       </section>
+
+      <section class="settings-section">
+        <h2>Tab Sync Debug</h2>
+        <p class="help-text">Inspect the persisted document-to-tab index and the live browser tab state before testing.</p>
+
+        <div class="form-actions">
+          <button type="button" id="refreshTabSyncDebugBtn" class="btn secondary">Refresh Debug State</button>
+          <button type="button" id="copyTabSyncDebugBtn" class="btn secondary">Copy Debug JSON</button>
+        </div>
+
+        <div class="connection-status debug-panel">
+          <div class="status-details" id="tabSyncDebugSummary">No debug snapshot loaded yet.</div>
+          <pre id="tabSyncDebugOutput" class="debug-output">Click "Refresh Debug State" to inspect the current tab/document index.</pre>
+        </div>
+      </section>
     </main>
 
     <!-- Status Messages -->

@@ -57,6 +57,8 @@ async function initializeExtension() {
       console.warn('Storage migration failed (non-fatal):', e);
     }
 
+    await tabManager.initialize();
+
     // Load connection settings
     const connectionSettings = await browserStorage.getConnectionSettings();
     console.log('Service Worker Init: Loaded connection settings:', connectionSettings);
@@ -298,7 +300,7 @@ function broadcastToPopup(type, data) {
         // UI might not be open, ignore errors
       });
     }
-  } catch (error) {
+  } catch {
     // Ignore - popup not open
   }
 }
@@ -330,6 +332,8 @@ tabsAPI.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     console.log('🔄 AUTO-SYNC: Tab page loaded completely:', tabId, tab.url, 'changeInfo:', changeInfo);
 
     try {
+      await tabManager.initialize();
+
       // Check if auto-sync is enabled and we're connected
       const syncSettings = await browserStorage.getSyncSettings();
       const connectionSettings = await browserStorage.getConnectionSettings();
@@ -415,7 +419,7 @@ tabsAPI.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           const response = await apiClient.insertWorkspaceDocument(wsId, document, workspacePath || '/', document.featureArray);
           if (response.status === 'success') {
             const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-            tabManager.markTabAsSynced(tab.id, docId);
+            tabManager.markTabAsSynced(tab.id, docId, document.data?.url);
             syncResult = { success: true, documentId: docId };
           } else {
             syncResult = { success: false, error: response.message || 'Failed to sync tab' };
@@ -443,6 +447,7 @@ tabsAPI.onRemoved.addListener(async (tabId, removeInfo) => {
   console.log('Tab removed:', tabId);
 
   // Capture any known Canvas document mapping before cleanup.
+  await tabManager.initialize();
   const syncedTabData = tabManager.getSyncedTabData(tabId);
 
   // Clean up tracking
@@ -502,44 +507,6 @@ windowsAPI.onRemoved.addListener(async (windowId) => {
 
 console.log('✅ Service Worker: All tab and window event listeners registered successfully');
 
-// Test basic functionality on startup
-setTimeout(async () => {
-  console.log('🔧 Service Worker: Testing basic functionality...');
-  try {
-    const status = await debugAutoSyncStatus();
-    console.log('🔧 Service Worker: Initial auto-sync status check completed');
-  } catch (error) {
-    console.error('🔧 Service Worker: Failed to check initial status:', error);
-  }
-}, 1000);
-
-// Debug helper function for checking auto-sync status
-async function debugAutoSyncStatus() {
-  try {
-    const syncSettings = await browserStorage.getSyncSettings();
-    const connectionSettings = await browserStorage.getConnectionSettings();
-    const currentContext = await browserStorage.getCurrentContext();
-    const browserIdentity = await browserStorage.getBrowserIdentity();
-
-    const status = {
-      sendNewTabsToCanvas: syncSettings?.sendNewTabsToCanvas,
-      connected: connectionSettings?.connected,
-      hasApiToken: !!connectionSettings?.apiToken,
-      serverUrl: connectionSettings?.serverUrl,
-      contextId: currentContext?.id,
-      contextUrl: currentContext?.url,
-      browserIdentity: browserIdentity,
-      apiClientInitialized: !!apiClient?.apiToken
-    };
-
-    console.log('🔍 AUTO-SYNC DEBUG STATUS:', status);
-    return status;
-  } catch (error) {
-    console.error('🔍 AUTO-SYNC DEBUG ERROR:', error);
-    return { error: error.message };
-  }
-}
-
 // Message handling for popup/settings communication
 runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message.type, message);
@@ -562,19 +529,6 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     respond({ success: false, error: error?.message || String(error) });
   });
 
-  // Add debug command
-  if (message.type === 'DEBUG_AUTO_SYNC_STATUS') {
-    (async () => {
-      try {
-        const status = await debugAutoSyncStatus();
-        respond({ success: true, status });
-      } catch (error) {
-        respond({ success: false, error: error.message });
-      }
-    })();
-    return true;
-  }
-
   // Add ping test
   if (message.type === 'PING') {
     console.log('🏓 Service Worker: PING received');
@@ -586,6 +540,10 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   case 'GET_CONNECTION_STATUS':
     // Return current connection status from storage
     run(handleGetConnectionStatus(respond));
+    return true;
+
+  case 'GET_TAB_SYNC_DEBUG':
+    run(handleGetTabSyncDebug(respond));
     return true;
 
   case 'TEST_CONNECTION':
@@ -840,6 +798,57 @@ async function handleGetConnectionStatus(sendResponse) {
       context: null,
       error: error.message
     });
+  }
+}
+
+async function handleGetTabSyncDebug(sendResponse) {
+  try {
+    await tabManager.initialize();
+
+    const [
+      connectionSettings,
+      syncSettings,
+      currentContext,
+      currentWorkspace,
+      workspacePath,
+      persistedTrackedTabs,
+      browserIdentity,
+      mode
+    ] = await Promise.all([
+      browserStorage.getConnectionSettings(),
+      browserStorage.getSyncSettings(),
+      browserStorage.getCurrentContext(),
+      browserStorage.getCurrentWorkspace(),
+      browserStorage.getWorkspacePath(),
+      browserStorage.getTrackedCanvasTabs(),
+      browserStorage.getBrowserIdentity(),
+      browserStorage.getSyncMode()
+    ]);
+
+    const debug = {
+      mode,
+      browserIdentity,
+      connection: {
+        connected: !!connectionSettings?.connected,
+        serverUrl: connectionSettings?.serverUrl || '',
+        hasApiToken: !!connectionSettings?.apiToken
+      },
+      websocket: webSocketClient.getConnectionStatus(),
+      syncEngine: syncEngine.getSyncStatus(),
+      selection: {
+        context: currentContext,
+        workspace: currentWorkspace,
+        workspacePath: workspacePath || '/'
+      },
+      syncSettings,
+      persistedTrackedTabs,
+      live: await tabManager.getDebugSnapshot()
+    };
+
+    sendResponse({ success: true, debug });
+  } catch (error) {
+    console.error('Failed to get tab sync debug state:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
@@ -1648,10 +1657,6 @@ async function handleBindContext(data, sendResponse) {
 
     console.log('Binding to context:', context);
 
-    // Get old context for context switching
-    const oldContext = await browserStorage.getCurrentContext();
-    const oldContextId = oldContext?.id;
-
     // Save context to storage
     await browserStorage.setCurrentContext(context);
 
@@ -1975,8 +1980,8 @@ async function handleSyncTab(data, sendResponse) {
       const document = tabManager.convertTabToDocument(tab, browserIdentity, syncSettings);
       const resp = await apiClient.insertWorkspaceDocument(wsId, document, contextSpec || workspacePath || '/', document.featureArray);
       if (resp.status === 'success') {
-        const docId = Array.isArray(resp.payload) ? resp.payload[0]?.id : resp.payload?.id;
-        tabManager.markTabAsSynced(tab.id, docId);
+        const docId = Array.isArray(resp.payload) ? resp.payload[0] : resp.payload;
+        tabManager.markTabAsSynced(tab.id, docId, document.data?.url);
         result = { success: true, documentId: docId };
       } else {
         result = { success: false, error: resp.message || 'Failed to sync tab' };
@@ -2775,9 +2780,10 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
-              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              // Best-effort: mark tabs as synced (ids can be mismatched in batch response, but UI uses URL comparison anyway)
-              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
+              const documentIds = Array.isArray(response.payload) ? response.payload : [response.payload];
+              selectedTabs.forEach((tab, index) => {
+                tabManager.markTabAsSynced(tab.id, documentIds[index] ?? documentIds[0], documents[index]?.data?.url);
+              });
               console.log(`Tab synced to current workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
 
@@ -2862,8 +2868,10 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
-              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
+              const documentIds = Array.isArray(response.payload) ? response.payload : [response.payload];
+              selectedTabs.forEach((tab, index) => {
+                tabManager.markTabAsSynced(tab.id, documentIds[index] ?? documentIds[0], documents[index]?.data?.url);
+              });
               console.log(`Tab synced to recent workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
 
@@ -2913,8 +2921,10 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
               : await apiClient.insertWorkspaceDocument(workspaceName, documents[0], contextSpec || '/', documents[0].featureArray);
 
             if (response.status === 'success') {
-              const docId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
-              selectedTabs.forEach(t => tabManager.markTabAsSynced(t.id, docId));
+              const documentIds = Array.isArray(response.payload) ? response.payload : [response.payload];
+              selectedTabs.forEach((tab, index) => {
+                tabManager.markTabAsSynced(tab.id, documentIds[index] ?? documentIds[0], documents[index]?.data?.url);
+              });
               console.log(`Tab synced to workspace ${workspaceName} at path ${contextSpec} via context menu`);
               await closeSelectedTabsSafely();
 

@@ -9,7 +9,7 @@ const ICON = {
   sync: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
   syncTo: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 14 12 11 15 14"/><line x1="12" y1="11" x2="12" y2="17"/>',
   syncClose: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
-  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
 };
 
 function createSvgIcon(pathsStr, size = 14) {
@@ -22,7 +22,7 @@ function createSvgIcon(pathsStr, size = 14) {
 }
 
 // DOM elements
-let connectionStatus, connectionText, contextInfo, contextId, contextUrl;
+let connectionStatus, connectionText, contextId, contextUrl;
 let searchInput, sendNewTabsToCanvas, openTabsAddedToCanvas, showSyncedTabs, showAllCanvasTabs;
 let browserToCanvasList, canvasToBrowserList;
 let syncAllBtn, syncToAllBtn, closeAllBtn, openAllBtn, settingsBtn, dockBtn, logoBtn, selectorBtn;
@@ -36,11 +36,9 @@ let toast;
 
 // Tab elements
 let browserToCanvasTab, canvasToBrowserTab;
-let browserToCanvasContent, canvasToBrowserContent;
 
 // View containers and navigation
 let viewContainer;
-let mainView, treeView, selectionView;
 
 // Tree view elements
 let treeBackBtn, treePathInput, pathSubmitBtn, pathCancelBtn;
@@ -66,8 +64,6 @@ const selectedBrowserTabs = new Set();
 const selectedCanvasTabs = new Set();
 let currentTab = 'browser-to-canvas';
 
-// View state
-let currentView = 'main'; // 'main', 'tree', 'selection'
 let treeData = null; // Store tree data from API
 let selectedPath = '/'; // Currently selected tree path
 let currentSelectionTab = 'contexts'; // 'contexts' or 'workspaces'
@@ -112,7 +108,7 @@ function isPopupView() {
       const popups = ext.getViews({ type: 'popup' });
       return Array.isArray(popups) && popups.includes(window);
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
 
@@ -126,7 +122,7 @@ function closePopupIfPossible() {
 
 // Listen for messages from service worker (cross-browser compatible)
 const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
-runtime.onMessage.addListener((message, sender, sendResponse) => {
+runtime.onMessage.addListener((message) => {
   console.log('Popup received message:', message);
 
   // Handle background events from service worker
@@ -224,14 +220,10 @@ runtime.onMessage.addListener((message, sender, sendResponse) => {
 function initializeElements() {
   // View containers
   viewContainer = document.getElementById('viewContainer');
-  mainView = document.getElementById('mainView');
-  treeView = document.getElementById('treeView');
-  selectionView = document.getElementById('selectionView');
 
   // Header elements
   connectionStatus = document.getElementById('connectionStatus');
   connectionText = document.getElementById('connectionText');
-  contextInfo = document.getElementById('contextInfo');
   contextId = document.getElementById('contextId');
   contextUrl = document.getElementById('contextUrl');
   logoBtn = document.getElementById('logoBtn');
@@ -250,10 +242,6 @@ function initializeElements() {
   // Tab navigation
   browserToCanvasTab = document.getElementById('browserToCanvasTab');
   canvasToBrowserTab = document.getElementById('canvasToBrowserTab');
-
-  // Tab content
-  browserToCanvasContent = document.getElementById('browser-to-canvas');
-  canvasToBrowserContent = document.getElementById('canvas-to-browser');
 
   // Tab lists
   browserToCanvasList = document.getElementById('browserToCanvasList');
@@ -512,7 +500,7 @@ function updateConnectionStatus(connection) {
         try {
           const url = new URL(connection.settings.serverUrl);
           displayServerUrl = url.hostname + (url.port ? ':' + url.port : '');
-        } catch (e) {
+        } catch {
           // If URL parsing fails, use the original value
           displayServerUrl = connection.settings.serverUrl.replace(/^https?:\/\//, '');
         }
@@ -1638,16 +1626,6 @@ function initializeFuseInstances() {
   }
 }
 
-function filterTabItems(container, query, type) {
-  // Legacy function - now handled by performFuzzySearch
-  // Keep for backwards compatibility but redirect to fuzzy search
-  if (query) {
-    performFuzzySearch(query, type);
-  } else {
-    clearSearch();
-  }
-}
-
 // Context URL editing handlers
 function handleContextUrlClick() {
   // Only allow editing if connected and we have a context or workspace
@@ -1671,7 +1649,6 @@ function handleContextUrlClick() {
 
 function navigateToView(viewName) {
   console.log('Navigating to view:', viewName);
-  currentView = viewName;
   viewContainer.setAttribute('data-current-view', viewName);
 
   // Initialize view-specific data when navigating
@@ -2353,17 +2330,6 @@ function handleBrowserTabSelection(event) {
   updateBulkActionVisibility();
 }
 
-function handleCanvasTabSelection(event) {
-  const documentId = parseInt(event.target.dataset.documentId);
-  if (event.target.checked) {
-    selectedCanvasTabs.add(documentId);
-  } else {
-    selectedCanvasTabs.delete(documentId);
-  }
-
-  updateBulkActionVisibility();
-}
-
 function updateBulkActionVisibility() {
   // Show/hide bulk actions for browser tabs
   if (selectedBrowserTabs.size > 0) {
@@ -2842,30 +2808,6 @@ function isUUID(str) {
   // UUID pattern: 8-4-4-4-12 hex chars with dashes
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidPattern.test(str);
-}
-
-// Utility to ensure workspace information is available
-async function ensureWorkspaceInfo() {
-  if (!currentConnection.workspace &&
-      (!currentConnection.context || (!currentConnection.context.workspaceName && !currentConnection.context.workspace))) {
-    console.log('No workspace info available, attempting to load...');
-    try {
-      const workspacesResponse = await sendMessageToBackground('GET_WORKSPACES');
-      if (workspacesResponse.success && workspacesResponse.workspaces && workspacesResponse.workspaces.length > 0) {
-        // Prefer "universe" workspace if available, otherwise use first workspace
-        let workspace = workspacesResponse.workspaces.find(ws => ws.name === 'universe');
-        if (!workspace) {
-          workspace = workspacesResponse.workspaces[0];
-        }
-        currentConnection.workspace = workspace;
-        console.log('Loaded workspace info (preferred universe):', workspace);
-        return workspace;
-      }
-    } catch (error) {
-      console.warn('Could not load workspace information:', error);
-    }
-  }
-  return currentConnection.workspace;
 }
 
 // Utility functions

@@ -31,6 +31,7 @@ export class SyncEngine {
   async initialize() {
     try {
       console.log('SyncEngine: Initializing...');
+      await tabManager.initialize();
 
       // Load sync settings
       const syncSettings = await browserStorage.getSyncSettings();
@@ -212,14 +213,24 @@ export class SyncEngine {
       case 'document.removed.batch':
       case 'tree.document.removed':
       case 'tree.document.removed.batch':
-        await this.handleRemoteDocumentRemoved(eventData, syncSettings);
+        await this.handleRemoteDocumentRemoved(eventData, syncSettings, {
+          mode,
+          currentContext,
+          currentWorkspace,
+          workspacePath
+        });
         break;
 
       case 'document.deleted':
       case 'document.deleted.batch':
       case 'tree.document.deleted':
       case 'tree.document.deleted.batch':
-        await this.handleRemoteDocumentDeleted(eventData, syncSettings);
+        await this.handleRemoteDocumentDeleted(eventData, syncSettings, {
+          mode,
+          currentContext,
+          currentWorkspace,
+          workspacePath
+        });
         break;
       }
     } catch (error) {
@@ -371,7 +382,7 @@ export class SyncEngine {
   }
 
   // Handle remote document removal
-  async handleRemoteDocumentRemoved(eventData, syncSettings) {
+  async handleRemoteDocumentRemoved(eventData, syncSettings, syncContext) {
     if (!syncSettings.closeTabsRemovedFromCanvas) {
       console.log('SyncEngine: Auto-close disabled, skipping remote removal');
       return;
@@ -415,18 +426,20 @@ export class SyncEngine {
         }
       } else if (documentIds.length > 0) {
         const trackedTabIds = tabManager.getTrackedTabIdsByDocumentIds(documentIds);
-        if (trackedTabIds.length === 0) {
-          console.log('SyncEngine: No tracked tabs found for removed document IDs');
+        if (trackedTabIds.length > 0) {
+          console.log('SyncEngine: Closing tracked tabs for removed document IDs:', trackedTabIds);
+          for (const tabId of trackedTabIds) {
+            await tabManager.closeTab(tabId);
+          }
           return;
         }
 
-        console.log('SyncEngine: Closing tracked tabs for removed document IDs:', trackedTabIds);
-        for (const tabId of trackedTabIds) {
-          await tabManager.closeTab(tabId);
-        }
+        console.log('SyncEngine: No tracked tabs found for removed document IDs, reconciling current state');
       } else {
-        console.log('SyncEngine: No URLs found in removal event, cannot close tabs');
+        console.log('SyncEngine: No URLs found in removal event, reconciling current state');
       }
+
+      await this.reconcileTrackedTabsWithCanvas(syncContext, syncSettings);
     } catch (error) {
       console.error('SyncEngine: Failed to handle document removal:', error);
     }
@@ -439,9 +452,77 @@ export class SyncEngine {
   }
 
   // Handle remote document deletion
-  async handleRemoteDocumentDeleted(eventData, syncSettings) {
+  async handleRemoteDocumentDeleted(eventData, syncSettings, syncContext) {
     // Same as removal for now
-    await this.handleRemoteDocumentRemoved(eventData, syncSettings);
+    await this.handleRemoteDocumentRemoved(eventData, syncSettings, syncContext);
+  }
+
+  async reconcileTrackedTabsWithCanvas(syncContext, syncSettings) {
+    try {
+      const documents = await this.fetchCurrentDocuments(syncContext, syncSettings);
+      if (!documents) return;
+
+      const activeDocumentIds = new Set(
+        documents
+          .map((document) => document?.id)
+          .filter((id) => id !== undefined && id !== null)
+          .map((id) => String(id))
+      );
+
+      const trackedTabs = tabManager.getTrackedTabs();
+      if (trackedTabs.length === 0) {
+        console.log('SyncEngine: No tracked tabs to reconcile');
+        return;
+      }
+
+      for (const trackedTab of trackedTabs) {
+        if (!trackedTab.documentId) continue;
+        if (activeDocumentIds.has(String(trackedTab.documentId))) continue;
+
+        if (!await tabManager.tabExists(trackedTab.tabId)) {
+          tabManager.unmarkTabAsSynced(trackedTab.tabId);
+          continue;
+        }
+
+        console.log('SyncEngine: Closing stale tracked tab:', trackedTab.tabId, trackedTab.documentId);
+        await tabManager.closeTab(trackedTab.tabId);
+      }
+    } catch (error) {
+      console.error('SyncEngine: Failed to reconcile tracked tabs:', error);
+    }
+  }
+
+  async fetchCurrentDocuments(syncContext, syncSettings) {
+    const { mode, currentContext, currentWorkspace, workspacePath } = syncContext || {};
+
+    if (mode === 'context' && currentContext?.id) {
+      const response = await apiClient.getContextDocuments(currentContext.id, ['data/abstraction/tab']);
+      if (response.status !== 'success') {
+        console.log('SyncEngine: Failed to fetch current context documents for reconciliation:', response);
+        return null;
+      }
+      return response.payload || [];
+    }
+
+    if (mode === 'explorer' && currentWorkspace) {
+      const wsId = currentWorkspace.name || currentWorkspace.id;
+      if (!wsId) return null;
+
+      const featureArray = ['data/abstraction/tab'];
+      if (this.isBrowserScopedSyncEnabled(syncSettings)) {
+        const browserIdentity = await browserStorage.getBrowserIdentity();
+        if (browserIdentity) featureArray.push(`tag/${browserIdentity}`);
+      }
+
+      const response = await apiClient.getWorkspaceDocuments(wsId, workspacePath || '/', featureArray);
+      if (response.status !== 'success') {
+        console.log('SyncEngine: Failed to fetch current workspace documents for reconciliation:', response);
+        return null;
+      }
+      return response.payload || [];
+    }
+
+    return null;
   }
 
   // Check if an event is relevant to our current context/workspace
@@ -859,22 +940,6 @@ export class SyncEngine {
       this.syncInProgress = false;
     }
   }
-
-
-
-  // Handle tab removal
-  async handleTabRemoved(tabId) {
-    try {
-      console.log('SyncEngine: Handling tab removal:', tabId);
-
-      // Clean up tracking
-      tabManager.unmarkTabAsSynced(tabId);
-
-    } catch (error) {
-      console.error('SyncEngine: Failed to handle tab removal:', error);
-    }
-  }
-
   // Handle context change
   async handleContextChange(oldContextId, newContextId) {
     try {

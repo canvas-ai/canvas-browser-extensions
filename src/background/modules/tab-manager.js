@@ -1,15 +1,113 @@
 // Tab Manager module for Canvas Extension
 // Handles browser tab operations and Canvas document conversion
 
+import { browserStorage } from './browser-storage.js';
+
 export class TabManager {
   constructor() {
     this.trackedTabs = new Map(); // tabId -> tab data
     this.syncedTabs = new Set(); // tabIds that are synced to Canvas
     this.pendingCanvasTabs = new Set(); // URLs of tabs being opened from Canvas (to prevent auto-sync race conditions)
+    this.initialized = false;
+    this.initializePromise = null;
+    this.persistTrackedTabsTimer = null;
 
     // Browser compatibility
     this.tabsAPI = (typeof chrome !== 'undefined') ? chrome.tabs : browser.tabs;
     this.windowsAPI = (typeof chrome !== 'undefined') ? chrome.windows : browser.windows;
+  }
+
+  async initialize() {
+    if (this.initialized) return true;
+    if (!this.initializePromise) {
+      this.initializePromise = this.restoreTrackedTabs();
+    }
+
+    await this.initializePromise;
+    return true;
+  }
+
+  async restoreTrackedTabs() {
+    try {
+      const storedTrackedTabs = await browserStorage.getTrackedCanvasTabs();
+      const syncSettings = await browserStorage.getSyncSettings();
+      const allTabs = await this.getAllTabs();
+
+      const activeTabsById = new Map(allTabs.map((tab) => [String(tab.id), tab]));
+      const activeTabsByUrl = new Map();
+      for (const tab of allTabs) {
+        if (!this.shouldSyncTab(tab)) continue;
+        const key = normalizeTabUrl(tab.url, syncSettings);
+        const tabsForUrl = activeTabsByUrl.get(key) || [];
+        tabsForUrl.push(tab);
+        activeTabsByUrl.set(key, tabsForUrl);
+      }
+
+      const restoredTabs = new Map(this.trackedTabs);
+      const claimedTabIds = new Set([...restoredTabs.keys()].map((tabId) => String(tabId)));
+      const trackedItems = Array.isArray(storedTrackedTabs) ? storedTrackedTabs : [];
+
+      for (const item of trackedItems) {
+        const documentId = item?.documentId;
+        const storedUrl = typeof item?.url === 'string' && item.url ? normalizeTabUrl(item.url, syncSettings) : null;
+        if (documentId === undefined || documentId === null || !storedUrl) continue;
+
+        let matchedTab = null;
+        const storedTabId = item?.tabId;
+        if (storedTabId !== undefined && storedTabId !== null) {
+          const candidate = activeTabsById.get(String(storedTabId));
+          const candidateUrl = candidate?.url ? normalizeTabUrl(candidate.url, syncSettings) : null;
+          if (candidate && candidateUrl === storedUrl && !claimedTabIds.has(String(candidate.id))) {
+            matchedTab = candidate;
+          }
+        }
+
+        if (!matchedTab) {
+          const tabsForUrl = activeTabsByUrl.get(storedUrl) || [];
+          matchedTab = tabsForUrl.find((tab) => !claimedTabIds.has(String(tab.id))) || null;
+        }
+
+        if (!matchedTab) continue;
+
+        restoredTabs.set(matchedTab.id, {
+          documentId: String(documentId),
+          url: storedUrl
+        });
+        claimedTabIds.add(String(matchedTab.id));
+      }
+
+      this.trackedTabs = restoredTabs;
+      this.syncedTabs = new Set(restoredTabs.keys());
+      this.initialized = true;
+      await this.persistTrackedTabsNow();
+      console.log(`TabManager: Restored ${restoredTabs.size} tracked Canvas tab mappings`);
+    } catch (error) {
+      console.error('TabManager: Failed to restore tracked tabs:', error);
+      this.initialized = true;
+    } finally {
+      this.initializePromise = null;
+    }
+  }
+
+  schedulePersistTrackedTabs() {
+    clearTimeout(this.persistTrackedTabsTimer);
+    this.persistTrackedTabsTimer = setTimeout(() => {
+      void this.persistTrackedTabsNow();
+    }, 50);
+  }
+
+  async persistTrackedTabsNow() {
+    try {
+      const trackedTabs = Array.from(this.trackedTabs.entries()).map(([tabId, tabData]) => ({
+        tabId,
+        documentId: tabData?.documentId != null ? String(tabData.documentId) : null,
+        url: tabData?.url || null
+      })).filter((item) => item.documentId && item.url);
+
+      await browserStorage.setTrackedCanvasTabs(trackedTabs);
+    } catch (error) {
+      console.error('TabManager: Failed to persist tracked tabs:', error);
+    }
   }
 
   // Convert browser tab to Canvas document format (based on PAYLOAD.md format)
@@ -225,18 +323,20 @@ export class TabManager {
 
   // Get unsynced tabs
   async getUnsyncedTabs() {
+    await this.initialize();
     const syncableTabs = await this.getSyncableTabs();
     return syncableTabs.filter(tab => !this.syncedTabs.has(tab.id));
   }
 
   // Track tab as synced
-  markTabAsSynced(tabId, documentId = null) {
+  markTabAsSynced(tabId, documentId = null, url = null) {
     this.syncedTabs.add(tabId);
-    if (documentId) {
-      // Store mapping for future reference
-      const tabData = this.trackedTabs.get(tabId) || {};
-      tabData.documentId = documentId;
+    const tabData = this.trackedTabs.get(tabId) || {};
+    if (documentId !== undefined && documentId !== null) tabData.documentId = String(documentId);
+    if (url) tabData.url = url;
+    if (Object.keys(tabData).length > 0) {
       this.trackedTabs.set(tabId, tabData);
+      this.schedulePersistTrackedTabs();
     }
   }
 
@@ -244,6 +344,7 @@ export class TabManager {
   unmarkTabAsSynced(tabId) {
     this.syncedTabs.delete(tabId);
     this.trackedTabs.delete(tabId);
+    this.schedulePersistTrackedTabs();
   }
 
   // Check if tab is synced
@@ -345,7 +446,7 @@ export class TabManager {
     try {
       await this.tabsAPI.get(tabId);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -355,13 +456,41 @@ export class TabManager {
     return this.trackedTabs.get(tabId);
   }
 
+  getTrackedTabs() {
+    return Array.from(this.trackedTabs.entries(), ([tabId, tabData]) => ({ tabId, ...tabData }));
+  }
+
+  async getDebugSnapshot() {
+    await this.initialize();
+    const allTabs = await this.getAllTabs();
+    const syncableTabs = allTabs.filter((tab) => this.shouldSyncTab(tab));
+
+    return {
+      initialized: this.initialized,
+      trackedTabs: this.getTrackedTabs(),
+      syncedTabIds: Array.from(this.syncedTabs),
+      syncableTabs: syncableTabs.map((tab) => ({
+        id: tab.id,
+        windowId: tab.windowId,
+        url: tab.url,
+        title: tab.title,
+        pinned: tab.pinned,
+        active: tab.active
+      }))
+    };
+  }
+
   getTrackedTabIdsByDocumentIds(documentIds = []) {
-    const wanted = new Set((Array.isArray(documentIds) ? documentIds : [documentIds]).filter((id) => id !== undefined && id !== null));
+    const wanted = new Set(
+      (Array.isArray(documentIds) ? documentIds : [documentIds])
+        .filter((id) => id !== undefined && id !== null)
+        .map((id) => String(id))
+    );
     if (wanted.size === 0) return [];
 
     const matches = [];
     for (const [tabId, tabData] of this.trackedTabs.entries()) {
-      if (wanted.has(tabData?.documentId)) {
+      if (wanted.has(String(tabData?.documentId))) {
         matches.push(tabId);
       }
     }
@@ -418,7 +547,7 @@ export class TabManager {
           canvasDoc: canvasDocsByUrl.get(url)
         });
         // Mark as synced in our tracking
-        this.markTabAsSynced(tab.id, canvasDocsByUrl.get(url).id);
+        this.markTabAsSynced(tab.id, canvasDocsByUrl.get(url).id, canvasDocsByUrl.get(url).data?.url);
       }
     });
 
@@ -443,22 +572,6 @@ export class TabManager {
     const browserTabs = await this.getSyncableTabs();
     const comparison = this.compareWithCanvasDocuments(browserTabs, canvasDocuments, syncSettings);
     return comparison.browserToCanvas;
-  }
-
-  // Get Canvas documents that should be opened in browser
-  getDocumentsToOpen(canvasDocuments = []) {
-    // This would typically be called after compareWithCanvasDocuments
-    // For now, return all Canvas tab documents not currently tracked
-    return canvasDocuments.filter(doc => {
-      if (doc.schema !== 'data/abstraction/tab' || !doc.data?.url) return false;
-
-      // Check if any browser tab has this URL
-      const hasOpenTab = [...this.trackedTabs.values()].some(tabData =>
-        tabData.url === doc.data.url
-      );
-
-      return !hasOpenTab;
-    });
   }
 
   // Sync a browser tab to Canvas
@@ -504,7 +617,7 @@ export class TabManager {
         const documentId = Array.isArray(response.payload) ? response.payload[0] : response.payload;
 
         // Mark tab as synced
-        this.markTabAsSynced(tab.id, documentId);
+        this.markTabAsSynced(tab.id, documentId, document.data?.url);
 
         console.log(`Tab synced successfully: ${tab.title}`);
         return {
@@ -546,7 +659,7 @@ export class TabManager {
           await this.windowsAPI.update(existingTab.windowId, { focused: true });
 
           // Mark as synced and remove from pending
-          this.markTabAsSynced(existingTab.id, canvasDoc.id);
+          this.markTabAsSynced(existingTab.id, canvasDoc.id, canvasDoc.data?.url);
 
           return {
             success: true,
@@ -575,7 +688,7 @@ export class TabManager {
         }
 
         // Mark as synced immediately to prevent auto-sync
-        this.markTabAsSynced(tab.id, canvasDoc.id);
+        this.markTabAsSynced(tab.id, canvasDoc.id, canvasDoc.data?.url);
 
         console.log(`Canvas document opened successfully: ${canvasDoc.data.title}`);
         return {
@@ -647,7 +760,7 @@ export class TabManager {
         const documentIds = Array.isArray(response.payload) ? response.payload : [response.payload];
         syncableTabs.forEach((tab, index) => {
           const documentId = documentIds[index] || documentIds[0]; // Fallback to first ID if array mismatch
-          this.markTabAsSynced(tab.id, documentId);
+          this.markTabAsSynced(tab.id, documentId, documents[index]?.data?.url);
           console.log(`✅ TabManager.syncMultipleTabs: Marked tab ${tab.id} as synced with document ${documentId}`);
         });
 

@@ -26,6 +26,7 @@ export class BrowserStorage {
       WORKSPACE_PATH: 'canvasWorkspacePath',
       SYNC_SETTINGS: 'canvasSyncSettings',
       BROWSER_IDENTITY: 'canvasBrowserIdentity',
+      TRACKED_CANVAS_TABS: 'canvasTrackedCanvasTabs',
       PINNED_TABS: 'canvasPinnedTabs',
       USER_INFO: 'canvasUserInfo',
       RECENT_DESTINATIONS: 'canvasRecentDestinations'
@@ -52,6 +53,7 @@ export class BrowserStorage {
       [this.KEYS.CURRENT_CONTEXT]: null,
       [this.KEYS.CURRENT_WORKSPACE]: null, // { id, name, label, path }
       [this.KEYS.BROWSER_IDENTITY]: '',
+      [this.KEYS.TRACKED_CANVAS_TABS]: [],
       // Stored as array in browser storage (Set can't be serialized)
       [this.KEYS.PINNED_TABS]: [],
       [this.KEYS.USER_INFO]: null, // { id, name, email, userType, status }
@@ -194,6 +196,16 @@ export class BrowserStorage {
     const current = await this.getSyncSettings();
     const updated = { ...current, ...settings };
     return await this.set(this.KEYS.SYNC_SETTINGS, updated);
+  }
+
+  async getTrackedCanvasTabs() {
+    const trackedTabs = await this.get(this.KEYS.TRACKED_CANVAS_TABS);
+    return Array.isArray(trackedTabs) ? trackedTabs : [];
+  }
+
+  async setTrackedCanvasTabs(trackedTabs) {
+    const items = Array.isArray(trackedTabs) ? trackedTabs : [];
+    return await this.set(this.KEYS.TRACKED_CANVAS_TABS, items);
   }
 
   // Browser Identity

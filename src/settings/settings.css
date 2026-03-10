@@ -192,6 +192,25 @@ body {
   color: #71717a;
 }
 
+.debug-panel {
+  margin-top: 16px;
+}
+
+.debug-output {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background-color: #0a0a0a;
+  color: #f4f4f5;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 480px;
+}
+
 .user-info {
   margin-top: 12px;
   padding: 12px;

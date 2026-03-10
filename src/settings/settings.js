@@ -5,7 +5,7 @@
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let deviceId, deviceToken;
 let testConnectionBtn, connectBtn, disconnectBtn;
-let connectionStatus, statusDot, statusText, statusDetails;
+let statusDot, statusText, statusDetails;
 let userInfo, userName, userServer;
 let syncModeSection, syncModeSelect;
 let explorerSettings, workspaceSelect;
@@ -15,17 +15,17 @@ let openTabsAddedToCanvas, closeTabsRemovedFromCanvas, sendNewTabsToCanvas, remo
 let removeUtmParameters;
 let syncOnlyCurrentBrowser, syncOnlyTaggedTabs, syncTagFilter;
 let saveSettingsBtn, saveAndCloseBtn, resetSettingsBtn;
+let refreshTabSyncDebugBtn, copyTabSyncDebugBtn, tabSyncDebugSummary, tabSyncDebugOutput;
 let toast;
 
 // State
 let isConnected = false;
 let isBoundToContext = false;
-const currentUser = null;
 let availableContexts = [];
 let availableWorkspaces = [];
 let settings = {};
-let git  = false;
 let currentMode = 'explorer';
+let lastTabSyncDebug = null;
 
 // Initialize settings page
 document.addEventListener('DOMContentLoaded', async () => {
@@ -39,11 +39,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (version && versionEl) {
       versionEl.textContent = `Version ${version}`;
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
   await loadSettings();
   await checkInitialConnection();
+  await refreshTabSyncDebug();
 });
 
 function initializeElements() {
@@ -62,7 +63,6 @@ function initializeElements() {
   disconnectBtn = document.getElementById('disconnectBtn');
 
   // Connection status
-  connectionStatus = document.getElementById('connectionStatus');
   statusDot = document.getElementById('statusDot');
   statusText = document.getElementById('statusText');
   statusDetails = document.getElementById('statusDetails');
@@ -98,6 +98,10 @@ function initializeElements() {
   saveSettingsBtn = document.getElementById('saveSettingsBtn');
   saveAndCloseBtn = document.getElementById('saveAndCloseBtn');
   resetSettingsBtn = document.getElementById('resetSettingsBtn');
+  refreshTabSyncDebugBtn = document.getElementById('refreshTabSyncDebugBtn');
+  copyTabSyncDebugBtn = document.getElementById('copyTabSyncDebugBtn');
+  tabSyncDebugSummary = document.getElementById('tabSyncDebugSummary');
+  tabSyncDebugOutput = document.getElementById('tabSyncDebugOutput');
 
   // Toast
   toast = document.getElementById('toast');
@@ -134,6 +138,8 @@ function setupEventListeners() {
   saveSettingsBtn.addEventListener('click', handleSaveSettings);
   saveAndCloseBtn.addEventListener('click', handleSaveAndClose);
   resetSettingsBtn.addEventListener('click', handleResetSettings);
+  refreshTabSyncDebugBtn.addEventListener('click', refreshTabSyncDebug);
+  copyTabSyncDebugBtn.addEventListener('click', copyTabSyncDebug);
 
   // Auto-generate browser identity if empty
   browserIdentity.addEventListener('blur', handleBrowserIdentityBlur);
@@ -868,7 +874,7 @@ function updateConnectionStatus(connected) {
         try {
           const url = new URL(serverUrlValue);
           displayServerUrl = url.hostname + (url.port ? ':' + url.port : '');
-        } catch (e) {
+        } catch {
           // If URL parsing fails, use the original value
           displayServerUrl = serverUrlValue.replace(/^https?:\/\//, '');
         }
@@ -907,6 +913,53 @@ function setButtonLoading(button, loading) {
   } else {
     button.disabled = false;
     button.textContent = button.dataset.originalText;
+  }
+}
+
+async function refreshTabSyncDebug() {
+  try {
+    setButtonLoading(refreshTabSyncDebugBtn, true);
+    const response = await sendMessageToBackground('GET_TAB_SYNC_DEBUG');
+    if (!response?.success) {
+      throw new Error(response?.error || 'Failed to load debug state');
+    }
+
+    lastTabSyncDebug = response.debug;
+    renderTabSyncDebug(response.debug);
+  } catch (error) {
+    lastTabSyncDebug = null;
+    tabSyncDebugSummary.textContent = `Failed to load debug state: ${error.message}`;
+    tabSyncDebugOutput.textContent = '';
+    showToast(`Failed to load debug state: ${error.message}`, 'error');
+  } finally {
+    setButtonLoading(refreshTabSyncDebugBtn, false);
+  }
+}
+
+function renderTabSyncDebug(debug) {
+  const trackedCount = debug?.live?.trackedTabs?.length || 0;
+  const persistedCount = debug?.persistedTrackedTabs?.length || 0;
+  const syncableCount = debug?.live?.syncableTabs?.length || 0;
+  const socketState = debug?.websocket?.state || 'unknown';
+  const scope = debug?.mode === 'context'
+    ? (debug?.selection?.context?.id || 'none')
+    : `${debug?.selection?.workspace?.name || debug?.selection?.workspace?.id || 'none'} @ ${debug?.selection?.workspacePath || '/'}`;
+
+  tabSyncDebugSummary.textContent = `Mode: ${debug?.mode || 'unknown'} | Scope: ${scope} | Socket: ${socketState} | Persisted mappings: ${persistedCount} | Live mappings: ${trackedCount} | Syncable tabs: ${syncableCount}`;
+  tabSyncDebugOutput.textContent = JSON.stringify(debug, null, 2);
+}
+
+async function copyTabSyncDebug() {
+  try {
+    if (!lastTabSyncDebug) {
+      await refreshTabSyncDebug();
+      if (!lastTabSyncDebug) return;
+    }
+
+    await navigator.clipboard.writeText(JSON.stringify(lastTabSyncDebug, null, 2));
+    showToast('Debug JSON copied to clipboard', 'success');
+  } catch (error) {
+    showToast(`Failed to copy debug JSON: ${error.message}`, 'error');
   }
 }
 
@@ -990,6 +1043,16 @@ function setupStorageListeners() {
           currentMode = newMode;
           if (syncModeSelect) syncModeSelect.value = newMode;
           updateModeVisibility(newMode);
+        }
+
+        if (
+          changes.canvasTrackedCanvasTabs ||
+          changes.canvasSyncMode ||
+          changes.canvasCurrentContext ||
+          changes.canvasCurrentWorkspace ||
+          changes.canvasWorkspacePath
+        ) {
+          void refreshTabSyncDebug();
         }
       }
     });
