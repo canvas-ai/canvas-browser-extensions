@@ -23,8 +23,7 @@
 
   "background": {
     "service_worker": "service-worker.js",
-    "type": "module",
-    "scripts": ["service-worker.js"]
+    "type": "module"
   },
 
   "action": {
