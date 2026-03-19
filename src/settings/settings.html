@@ -26,9 +26,9 @@
 
         <div class="form-group">
           <label for="browserIdentity">Browser Identity</label>
-          <input type="text" id="browserIdentity" placeholder="e.g., firefox@linux, chrome@mac"
+          <input type="text" id="browserIdentity" placeholder="e.g., firefox, chrome, edge"
                  class="input-field" required>
-          <small class="help-text">Auto-detected as browser@os. Change to distinguish multiple installs on the same OS.</small>
+          <small class="help-text">Defaults to the browser name only. No random suffixes, because we are not feral.</small>
         </div>
 
         <div class="form-group">
@@ -52,24 +52,43 @@
           <small class="help-text">Generate this token from the Canvas web interface</small>
         </div>
 
-        <details class="form-group" style="margin-top: 12px;">
-          <summary style="cursor: pointer;">Advanced: Device token (optional)</summary>
-          <div style="margin-top: 12px;">
-            <div class="form-group">
-              <label for="deviceId">Device ID</label>
-              <input type="text" id="deviceId" placeholder="auto"
-                     class="input-field">
-              <small class="help-text">Leave blank to auto-manage (recommended)</small>
-            </div>
+        <div class="form-group">
+          <label for="deviceSelect">Assigned Device</label>
+          <select id="deviceSelect" class="input-field" disabled>
+            <option value="">Connect first to load devices...</option>
+          </select>
+          <small class="help-text" id="deviceSelectionHelp">Pick an existing registered device for this browser instance.</small>
+        </div>
 
-            <div class="form-group">
-              <label for="deviceToken">Device Token</label>
-              <input type="password" id="deviceToken" placeholder="auto (canvas-...)"
-                     class="input-field">
-              <small class="help-text">Leave blank and the extension will register a device token automatically</small>
-            </div>
+        <div class="connection-status" id="deviceRegistrationSection" style="display: none;">
+          <div class="status-text" style="margin-bottom: 8px;">Register Browser Device</div>
+          <div class="status-details" style="margin-bottom: 16px;">No registered devices found for this user yet. Create one first.</div>
+
+          <div class="form-group">
+            <label for="newDeviceName">Device Name</label>
+            <input type="text" id="newDeviceName" placeholder="e.g., Firefox on Work Laptop"
+                   class="input-field">
           </div>
-        </details>
+
+          <div class="form-group">
+            <label for="newDevicePlatform">Operating System</label>
+            <select id="newDevicePlatform" class="input-field">
+              <option value="">Select OS...</option>
+              <option value="windows">Windows</option>
+              <option value="mac">macOS</option>
+              <option value="linux">Linux</option>
+              <option value="android">Android</option>
+              <option value="ios">iOS</option>
+              <option value="unknown">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="newDeviceDescription">Description</label>
+            <input type="text" id="newDeviceDescription" placeholder="Optional"
+                   class="input-field">
+          </div>
+        </div>
 
         <div class="form-actions">
           <button type="button" id="testConnectionBtn" class="btn secondary">Test Connection</button>

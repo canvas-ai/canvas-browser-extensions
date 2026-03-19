@@ -229,15 +229,7 @@ export class BrowserStorage {
     else if (ua.includes('Edg/') || ua.includes('Edg ')) browserName = 'edge';
     else if (ua.includes('Chrome')) browserName = 'chrome';
     else if (ua.includes('Safari')) browserName = 'safari';
-
-    let os = 'unknown';
-    if (ua.includes('Android')) os = 'android';
-    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'ios';
-    else if (ua.includes('Linux')) os = 'linux';
-    else if (ua.includes('Mac OS X') || ua.includes('Macintosh')) os = 'mac';
-    else if (ua.includes('Windows')) os = 'windows';
-
-    return `${browserName}@${os}`;
+    return browserName;
   }
 
   // Pinned Tabs Management

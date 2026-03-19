@@ -345,6 +345,34 @@ function scheduleRefreshTabLists() {
   refreshTabsDebounce = setTimeout(refreshTabLists, 250);
 }
 
+async function ensureApiClientReady(override = null) {
+  const connectionSettings = override?.serverUrl
+    ? {
+      serverUrl: override.serverUrl,
+      apiBasePath: override.apiBasePath || '/rest/v2',
+      apiToken: override.apiToken || ''
+    }
+    : await browserStorage.getConnectionSettings();
+  if (!connectionSettings.apiToken || !connectionSettings.serverUrl) {
+    throw new Error('Not connected to Canvas server - missing credentials');
+  }
+
+  const nextServerUrl = connectionSettings.serverUrl.replace(/\/$/, '');
+  if (
+    apiClient.baseUrl !== nextServerUrl ||
+    apiClient.apiBasePath !== connectionSettings.apiBasePath ||
+    apiClient.apiToken !== connectionSettings.apiToken
+  ) {
+    apiClient.initialize(
+      connectionSettings.serverUrl,
+      connectionSettings.apiBasePath,
+      connectionSettings.apiToken
+    );
+  }
+
+  return connectionSettings;
+}
+
 // Tab event listeners for synchronization
 tabsAPI.onCreated.addListener(async (tab) => {
   console.log('🆕 TAB EVENT: Tab created detected!', tab.id, tab.url);
@@ -710,6 +738,14 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     run(handleGetConnectionSettings(message.data, respond));
     return true;
 
+  case 'GET_REGISTERED_DEVICES':
+    run(handleGetRegisteredDevices(message.data, respond));
+    return true;
+
+  case 'ASSIGN_BROWSER_DEVICE':
+    run(handleAssignBrowserDevice(message.data, respond));
+    return true;
+
   case 'GET_MODE_AND_SELECTION':
     // Get current sync mode and selection (context/workspace)
     run(handleGetModeAndSelection(respond));
@@ -803,6 +839,7 @@ async function handleGetConnectionStatus(sendResponse) {
     const connectionSettings = await browserStorage.getConnectionSettings();
     const currentContext = await browserStorage.getCurrentContext();
     const userInfo = await browserStorage.getUserInfo();
+    const browserIdentity = await browserStorage.getBrowserIdentity();
     const mode = await browserStorage.getSyncMode();
     const workspace = await browserStorage.getCurrentWorkspace();
     const workspacePath = await browserStorage.getWorkspacePath();
@@ -815,6 +852,7 @@ async function handleGetConnectionStatus(sendResponse) {
       connected: connectionSettings.connected || false,
       context: currentContext,
       settings: connectionSettings,
+      browserIdentity,
       user: userInfo,
       mode: mode || 'explorer',
       workspace,
@@ -931,6 +969,14 @@ async function handleConnect(data, sendResponse) {
       await browserStorage.setWorkspacePath('/');
       await browserStorage.setSyncMode('explorer');
       await browserStorage.setUserInfo(null);
+      await browserStorage.setConnectionSettings({
+        deviceId: '',
+        deviceToken: '',
+        deviceName: '',
+        devicePlatform: '',
+        deviceDescription: '',
+        deviceType: ''
+      });
     }
 
 
@@ -949,6 +995,12 @@ async function handleConnect(data, sendResponse) {
       serverUrl: data.serverUrl,
       apiBasePath: data.apiBasePath,
       apiToken: data.apiToken,
+      deviceId: previousConnection?.deviceId || '',
+      deviceToken: previousConnection?.deviceToken || '',
+      deviceName: previousConnection?.deviceName || '',
+      devicePlatform: previousConnection?.devicePlatform || '',
+      deviceDescription: previousConnection?.deviceDescription || '',
+      deviceType: previousConnection?.deviceType || '',
       connected: true
     };
 
@@ -1587,6 +1639,69 @@ async function handleGetConnectionSettings(data, sendResponse) {
   }
 }
 
+async function handleGetRegisteredDevices(data, sendResponse) {
+  try {
+    await ensureApiClientReady(data);
+    const response = await apiClient.get('/auth/devices');
+    const devices = apiClient.parseResponsePayload(response);
+    sendResponse({
+      success: true,
+      devices: Array.isArray(devices) ? devices : []
+    });
+  } catch (error) {
+    console.error('Failed to get registered devices:', error);
+    sendResponse({
+      success: false,
+      devices: [],
+      error: error.message
+    });
+  }
+}
+
+async function handleAssignBrowserDevice(data, sendResponse) {
+  try {
+    if (!data?.browserIdentity) {
+      throw new Error('Browser identity is required');
+    }
+
+    await ensureApiClientReady(data);
+
+    const profile = apiClient.buildBrowserDeviceProfile(data.browserIdentity);
+    const payload = {
+      ...profile,
+      type: 'browser'
+    };
+
+    if (data.deviceId) {
+      payload.deviceId = String(data.deviceId).trim();
+      payload.name = String(data.deviceName || profile.name).trim() || profile.name;
+      payload.platform = String(data.devicePlatform || profile.platform || '').trim() || profile.platform;
+      if (data.deviceDescription !== undefined) payload.description = String(data.deviceDescription || '').trim() || undefined;
+    } else {
+      const name = String(data.deviceName || '').trim();
+      const platform = String(data.devicePlatform || '').trim();
+      if (!name) throw new Error('Device name is required');
+      if (!platform) throw new Error('Device OS is required');
+      payload.name = name;
+      payload.platform = platform;
+      payload.description = String(data.deviceDescription || '').trim() || undefined;
+    }
+
+    const response = await apiClient.post('/auth/devices/register', payload);
+    const device = apiClient.parseResponsePayload(response);
+    sendResponse({
+      success: true,
+      device
+    });
+  } catch (error) {
+    console.error('Failed to assign browser device:', error);
+    sendResponse({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
 async function handleRemoveFromContext(data, sendResponse) {
   try {
     // Delegate to handleRemoveCanvasDocument for consistent behavior
@@ -1968,7 +2083,7 @@ async function handleSyncTab(data, sendResponse) {
     const workspacePath = await browserStorage.getWorkspacePath();
 
     // Get connection settings
-    const connectionSettings = await browserStorage.getConnectionSettings();
+    const connectionSettings = await ensureApiClientReady();
     console.log('Sync Tab: connection settings check:', connectionSettings);
 
     // Get sync settings
@@ -1986,15 +2101,6 @@ async function handleSyncTab(data, sendResponse) {
 
     // Get browser identity
     const browserIdentity = await browserStorage.getBrowserIdentity();
-
-    // Initialize API client if needed
-    if (!apiClient.apiToken) {
-      apiClient.initialize(
-        connectionSettings.serverUrl,
-        connectionSettings.apiBasePath,
-        connectionSettings.apiToken
-      );
-    }
 
     // Sync the tab
     let result;
@@ -2079,7 +2185,7 @@ async function handleSyncMultipleTabs(data, sendResponse) {
     }
 
     // Get connection settings
-    const connectionSettings = await browserStorage.getConnectionSettings();
+    const connectionSettings = await ensureApiClientReady();
     console.log('🔧 Connection settings:', connectionSettings);
 
     // Get sync settings
@@ -2097,16 +2203,6 @@ async function handleSyncMultipleTabs(data, sendResponse) {
     const browserIdentity = await browserStorage.getBrowserIdentity();
     console.log('🔧 Browser identity:', browserIdentity);
 
-    // Initialize API client if needed
-    if (!apiClient.apiToken) {
-      console.log('🔧 Initializing API client...');
-      apiClient.initialize(
-        connectionSettings.serverUrl,
-        connectionSettings.apiBasePath,
-        connectionSettings.apiToken
-      );
-    }
-
     let result;
     if (mode === 'context' && !contextSpec) {
       console.log('🔧 Calling tabManager.syncMultipleTabs (context mode)...');
@@ -2123,7 +2219,11 @@ async function handleSyncMultipleTabs(data, sendResponse) {
       const docs = tabs.map(tab => tabManager.convertTabToDocument(tab, browserIdentity, syncSettings));
       const resp = await apiClient.insertWorkspaceDocuments(wsId, docs, contextSpec || workspacePath || '/', docs[0]?.featureArray || []);
       if (resp.status === 'success') {
-        result = { success: true, total: tabs.length, successful: tabs.length, failed: 0 };
+        const documentIds = Array.isArray(resp.payload) ? resp.payload : [resp.payload];
+        tabs.forEach((tab, index) => {
+          tabManager.markTabAsSynced(tab.id, documentIds[index] ?? documentIds[0], docs[index]?.data?.url);
+        });
+        result = { success: true, total: tabs.length, successful: tabs.length, failed: 0, documentIds };
       } else {
         result = { success: false, error: resp.message || 'Batch sync failed' };
       }
@@ -2714,6 +2814,8 @@ if (contextMenusAPI && contextMenusAPI.onClicked) {
         console.log('Context menu blocked on extension page:', tab.url);
         return;
       }
+
+      await ensureApiClientReady();
 
       // Handle "close tab after send" prefix
       let closeAfterSend = false;

@@ -88,6 +88,42 @@ export class CanvasApiClient {
     return !!(syncSettings?.syncOnlyCurrentBrowser || syncSettings?.syncOnlyThisBrowser);
   }
 
+  parseResponsePayload(response) {
+    return response?.payload || response?.data || response;
+  }
+
+  getBrowserPlatform() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.userAgentData?.platform || navigator.platform || '';
+    const value = `${platform} ${ua}`.toLowerCase();
+
+    if (value.includes('win')) return 'windows';
+    if (value.includes('mac')) return 'mac';
+    if (value.includes('linux')) return 'linux';
+    if (value.includes('android')) return 'android';
+    if (value.includes('iphone') || value.includes('ipad') || value.includes('ios')) return 'ios';
+    return platform || 'unknown';
+  }
+
+  getBrowserArch() {
+    const arch = navigator.userAgentData?.architecture;
+    return typeof arch === 'string' && arch.trim() ? arch.trim() : undefined;
+  }
+
+  buildBrowserDeviceProfile(identity) {
+    const browserName = String(identity || 'browser').trim() || 'browser';
+    const platform = this.getBrowserPlatform();
+
+    return {
+      name: browserName,
+      hostname: browserName,
+      description: `Canvas browser extension (${platform})`,
+      platform,
+      arch: this.getBrowserArch(),
+      type: 'browser'
+    };
+  }
+
   async ensureWorkspaceStarted(workspaceNameOrId) {
     const workspaceKey = encodeURIComponent(workspaceNameOrId);
     if (this.startedWorkspaces.has(workspaceKey)) return;
@@ -111,30 +147,23 @@ export class CanvasApiClient {
     }
 
     if (!this.userToken) throw new Error('No user token available to register device');
+    if (!storedId) throw new Error('No device assigned to this browser. Pick or register a device in extension settings.');
 
     this.deviceTokenPromise = (async () => {
       const identity = await browserStorage.getBrowserIdentity();
-      const payload = {
-        name: identity || 'browser',
-        hostname: identity || 'browser',
-        type: 'browser'
+      const profile = {
+        ...this.buildBrowserDeviceProfile(identity),
+        name: String(settings?.deviceName || '').trim() || String(settings?.browserIdentity || identity || 'browser').trim() || 'browser',
+        description: settings?.deviceDescription || undefined,
+        platform: settings?.devicePlatform || this.getBrowserPlatform(),
+        type: settings?.deviceType || 'browser'
       };
 
-      const url = `${this.baseUrl}${this.apiBasePath}/auth/devices/register`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-App-Name': this.appKey,
-          'Authorization': `Bearer ${this.userToken}`
-        },
-        body: JSON.stringify(payload)
+      const data = await this.post('/auth/devices/register', {
+        ...profile,
+        deviceId: String(storedId).trim()
       });
-
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      const data = await resp.json();
-      const body = data?.payload || data?.data || data;
+      const body = this.parseResponsePayload(data);
       const token = body?.token;
       const deviceId = body?.deviceId;
       if (!token) throw new Error('Device registration did not return a device token');
@@ -145,6 +174,10 @@ export class CanvasApiClient {
       await browserStorage.setConnectionSettings({
         deviceToken: this.deviceToken,
         deviceId: this.deviceId,
+        deviceName: body?.name || profile.name,
+        devicePlatform: body?.platform || profile.platform,
+        deviceDescription: body?.description || profile.description,
+        deviceType: body?.type || profile.type,
         deviceTokenServerUrl: this.baseUrl
       });
 

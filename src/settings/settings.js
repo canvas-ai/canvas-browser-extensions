@@ -3,7 +3,8 @@
 
 // DOM elements
 let browserIdentity, serverUrl, apiBasePath, apiToken;
-let deviceId, deviceToken;
+let deviceSelect, deviceSelectionHelp, deviceRegistrationSection;
+let newDeviceName, newDevicePlatform, newDeviceDescription;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let statusDot, statusText, statusDetails;
 let userInfo, userName, userServer;
@@ -23,6 +24,7 @@ let isConnected = false;
 let isBoundToContext = false;
 let availableContexts = [];
 let availableWorkspaces = [];
+let availableDevices = [];
 let settings = {};
 let currentMode = 'explorer';
 let lastTabSyncDebug = null;
@@ -53,8 +55,12 @@ function initializeElements() {
   serverUrl = document.getElementById('serverUrl');
   apiBasePath = document.getElementById('apiBasePath');
   apiToken = document.getElementById('apiToken');
-  deviceId = document.getElementById('deviceId');
-  deviceToken = document.getElementById('deviceToken');
+  deviceSelect = document.getElementById('deviceSelect');
+  deviceSelectionHelp = document.getElementById('deviceSelectionHelp');
+  deviceRegistrationSection = document.getElementById('deviceRegistrationSection');
+  newDeviceName = document.getElementById('newDeviceName');
+  newDevicePlatform = document.getElementById('newDevicePlatform');
+  newDeviceDescription = document.getElementById('newDeviceDescription');
 
   // Connection controls
 
@@ -143,6 +149,7 @@ function setupEventListeners() {
 
   // Auto-generate browser identity if empty
   browserIdentity.addEventListener('blur', handleBrowserIdentityBlur);
+  deviceSelect.addEventListener('change', updateDeviceSelectionUI);
 
   // Sync filtering options
   syncOnlyTaggedTabs.addEventListener('change', () => {
@@ -184,6 +191,10 @@ async function loadSettings() {
         apiToken: savedConnectionSettings.apiToken || '',
         deviceId: savedConnectionSettings.deviceId || '',
         deviceToken: savedConnectionSettings.deviceToken || '',
+        deviceName: savedConnectionSettings.deviceName || '',
+        devicePlatform: savedConnectionSettings.devicePlatform || '',
+        deviceDescription: savedConnectionSettings.deviceDescription || '',
+        deviceType: savedConnectionSettings.deviceType || 'browser',
         connected: savedConnectionSettings.connected || false
       },
       syncSettings: {
@@ -196,7 +207,7 @@ async function loadSettings() {
         syncOnlyTaggedTabs: savedSyncSettings.syncOnlyTaggedTabs || false,
         syncTagFilter: savedSyncSettings.syncTagFilter || ''
       },
-      browserIdentity: '',
+      browserIdentity: response.browserIdentity || getDefaultBrowserIdentity(),
       currentContext: (modeSelResponse.success ? modeSelResponse.context : null) || (response.context || null),
       currentWorkspace: modeSelResponse.success ? modeSelResponse.workspace : null,
       mode: modeSelResponse.success ? (modeSelResponse.mode || 'explorer') : 'explorer',
@@ -213,7 +224,8 @@ async function loadSettings() {
     if (isConnected) {
       await Promise.all([
         loadContexts(),
-        loadWorkspaces()
+        loadWorkspaces(),
+        loadRegisteredDevices()
       ]);
 
       // Preselect dropdowns if values exist - this will be handled in populate functions
@@ -238,7 +250,7 @@ async function loadSettings() {
         sendNewTabsToCanvas: false,
         removeClosedTabsFromCanvas: false
       },
-      browserIdentity: '',
+      browserIdentity: getDefaultBrowserIdentity(),
       currentContext: null
     };
     populateForm();
@@ -250,9 +262,11 @@ function populateForm() {
   serverUrl.value = settings.connectionSettings.serverUrl;
   apiBasePath.value = settings.connectionSettings.apiBasePath;
   apiToken.value = settings.connectionSettings.apiToken;
-  browserIdentity.value = settings.browserIdentity;
-  if (deviceId) deviceId.value = settings.connectionSettings.deviceId || '';
-  if (deviceToken) deviceToken.value = settings.connectionSettings.deviceToken || '';
+  browserIdentity.value = settings.browserIdentity || getDefaultBrowserIdentity();
+  if (newDeviceName) newDeviceName.value = settings.connectionSettings.deviceName || '';
+  if (newDevicePlatform) newDevicePlatform.value = settings.connectionSettings.devicePlatform || '';
+  if (newDeviceDescription) newDeviceDescription.value = settings.connectionSettings.deviceDescription || '';
+  populateDeviceSelect();
 
   // Sync settings
   openTabsAddedToCanvas.checked = settings.syncSettings.openTabsAddedToCanvas;
@@ -298,9 +312,7 @@ async function handleTestConnection() {
     const connectionData = {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
-      apiToken: apiToken.value.trim(),
-      deviceId: deviceId?.value?.trim?.() || '',
-      deviceToken: deviceToken?.value?.trim?.() || ''
+      apiToken: apiToken.value.trim()
     };
 
     console.log('Testing connection with:', connectionData);
@@ -324,7 +336,11 @@ async function handleTestConnection() {
         }
 
         // Load contexts and workspaces if authenticated
-        await Promise.all([loadContexts(), loadWorkspaces()]);
+        await Promise.all([
+          loadContexts(),
+          loadWorkspaces(),
+          loadRegisteredDevices(connectionData)
+        ]);
       } else if (response.connected) {
         showToast('⚠️ Server reachable but authentication failed - check API token', 'warning');
       } else {
@@ -363,8 +379,6 @@ async function handleConnect() {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
       apiToken: apiToken.value.trim(),
-      deviceId: deviceId?.value?.trim?.() || '',
-      deviceToken: deviceToken?.value?.trim?.() || '',
       browserIdentity: browserIdentity.value.trim()
     };
 
@@ -387,7 +401,7 @@ async function handleConnect() {
       }
 
       // Load contexts and workspaces
-      await Promise.all([loadContexts(), loadWorkspaces()]);
+      await Promise.all([loadContexts(), loadWorkspaces(), loadRegisteredDevices()]);
 
       // Auto-select universe workspace in explorer mode if available
       if (currentMode === 'explorer') {
@@ -443,6 +457,8 @@ async function handleDisconnect() {
     // Simulate success for now
     setTimeout(() => {
       isConnected = false;
+      availableDevices = [];
+      populateDeviceSelect();
       updateConnectionStatus(false);
       showToast('Disconnected successfully', 'success');
       setButtonLoading(disconnectBtn, false);
@@ -600,6 +616,84 @@ function populateWorkspaceSelect() {
   }
 }
 
+async function loadRegisteredDevices(connectionOverride = null) {
+  try {
+    if (!isConnected && !connectionOverride) {
+      availableDevices = [];
+      populateDeviceSelect();
+      return;
+    }
+
+    const response = await sendMessageToBackground('GET_REGISTERED_DEVICES', connectionOverride);
+    if (!response?.success) {
+      throw new Error(response?.error || 'Failed to load devices');
+    }
+
+    availableDevices = Array.isArray(response.devices) ? response.devices : [];
+    populateDeviceSelect();
+  } catch (error) {
+    console.error('Failed to load registered devices:', error);
+    availableDevices = [];
+    populateDeviceSelect();
+    showToast(`Failed to load devices: ${error.message}`, 'error');
+  }
+}
+
+function populateDeviceSelect() {
+  if (!deviceSelect) return;
+
+  deviceSelect.textContent = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = availableDevices.length > 0 ? 'Select a device...' : 'No registered devices found';
+  deviceSelect.appendChild(defaultOption);
+
+  availableDevices.forEach((device) => {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    const platform = device.platform ? ` (${device.platform})` : '';
+    option.textContent = `${device.name || device.deviceId}${platform}`;
+    deviceSelect.appendChild(option);
+  });
+
+  deviceSelect.disabled = availableDevices.length === 0;
+  if (availableDevices.some((device) => device.deviceId === settings.connectionSettings.deviceId)) {
+    deviceSelect.value = settings.connectionSettings.deviceId;
+  } else {
+    deviceSelect.value = '';
+  }
+
+  updateDeviceSelectionUI();
+}
+
+function updateDeviceSelectionUI() {
+  const hasDevices = availableDevices.length > 0;
+  const selectedDevice = availableDevices.find((device) => device.deviceId === deviceSelect.value) || null;
+
+  if (deviceRegistrationSection) {
+    deviceRegistrationSection.style.display = hasDevices ? 'none' : 'block';
+  }
+
+  if (deviceSelectionHelp) {
+    deviceSelectionHelp.textContent = hasDevices
+      ? 'Pick which registered device this browser should use.'
+      : 'No registered devices exist yet. Register one below.';
+  }
+
+  if (selectedDevice && newDeviceName && newDevicePlatform && newDeviceDescription) {
+    newDeviceName.value = selectedDevice.name || '';
+    newDevicePlatform.value = selectedDevice.platform || '';
+    newDeviceDescription.value = selectedDevice.description || '';
+  } else if (!hasDevices) {
+    if (newDeviceName && !newDeviceName.value.trim()) {
+      newDeviceName.value = `${browserIdentity.value.trim() || getDefaultBrowserIdentity()} browser`;
+    }
+    if (newDevicePlatform && !newDevicePlatform.value) {
+      newDevicePlatform.value = getDefaultDevicePlatform();
+    }
+  }
+}
+
 function updateModeVisibility(mode) {
   if (!contextSettings || !explorerSettings) return;
   if (mode === 'context') {
@@ -732,18 +826,20 @@ async function handleSaveSettings() {
       await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: ws });
     }
 
-    // Collect all settings
-    const deviceIdValue = deviceId?.value?.trim?.();
-    const deviceTokenValue = deviceToken?.value?.trim?.();
+    const assignedDevice = await resolveDeviceAssignment();
 
     const allSettings = {
       connectionSettings: {
         serverUrl: serverUrl.value.trim(),
         apiBasePath: apiBasePath.value.trim(),
         apiToken: apiToken.value.trim(),
-        // Preserve auto-managed device token/id unless user overrides it explicitly.
-        deviceId: (deviceIdValue ?? settings.connectionSettings.deviceId ?? '').trim(),
-        deviceToken: (deviceTokenValue ?? settings.connectionSettings.deviceToken ?? '').trim(),
+        deviceId: assignedDevice.deviceId,
+        deviceToken: assignedDevice.token,
+        deviceName: assignedDevice.name || '',
+        devicePlatform: assignedDevice.platform || '',
+        deviceDescription: assignedDevice.description || '',
+        deviceType: assignedDevice.type || 'browser',
+        deviceTokenServerUrl: serverUrl.value.trim().replace(/\/$/, ''),
         connected: isConnected
       },
       syncSettings: {
@@ -765,6 +861,8 @@ async function handleSaveSettings() {
     const saveResponse = await sendMessageToBackground('SAVE_SETTINGS', allSettings);
 
     if (saveResponse.success) {
+      settings.connectionSettings = { ...settings.connectionSettings, ...allSettings.connectionSettings };
+      settings.browserIdentity = allSettings.browserIdentity;
       showToast('Settings saved successfully! Extension is fully configured.', 'success');
     } else {
       throw new Error(saveResponse.error || 'Failed to save settings');
@@ -776,6 +874,59 @@ async function handleSaveSettings() {
   } finally {
     setButtonLoading(saveSettingsBtn, false);
   }
+}
+
+async function resolveDeviceAssignment() {
+  const connectionData = {
+    serverUrl: serverUrl.value.trim(),
+    apiBasePath: apiBasePath.value.trim(),
+    apiToken: apiToken.value.trim(),
+    browserIdentity: browserIdentity.value.trim()
+  };
+
+  if (availableDevices.length > 0) {
+    const selectedDevice = availableDevices.find((device) => device.deviceId === deviceSelect.value);
+    if (!selectedDevice) {
+      throw new Error('Pick a registered device for this browser');
+    }
+
+    const response = await sendMessageToBackground('ASSIGN_BROWSER_DEVICE', {
+      ...connectionData,
+      deviceId: selectedDevice.deviceId,
+      deviceName: selectedDevice.name,
+      devicePlatform: selectedDevice.platform,
+      deviceDescription: selectedDevice.description
+    });
+    if (!response?.success || !response.device?.deviceId || !response.device?.token) {
+      throw new Error(response?.error || 'Failed to assign selected device');
+    }
+    return response.device;
+  }
+
+  const deviceNameValue = newDeviceName.value.trim();
+  const devicePlatformValue = newDevicePlatform.value.trim();
+  if (!deviceNameValue) {
+    throw new Error('Device name is required');
+  }
+  if (!devicePlatformValue) {
+    throw new Error('Device OS is required');
+  }
+
+  const response = await sendMessageToBackground('ASSIGN_BROWSER_DEVICE', {
+    ...connectionData,
+    deviceName: deviceNameValue,
+    devicePlatform: devicePlatformValue,
+    deviceDescription: newDeviceDescription.value.trim()
+  });
+  if (!response?.success || !response.device?.deviceId || !response.device?.token) {
+    throw new Error(response?.error || 'Failed to register device');
+  }
+
+  availableDevices = [response.device];
+  populateDeviceSelect();
+  deviceSelect.value = response.device.deviceId;
+  updateDeviceSelectionUI();
+  return response.device;
 }
 
 async function handleResetSettings() {
@@ -810,27 +961,26 @@ async function handleBrowserIdentityBlur() {
 }
 
 async function generateBrowserIdentity() {
-  // TODO: Generate browser identity via background
-  console.log('TODO: Generate browser identity');
+  browserIdentity.value = getDefaultBrowserIdentity();
+}
 
-  // For now, generate a simple one
-  const userAgent = navigator.userAgent;
-  let browserType = 'unknown';
+function getDefaultBrowserIdentity() {
+  const userAgent = navigator.userAgent || '';
+  if (userAgent.includes('Firefox')) return 'firefox';
+  if (userAgent.includes('Edg/') || userAgent.includes('Edg ')) return 'edge';
+  if (userAgent.includes('Chrome')) return 'chrome';
+  if (userAgent.includes('Safari')) return 'safari';
+  return 'browser';
+}
 
-  if (userAgent.includes('Chrome')) {
-    browserType = 'chrome';
-  } else if (userAgent.includes('Firefox')) {
-    browserType = 'firefox';
-  } else if (userAgent.includes('Edge')) {
-    browserType = 'edge';
-  } else if (userAgent.includes('Safari')) {
-    browserType = 'safari';
-  }
-
-  const suffix = Math.random().toString(36).substring(2, 8);
-  const identity = `${browserType}@${suffix}`;
-
-  browserIdentity.value = identity;
+function getDefaultDevicePlatform() {
+  const userAgent = navigator.userAgent || '';
+  if (userAgent.includes('Android')) return 'android';
+  if (userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'ios';
+  if (userAgent.includes('Windows')) return 'windows';
+  if (userAgent.includes('Mac OS X') || userAgent.includes('Macintosh')) return 'mac';
+  if (userAgent.includes('Linux')) return 'linux';
+  return 'unknown';
 }
 
 function validateConnectionForm() {
