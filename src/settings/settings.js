@@ -4,6 +4,7 @@
 // DOM elements
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let deviceSelect, deviceSelectionHelp, deviceRegistrationSection;
+let deviceDetailsSection, selectedDeviceName, selectedDeviceId, selectedDevicePlatform, selectedDeviceDescription;
 let newDeviceName, newDevicePlatform, newDeviceDescription;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let statusDot, statusText, statusDetails;
@@ -28,6 +29,8 @@ let availableDevices = [];
 let settings = {};
 let currentMode = 'explorer';
 let lastTabSyncDebug = null;
+
+const REGISTER_NEW_DEVICE_VALUE = '__register_new_device__';
 
 // Initialize settings page
 document.addEventListener('DOMContentLoaded', async () => {
@@ -58,6 +61,11 @@ function initializeElements() {
   deviceSelect = document.getElementById('deviceSelect');
   deviceSelectionHelp = document.getElementById('deviceSelectionHelp');
   deviceRegistrationSection = document.getElementById('deviceRegistrationSection');
+  deviceDetailsSection = document.getElementById('deviceDetailsSection');
+  selectedDeviceName = document.getElementById('selectedDeviceName');
+  selectedDeviceId = document.getElementById('selectedDeviceId');
+  selectedDevicePlatform = document.getElementById('selectedDevicePlatform');
+  selectedDeviceDescription = document.getElementById('selectedDeviceDescription');
   newDeviceName = document.getElementById('newDeviceName');
   newDevicePlatform = document.getElementById('newDevicePlatform');
   newDeviceDescription = document.getElementById('newDeviceDescription');
@@ -392,6 +400,7 @@ async function handleConnect() {
 
     if (response.success && response.authenticated) {
       isConnected = true;
+      settings.user = response.user || null;
       updateConnectionStatus(true);
 
       if (response.user) {
@@ -403,28 +412,27 @@ async function handleConnect() {
       // Load contexts and workspaces
       await Promise.all([loadContexts(), loadWorkspaces(), loadRegisteredDevices()]);
 
-      // Auto-select universe workspace in explorer mode if available
-      if (currentMode === 'explorer') {
-        const universeWorkspace = availableWorkspaces.find(w => w.name === 'universe');
-        if (universeWorkspace && !workspaceSelect.value) {
-          workspaceSelect.value = universeWorkspace.id;
-          const selectedWorkspace = availableWorkspaces.find(w => w.id === universeWorkspace.id);
-          await sendMessageToBackground('SET_MODE_AND_SELECTION', { mode: 'explorer', workspace: selectedWorkspace, workspacePath: '/' });
-          showToast('Auto-selected universe workspace', 'info');
-        }
+      const universeWorkspace = getUniverseWorkspace();
+      if (!universeWorkspace) {
+        throw new Error('Universe workspace not found');
       }
 
-      // Auto-bind to first/selected context if available (mandatory for context mode)
-      if (currentMode === 'context') {
-        if (contextSelect.value) {
-          await handleBindContext();
-        } else if (availableContexts.length > 0) {
-          // Auto-select and bind to first context if none selected
-          contextSelect.value = availableContexts[0].id;
-          await handleBindContext();
-          showToast('Auto-bound to first available context', 'info');
-        }
-      }
+      currentMode = 'explorer';
+      settings.mode = 'explorer';
+      settings.currentContext = null;
+      settings.currentWorkspace = universeWorkspace;
+      isBoundToContext = false;
+      syncModeSelect.value = 'explorer';
+      workspaceSelect.value = universeWorkspace.id;
+      updateModeVisibility('explorer');
+      if (currentContext) currentContext.style.display = 'none';
+
+      await sendMessageToBackground('SET_MODE_AND_SELECTION', {
+        mode: 'explorer',
+        workspace: universeWorkspace,
+        workspacePath: '/'
+      });
+      showToast('Explorer mode selected with universe workspace', 'info');
     } else if (response.success && response.connected && !response.authenticated) {
       // Server reachable but authentication failed
       isConnected = false;
@@ -616,6 +624,10 @@ function populateWorkspaceSelect() {
   }
 }
 
+function getUniverseWorkspace() {
+  return availableWorkspaces.find((workspace) => workspace.name === 'universe') || null;
+}
+
 async function loadRegisteredDevices(connectionOverride = null) {
   try {
     if (!isConnected && !connectionOverride) {
@@ -642,10 +654,15 @@ async function loadRegisteredDevices(connectionOverride = null) {
 function populateDeviceSelect() {
   if (!deviceSelect) return;
 
+  const previousValue = deviceSelect.value;
   deviceSelect.textContent = '';
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
-  defaultOption.textContent = availableDevices.length > 0 ? 'Select a device...' : 'No registered devices found';
+  if (!isConnected) {
+    defaultOption.textContent = 'Connect first to load devices...';
+  } else {
+    defaultOption.textContent = availableDevices.length > 0 ? 'Select a device...' : 'No registered devices found';
+  }
   deviceSelect.appendChild(defaultOption);
 
   availableDevices.forEach((device) => {
@@ -656,9 +673,22 @@ function populateDeviceSelect() {
     deviceSelect.appendChild(option);
   });
 
-  deviceSelect.disabled = availableDevices.length === 0;
-  if (availableDevices.some((device) => device.deviceId === settings.connectionSettings.deviceId)) {
+  if (isConnected) {
+    const registerOption = document.createElement('option');
+    registerOption.value = REGISTER_NEW_DEVICE_VALUE;
+    registerOption.textContent = 'Register a new device';
+    deviceSelect.appendChild(registerOption);
+  }
+
+  deviceSelect.disabled = !isConnected;
+  if (previousValue === REGISTER_NEW_DEVICE_VALUE) {
+    deviceSelect.value = REGISTER_NEW_DEVICE_VALUE;
+  } else if (availableDevices.some((device) => device.deviceId === previousValue)) {
+    deviceSelect.value = previousValue;
+  } else if (availableDevices.some((device) => device.deviceId === settings.connectionSettings.deviceId)) {
     deviceSelect.value = settings.connectionSettings.deviceId;
+  } else if (isConnected && availableDevices.length === 0) {
+    deviceSelect.value = REGISTER_NEW_DEVICE_VALUE;
   } else {
     deviceSelect.value = '';
   }
@@ -668,26 +698,39 @@ function populateDeviceSelect() {
 
 function updateDeviceSelectionUI() {
   const hasDevices = availableDevices.length > 0;
+  const isRegistering = !hasDevices || deviceSelect.value === REGISTER_NEW_DEVICE_VALUE;
   const selectedDevice = availableDevices.find((device) => device.deviceId === deviceSelect.value) || null;
 
   if (deviceRegistrationSection) {
-    deviceRegistrationSection.style.display = hasDevices ? 'none' : 'block';
+    deviceRegistrationSection.style.display = isConnected && isRegistering ? 'block' : 'none';
+  }
+
+  if (deviceDetailsSection) {
+    deviceDetailsSection.style.display = selectedDevice ? 'block' : 'none';
   }
 
   if (deviceSelectionHelp) {
-    deviceSelectionHelp.textContent = hasDevices
-      ? 'Pick which registered device this browser should use.'
-      : 'No registered devices exist yet. Register one below.';
+    if (!isConnected) {
+      deviceSelectionHelp.textContent = 'Connect first to load devices.';
+    } else if (selectedDevice) {
+      deviceSelectionHelp.textContent = 'Selected device details are shown below.';
+    } else {
+      deviceSelectionHelp.textContent = 'Register a named device for this browser.';
+    }
   }
 
-  if (selectedDevice && newDeviceName && newDevicePlatform && newDeviceDescription) {
-    newDeviceName.value = selectedDevice.name || '';
-    newDevicePlatform.value = selectedDevice.platform || '';
-    newDeviceDescription.value = selectedDevice.description || '';
-  } else if (!hasDevices) {
-    if (newDeviceName && !newDeviceName.value.trim()) {
-      newDeviceName.value = `${browserIdentity.value.trim() || getDefaultBrowserIdentity()} browser`;
+  if (selectedDevice) {
+    if (selectedDeviceName) selectedDeviceName.textContent = selectedDevice.name || 'Unnamed device';
+    if (selectedDeviceId) selectedDeviceId.textContent = `ID: ${selectedDevice.deviceId || '-'}`;
+    if (selectedDevicePlatform) selectedDevicePlatform.textContent = `OS: ${selectedDevice.platform || '-'}`;
+    if (selectedDeviceDescription) {
+      selectedDeviceDescription.textContent = selectedDevice.description
+        ? `Description: ${selectedDevice.description}`
+        : 'Description: -';
     }
+  }
+
+  if (isRegistering) {
     if (newDevicePlatform && !newDevicePlatform.value) {
       newDevicePlatform.value = getDefaultDevicePlatform();
     }
@@ -884,10 +927,15 @@ async function resolveDeviceAssignment() {
     browserIdentity: browserIdentity.value.trim()
   };
 
-  if (availableDevices.length > 0) {
-    const selectedDevice = availableDevices.find((device) => device.deviceId === deviceSelect.value);
+  const selectedValue = deviceSelect.value;
+
+  if (selectedValue && selectedValue !== REGISTER_NEW_DEVICE_VALUE) {
+    const selectedDevice = availableDevices.find((device) => device.deviceId === selectedValue);
     if (!selectedDevice) {
       throw new Error('Pick a registered device for this browser');
+    }
+    if (isUuidLike(selectedDevice.name || '')) {
+      throw new Error('Selected device uses a UUID as its name. Register a new device with a real name.');
     }
 
     const response = await sendMessageToBackground('ASSIGN_BROWSER_DEVICE', {
@@ -903,10 +951,17 @@ async function resolveDeviceAssignment() {
     return response.device;
   }
 
+  if (availableDevices.length > 0 && selectedValue !== REGISTER_NEW_DEVICE_VALUE) {
+    throw new Error('Pick a registered device or choose "Register a new device"');
+  }
+
   const deviceNameValue = newDeviceName.value.trim();
   const devicePlatformValue = newDevicePlatform.value.trim();
   if (!deviceNameValue) {
     throw new Error('Device name is required');
+  }
+  if (isUuidLike(deviceNameValue)) {
+    throw new Error('Device name cannot be a UUID. Use something a human can recognize.');
   }
   if (!devicePlatformValue) {
     throw new Error('Device OS is required');
@@ -962,6 +1017,11 @@ async function handleBrowserIdentityBlur() {
 
 async function generateBrowserIdentity() {
   browserIdentity.value = getDefaultBrowserIdentity();
+}
+
+function isUuidLike(value) {
+  const normalizedValue = String(value || '').trim().replace(/-/g, '');
+  return /^[0-9a-f]{32}$/i.test(normalizedValue);
 }
 
 function getDefaultBrowserIdentity() {

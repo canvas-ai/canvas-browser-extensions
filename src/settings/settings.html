@@ -57,12 +57,22 @@
           <select id="deviceSelect" class="input-field" disabled>
             <option value="">Connect first to load devices...</option>
           </select>
-          <small class="help-text" id="deviceSelectionHelp">Pick an existing registered device for this browser instance.</small>
+          <small class="help-text" id="deviceSelectionHelp">Pick an existing device or register a named one for this browser.</small>
+        </div>
+
+        <div class="current-context" id="deviceDetailsSection" style="display: none;">
+          <h3>Selected Device</h3>
+          <div class="context-info">
+            <div class="context-id" id="selectedDeviceName">-</div>
+            <div class="context-url" id="selectedDeviceId">-</div>
+            <div class="context-url" id="selectedDevicePlatform">-</div>
+            <div class="context-url" id="selectedDeviceDescription">-</div>
+          </div>
         </div>
 
         <div class="connection-status" id="deviceRegistrationSection" style="display: none;">
           <div class="status-text" style="margin-bottom: 8px;">Register Browser Device</div>
-          <div class="status-details" style="margin-bottom: 16px;">No registered devices found for this user yet. Create one first.</div>
+          <div class="status-details" style="margin-bottom: 16px;">Set a real device name. UUIDs are for databases, not humans.</div>
 
           <div class="form-group">
             <label for="newDeviceName">Device Name</label>

@@ -1658,6 +1658,11 @@ async function handleGetRegisteredDevices(data, sendResponse) {
   }
 }
 
+function isUuidLikeDeviceName(value) {
+  const normalizedValue = String(value || '').trim().replace(/-/g, '');
+  return /^[0-9a-f]{32}$/i.test(normalizedValue);
+}
+
 async function handleAssignBrowserDevice(data, sendResponse) {
   try {
     if (!data?.browserIdentity) {
@@ -1677,10 +1682,14 @@ async function handleAssignBrowserDevice(data, sendResponse) {
       payload.name = String(data.deviceName || profile.name).trim() || profile.name;
       payload.platform = String(data.devicePlatform || profile.platform || '').trim() || profile.platform;
       if (data.deviceDescription !== undefined) payload.description = String(data.deviceDescription || '').trim() || undefined;
+      if (isUuidLikeDeviceName(payload.name)) {
+        throw new Error('Selected device uses a UUID as its name. Register a new device with a real name.');
+      }
     } else {
       const name = String(data.deviceName || '').trim();
       const platform = String(data.devicePlatform || '').trim();
       if (!name) throw new Error('Device name is required');
+      if (isUuidLikeDeviceName(name)) throw new Error('Device name cannot be a UUID. Use something a human can recognize.');
       if (!platform) throw new Error('Device OS is required');
       payload.name = name;
       payload.platform = platform;
