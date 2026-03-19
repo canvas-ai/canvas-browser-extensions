@@ -128,6 +128,11 @@ runtime.onMessage.addListener((message) => {
   // Handle background events from service worker
   if (message.type === 'BACKGROUND_EVENT') {
     switch (message.eventType) {
+    case 'settings.saved':
+      console.log('Refreshing popup after settings save');
+      loadInitialData();
+      break;
+
     case 'tabs.refresh':
       console.log('Refreshing tabs due to context change');
       loadTabs();
@@ -174,6 +179,11 @@ runtime.onMessage.addListener((message) => {
 
   // Handle direct message types (legacy)
   switch (message.type) {
+  case 'settings.saved':
+    console.log('Refreshing popup after settings save');
+    loadInitialData();
+    break;
+
   case 'tabs.refresh':
     console.log('Refreshing tabs due to context change');
     loadTabs();

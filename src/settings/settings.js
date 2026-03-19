@@ -5,6 +5,7 @@
 let browserIdentity, serverUrl, apiBasePath, apiToken;
 let deviceSelect, deviceSelectionHelp, deviceRegistrationSection;
 let deviceDetailsSection, selectedDeviceName, selectedDeviceId, selectedDevicePlatform, selectedDeviceDescription;
+let generatedDeviceId;
 let newDeviceName, newDevicePlatform, newDeviceDescription;
 let testConnectionBtn, connectBtn, disconnectBtn;
 let statusDot, statusText, statusDetails;
@@ -29,6 +30,7 @@ let availableDevices = [];
 let settings = {};
 let currentMode = 'explorer';
 let lastTabSyncDebug = null;
+let currentGeneratedDeviceId = '';
 
 const REGISTER_NEW_DEVICE_VALUE = '__register_new_device__';
 
@@ -66,6 +68,7 @@ function initializeElements() {
   selectedDeviceId = document.getElementById('selectedDeviceId');
   selectedDevicePlatform = document.getElementById('selectedDevicePlatform');
   selectedDeviceDescription = document.getElementById('selectedDeviceDescription');
+  generatedDeviceId = document.getElementById('generatedDeviceId');
   newDeviceName = document.getElementById('newDeviceName');
   newDevicePlatform = document.getElementById('newDevicePlatform');
   newDeviceDescription = document.getElementById('newDeviceDescription');
@@ -731,6 +734,8 @@ function updateDeviceSelectionUI() {
   }
 
   if (isRegistering) {
+    ensureGeneratedDeviceId();
+    if (generatedDeviceId) generatedDeviceId.value = currentGeneratedDeviceId;
     if (newDevicePlatform && !newDevicePlatform.value) {
       newDevicePlatform.value = getDefaultDevicePlatform();
     }
@@ -969,6 +974,8 @@ async function resolveDeviceAssignment() {
 
   const response = await sendMessageToBackground('ASSIGN_BROWSER_DEVICE', {
     ...connectionData,
+    registerNew: true,
+    deviceId: ensureGeneratedDeviceId(),
     deviceName: deviceNameValue,
     devicePlatform: devicePlatformValue,
     deviceDescription: newDeviceDescription.value.trim()
@@ -978,6 +985,7 @@ async function resolveDeviceAssignment() {
   }
 
   availableDevices = [response.device];
+  currentGeneratedDeviceId = '';
   populateDeviceSelect();
   deviceSelect.value = response.device.deviceId;
   updateDeviceSelectionUI();
@@ -1017,6 +1025,26 @@ async function handleBrowserIdentityBlur() {
 
 async function generateBrowserIdentity() {
   browserIdentity.value = getDefaultBrowserIdentity();
+}
+
+function ensureGeneratedDeviceId() {
+  if (!currentGeneratedDeviceId) {
+    currentGeneratedDeviceId = generateUuidV4();
+  }
+  return currentGeneratedDeviceId;
+}
+
+function generateUuidV4() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function isUuidLike(value) {

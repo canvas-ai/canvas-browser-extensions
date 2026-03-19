@@ -115,6 +115,12 @@ body {
   cursor: not-allowed;
 }
 
+.generated-id-field[readonly] {
+  background-color: #f4f4f5;
+  color: #71717a;
+  cursor: default;
+}
+
 .help-text {
   display: block;
   font-size: 12px;

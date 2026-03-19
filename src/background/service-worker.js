@@ -1677,7 +1677,7 @@ async function handleAssignBrowserDevice(data, sendResponse) {
       type: 'browser'
     };
 
-    if (data.deviceId) {
+    if (data.deviceId && !data.registerNew) {
       payload.deviceId = String(data.deviceId).trim();
       payload.name = String(data.deviceName || profile.name).trim() || profile.name;
       payload.platform = String(data.devicePlatform || profile.platform || '').trim() || profile.platform;
@@ -1691,6 +1691,7 @@ async function handleAssignBrowserDevice(data, sendResponse) {
       if (!name) throw new Error('Device name is required');
       if (isUuidLikeDeviceName(name)) throw new Error('Device name cannot be a UUID. Use something a human can recognize.');
       if (!platform) throw new Error('Device OS is required');
+      if (data.deviceId) payload.deviceId = String(data.deviceId).trim();
       payload.name = name;
       payload.platform = platform;
       payload.description = String(data.deviceDescription || '').trim() || undefined;
@@ -1894,6 +1895,13 @@ async function handleSaveSettings(data, sendResponse) {
 
     // Update context menus after settings change
     await setupContextMenus();
+    refreshTabLists();
+    broadcastToPopup('settings.saved', {
+      mode: await browserStorage.getSyncMode(),
+      workspace: await browserStorage.getCurrentWorkspace(),
+      workspacePath: await browserStorage.getWorkspacePath(),
+      context: verifyContext
+    });
 
     sendResponse({
       success: true,
