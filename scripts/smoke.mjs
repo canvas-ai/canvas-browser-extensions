@@ -149,15 +149,16 @@ try {
 
   const insertEventPromise = waitForEvent(
     socket,
-    'workspace.documents.inserted',
-    (payload) => payload?.contextSpec === '/'
+    'tree.document.inserted.batch',
+    (payload) => (payload?.contextSpec || payload?.context?.path) === '/'
   );
 
   const insertResponse = await request('POST', `/workspaces/${encodeURIComponent(config.workspace)}/documents`, {
     token: deviceToken,
     body: {
-      contextSpec: '/',
-      featureArray: ['data/abstraction/tab', `tag/${uniqueId}`],
+      treeNameOrTreeId: 'ContextTree',
+      context: '/',
+      features: ['data/abstraction/tab', `tag/${uniqueId}`],
       documents: [{
         schema: 'data/abstraction/tab',
         schemaVersion: '2.0',
@@ -184,11 +185,11 @@ try {
   }
 
   const insertEvent = await insertEventPromise;
-  logStep('workspace.documents.inserted', insertEvent?.workspaceId || 'received');
+  logStep('tree.document.inserted.batch', insertEvent?.workspaceId || 'received');
 
   const listResponse = await request(
     'GET',
-    `/workspaces/${encodeURIComponent(config.workspace)}/documents?contextSpec=%2F&featureArray=data%2Fabstraction%2Ftab&featureArray=tag%2F${encodeURIComponent(uniqueId)}`,
+    `/workspaces/${encodeURIComponent(config.workspace)}/documents?treeNameOrTreeId=ContextTree&context=%2F&allOf=data%2Fabstraction%2Ftab&allOf=tag%2F${encodeURIComponent(uniqueId)}`,
     { token: config.apiToken }
   );
 
@@ -201,7 +202,7 @@ try {
 
   const deleteEventPromise = waitForEvent(
     socket,
-    'workspace.documents.deleted',
+    'tree.document.deleted.batch',
     (payload) => Array.isArray(payload?.documentIds) && payload.documentIds.includes(insertedDocumentId)
   );
 
@@ -218,7 +219,7 @@ try {
   }
 
   const deleteEvent = await deleteEventPromise;
-  logStep('workspace.documents.deleted', deleteEvent?.documentIds?.join(', ') || 'received');
+  logStep('tree.document.deleted.batch', deleteEvent?.documentIds?.join(', ') || 'received');
 
   console.log('');
   console.log('Smoke test passed');

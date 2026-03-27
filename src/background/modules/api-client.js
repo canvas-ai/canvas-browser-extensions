@@ -3,6 +3,8 @@
 
 import { browserStorage } from './browser-storage.js';
 
+const DEFAULT_WORKSPACE_TREE_NAME = 'ContextTree';
+
 export class CanvasApiClient {
   constructor() {
     this.baseUrl = null;
@@ -43,6 +45,10 @@ export class CanvasApiClient {
       throw new Error(`Invalid document ID(s): expected numbers (or numeric strings), got ${JSON.stringify(raw)}`);
     }
     return ids;
+  }
+
+  getWorkspaceTreeRoute(workspaceNameOrId) {
+    return `/workspaces/${encodeURIComponent(workspaceNameOrId)}/trees/${encodeURIComponent(DEFAULT_WORKSPACE_TREE_NAME)}`;
   }
 
   async fetchDeleteWithJson(url, body) {
@@ -639,7 +645,7 @@ Firefox blocks local network requests for security reasons.
   // Workspace tree
   async getWorkspaceTree(workspaceNameOrId) {
     await this.ensureWorkspaceStarted(workspaceNameOrId);
-    return await this.get(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree`);
+    return await this.get(this.getWorkspaceTreeRoute(workspaceNameOrId));
   }
 
   async getWorkspaceDocuments(workspaceNameOrId, contextSpec = '/', featureArray = []) {
@@ -652,9 +658,10 @@ Firefox blocks local network requests for security reasons.
     let endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`;
 
     const params = new URLSearchParams();
-    if (contextSpec) params.set('contextSpec', contextSpec);
+    params.set('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME);
+    if (contextSpec) params.set('context', contextSpec);
     if (enhancedFeatureArray.length > 0) {
-      enhancedFeatureArray.forEach(feature => params.append('featureArray', feature));
+      enhancedFeatureArray.forEach(feature => params.append('allOf', feature));
     }
 
     const query = params.toString();
@@ -666,8 +673,9 @@ Firefox blocks local network requests for security reasons.
   async insertWorkspaceDocument(workspaceNameOrId, document, contextSpec = '/', featureArray = []) {
     await this.ensureWorkspaceStarted(workspaceNameOrId);
     const data = {
-      contextSpec,
-      featureArray,
+      treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME,
+      context: contextSpec,
+      features: featureArray,
       documents: [document]
     };
     return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`, data);
@@ -676,8 +684,9 @@ Firefox blocks local network requests for security reasons.
   async insertWorkspaceDocuments(workspaceNameOrId, documents, contextSpec = '/', featureArray = []) {
     await this.ensureWorkspaceStarted(workspaceNameOrId);
     const data = {
-      contextSpec,
-      featureArray,
+      treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME,
+      context: contextSpec,
+      features: featureArray,
       documents
     };
     return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`, data);
@@ -688,9 +697,10 @@ Firefox blocks local network requests for security reasons.
     // DELETE /workspaces/:id/documents/remove with body and query
     const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents/remove`;
     const url = new URL(this.buildUrl(endpoint));
-    if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
+    url.searchParams.set('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME);
+    if (contextSpec) url.searchParams.set('context', contextSpec);
     if (Array.isArray(featureArray)) {
-      for (const f of featureArray) url.searchParams.append('featureArray', f);
+      for (const f of featureArray) url.searchParams.append('allOf', f);
     }
     const ids = this.normalizeDocumentIds(documentIds);
     return await this.fetchDeleteWithJson(url.toString(), ids);
@@ -701,9 +711,10 @@ Firefox blocks local network requests for security reasons.
     // DELETE /workspaces/:id/documents with body and query
     const endpoint = `/workspaces/${encodeURIComponent(workspaceNameOrId)}/documents`;
     const url = new URL(this.buildUrl(endpoint));
-    if (contextSpec) url.searchParams.set('contextSpec', contextSpec);
+    url.searchParams.set('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME);
+    if (contextSpec) url.searchParams.set('context', contextSpec);
     if (Array.isArray(featureArray)) {
-      for (const f of featureArray) url.searchParams.append('featureArray', f);
+      for (const f of featureArray) url.searchParams.append('allOf', f);
     }
     const ids = this.normalizeDocumentIds(documentIds);
     return await this.fetchDeleteWithJson(url.toString(), ids);
@@ -717,7 +728,7 @@ Firefox blocks local network requests for security reasons.
       data,
       autoCreateLayers
     };
-    return await this.post(`/workspaces/${encodeURIComponent(workspaceNameOrId)}/tree/paths`, requestData);
+    return await this.post(`${this.getWorkspaceTreeRoute(workspaceNameOrId)}/paths`, requestData);
   }
 
   // Document methods (tabs)
@@ -745,7 +756,7 @@ Firefox blocks local network requests for security reasons.
     // Add feature array as query parameters if provided
     if (enhancedFeatureArray.length > 0) {
       const params = new URLSearchParams();
-      enhancedFeatureArray.forEach(feature => params.append('featureArray', feature));
+      enhancedFeatureArray.forEach(feature => params.append('allOf', feature));
       endpoint += `?${params.toString()}`;
     }
 
@@ -765,7 +776,7 @@ Firefox blocks local network requests for security reasons.
 
     const data = {
       documents: document,  // Server expects "documents" (can be single object)
-      featureArray: enhancedFeatureArray
+      features: enhancedFeatureArray
     };
     return await this.post(`/contexts/${contextId}/documents`, data);
   }
@@ -783,7 +794,7 @@ Firefox blocks local network requests for security reasons.
 
     const data = {
       documents,
-      featureArray: enhancedFeatureArray
+      features: enhancedFeatureArray
     };
     return await this.post(`/contexts/${contextId}/documents`, data);
   }
@@ -802,7 +813,7 @@ Firefox blocks local network requests for security reasons.
     const doc = typeof document === 'object' ? { ...document, id: documentId } : { id: documentId };
     const data = {
       documents: [doc],
-      featureArray: enhancedFeatureArray
+      features: enhancedFeatureArray
     };
     return await this.put(`/contexts/${contextId}/documents`, data);
   }
@@ -820,7 +831,7 @@ Firefox blocks local network requests for security reasons.
     const endpoint = `/contexts/${contextId}/documents/remove`;
     const url = new URL(this.buildUrl(endpoint));
     if (Array.isArray(featureArray)) {
-      for (const f of featureArray) url.searchParams.append('featureArray', f);
+      for (const f of featureArray) url.searchParams.append('allOf', f);
     }
     const ids = this.normalizeDocumentIds(documentIds);
     return await this.fetchDeleteWithJson(url.toString(), ids);

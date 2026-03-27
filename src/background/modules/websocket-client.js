@@ -58,10 +58,20 @@ export class WebSocketClient {
       type: eventMap[eventName] || eventName,
       workspaceId: payload.workspaceId,
       workspaceName: payload.workspaceName,
-      contextSpec: payload.contextSpec || '/',
+      contextSpec: payload.contextSpec || payload.context?.path || payload.path || '/',
       documentIds: this.extractDocumentIds(payload),
       timestamp: payload.timestamp,
       sourceEvent: eventName
+    };
+  }
+
+  normalizeTreeDocumentEvent(eventName, payload = {}) {
+    return {
+      ...payload,
+      type: eventName,
+      contextSpec: payload.contextSpec || payload.context?.path || payload.path || '/',
+      documentIds: payload.documentIds || (payload.documentId != null ? [payload.documentId] : []),
+      documentId: payload.documentId ?? null
     };
   }
 
@@ -164,6 +174,16 @@ export class WebSocketClient {
         this.socket.on('workspace.documents.removed', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.removed', payload));
         this.socket.on('workspace.documents.deleted', (payload) => this._handleWorkspaceDocumentEvent('workspace.documents.deleted', payload));
 
+        // Tree document events are the canonical workspace tree sync events.
+        this.socket.on('tree.document.inserted', (payload) => this._handleTreeDocumentEvent('tree.document.inserted', payload));
+        this.socket.on('tree.document.inserted.batch', (payload) => this._handleTreeDocumentEvent('tree.document.inserted.batch', payload));
+        this.socket.on('tree.document.updated', (payload) => this._handleTreeDocumentEvent('tree.document.updated', payload));
+        this.socket.on('tree.document.updated.batch', (payload) => this._handleTreeDocumentEvent('tree.document.updated.batch', payload));
+        this.socket.on('tree.document.removed', (payload) => this._handleTreeDocumentEvent('tree.document.removed', payload));
+        this.socket.on('tree.document.removed.batch', (payload) => this._handleTreeDocumentEvent('tree.document.removed.batch', payload));
+        this.socket.on('tree.document.deleted', (payload) => this._handleTreeDocumentEvent('tree.document.deleted', payload));
+        this.socket.on('tree.document.deleted.batch', (payload) => this._handleTreeDocumentEvent('tree.document.deleted.batch', payload));
+
         // Context events
         this.socket.on('context.created', (payload) => this._handleContextEvent('context.created', payload));
         this.socket.on('context.updated', (payload) => this._handleContextEvent('context.updated', payload));
@@ -231,6 +251,12 @@ export class WebSocketClient {
     if (normalized.type !== eventName) {
       this.emit(normalized.type, normalized);
     }
+  }
+
+  _handleTreeDocumentEvent(eventName, payload) {
+    const normalized = this.normalizeTreeDocumentEvent(eventName, payload);
+    console.log('WebSocketClient: Tree document event:', eventName, normalized);
+    this.emit(eventName, normalized);
   }
 
   // Handle context events
