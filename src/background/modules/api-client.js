@@ -3,7 +3,7 @@
 
 import { browserStorage } from './browser-storage.js';
 
-const DEFAULT_WORKSPACE_TREE_NAME = 'ContextTree';
+const DEFAULT_WORKSPACE_TREE_NAME = 'default';
 
 export class CanvasApiClient {
   constructor() {
