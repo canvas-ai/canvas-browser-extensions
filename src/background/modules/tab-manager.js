@@ -137,7 +137,6 @@ export class TabManager {
       metadata: {
         contentType: 'application/json',
         contentEncoding: 'utf8',
-        dataPaths: []
       },
       indexOptions: {
         checksumAlgorithms: ['sha1', 'sha256'],
