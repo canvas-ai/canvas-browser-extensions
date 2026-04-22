@@ -923,11 +923,15 @@ async function handleTestConnection(data, sendResponse) {
   try {
     console.log('Testing connection with data:', data);
 
-
-
     // Initialize API client with provided settings
     if (data.serverUrl && data.apiBasePath) {
       apiClient.initialize(data.serverUrl, data.apiBasePath, data.apiToken || '');
+    }
+
+    // For credentials auth, exchange email/password for a JWT first
+    if (data.authMode === 'credentials' && data.email && data.password) {
+      const loginResult = await apiClient.login(data.email, data.password);
+      apiClient.userToken = loginResult.token;
     }
 
     // Test the connection
@@ -952,7 +956,9 @@ async function handleConnect(data, sendResponse) {
     console.log('Connecting with data:', data);
 
     // Validate required fields
-    if (!data.serverUrl || !data.apiBasePath || !data.apiToken) {
+    const hasToken = !!data.apiToken;
+    const hasCredentials = data.authMode === 'credentials' && !!data.email && !!data.password;
+    if (!data.serverUrl || !data.apiBasePath || (!hasToken && !hasCredentials)) {
       throw new Error('Missing required connection parameters');
     }
 
@@ -979,10 +985,16 @@ async function handleConnect(data, sendResponse) {
       });
     }
 
-
-
     // Initialize API client
-    apiClient.initialize(data.serverUrl, data.apiBasePath, data.apiToken);
+    apiClient.initialize(data.serverUrl, data.apiBasePath, data.apiToken || '');
+
+    // For credentials auth, exchange email/password for a JWT before testing
+    let resolvedApiToken = data.apiToken || '';
+    if (hasCredentials) {
+      const loginResult = await apiClient.login(data.email, data.password);
+      resolvedApiToken = loginResult.token;
+      apiClient.userToken = resolvedApiToken;
+    }
 
     // Test the connection first
     const testResult = await apiClient.testConnection();
@@ -994,7 +1006,8 @@ async function handleConnect(data, sendResponse) {
     const connectionSettings = {
       serverUrl: data.serverUrl,
       apiBasePath: data.apiBasePath,
-      apiToken: data.apiToken,
+      apiToken: resolvedApiToken,
+      authMode: data.authMode || 'token',
       deviceId: previousConnection?.deviceId || '',
       deviceToken: previousConnection?.deviceToken || '',
       deviceName: previousConnection?.deviceName || '',
@@ -1036,6 +1049,7 @@ async function handleConnect(data, sendResponse) {
       connected: true,
       authenticated: true,
       user: testResult.user,
+      apiToken: resolvedApiToken,
       message: 'Connected and settings saved successfully'
     });
   } catch (error) {

@@ -604,6 +604,30 @@ Firefox blocks local network requests for security reasons.
     return await this.get('/auth/me');
   }
 
+  async login(email, password) {
+    const url = this.buildUrl('/auth/login');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'success' || !data.payload?.token) {
+        throw new Error(data?.message || `Login failed: HTTP ${response.status}`);
+      }
+      return data.payload; // { token, user }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') throw new Error('Login request timed out');
+      throw error;
+    }
+  }
+
   // Context methods
   async getContexts() {
     return await this.get('/contexts');

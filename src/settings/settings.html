@@ -46,10 +46,34 @@
         </div>
 
         <div class="form-group">
+          <label>Authentication Mode</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="authMode" id="authModeToken" value="token" checked>
+              API Token
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="authMode" id="authModeCredentials" value="credentials">
+              Username &amp; Password
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="apiTokenGroup">
           <label for="apiToken">API Token</label>
           <input type="password" id="apiToken" placeholder="canvas-..."
-                 class="input-field" required>
+                 class="input-field">
           <small class="help-text">Generate this token from the Canvas web interface</small>
+        </div>
+
+        <div class="form-group" id="credentialsGroup" style="display: none;">
+          <label for="authEmail">Email</label>
+          <input type="email" id="authEmail" placeholder="user@example.com"
+                 class="input-field" autocomplete="email">
+          <label for="authPassword" style="margin-top: 8px;">Password</label>
+          <input type="password" id="authPassword" placeholder="Your password"
+                 class="input-field" autocomplete="current-password">
+          <small class="help-text">Sign in with your Canvas account credentials</small>
         </div>
 
         <div class="form-group">

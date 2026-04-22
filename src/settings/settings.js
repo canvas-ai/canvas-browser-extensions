@@ -3,6 +3,7 @@
 
 // DOM elements
 let browserIdentity, serverUrl, apiBasePath, apiToken;
+let authModeToken, authModeCredentials, apiTokenGroup, credentialsGroup, authEmail, authPassword;
 let deviceSelect, deviceSelectionHelp, deviceRegistrationSection;
 let deviceDetailsSection, selectedDeviceName, selectedDeviceId, selectedDevicePlatform, selectedDeviceDescription;
 let generatedDeviceId;
@@ -22,6 +23,7 @@ let refreshTabSyncDebugBtn, copyTabSyncDebugBtn, tabSyncDebugSummary, tabSyncDeb
 let toast;
 
 // State
+let currentAuthMode = 'token';
 let isConnected = false;
 let isBoundToContext = false;
 let availableContexts = [];
@@ -60,6 +62,12 @@ function initializeElements() {
   serverUrl = document.getElementById('serverUrl');
   apiBasePath = document.getElementById('apiBasePath');
   apiToken = document.getElementById('apiToken');
+  authModeToken = document.getElementById('authModeToken');
+  authModeCredentials = document.getElementById('authModeCredentials');
+  apiTokenGroup = document.getElementById('apiTokenGroup');
+  credentialsGroup = document.getElementById('credentialsGroup');
+  authEmail = document.getElementById('authEmail');
+  authPassword = document.getElementById('authPassword');
   deviceSelect = document.getElementById('deviceSelect');
   deviceSelectionHelp = document.getElementById('deviceSelectionHelp');
   deviceRegistrationSection = document.getElementById('deviceRegistrationSection');
@@ -125,8 +133,11 @@ function initializeElements() {
 }
 
 function setupEventListeners() {
-  // Connection buttons
+  // Auth mode toggle
+  authModeToken.addEventListener('change', handleAuthModeChange);
+  authModeCredentials.addEventListener('change', handleAuthModeChange);
 
+  // Connection buttons
   testConnectionBtn.addEventListener('click', handleTestConnection);
   connectBtn.addEventListener('click', handleConnect);
   disconnectBtn.addEventListener('click', handleDisconnect);
@@ -175,6 +186,16 @@ function setupEventListeners() {
 
 
 
+function handleAuthModeChange() {
+  currentAuthMode = authModeCredentials.checked ? 'credentials' : 'token';
+  updateAuthModeVisibility(currentAuthMode);
+}
+
+function updateAuthModeVisibility(mode) {
+  if (apiTokenGroup) apiTokenGroup.style.display = mode === 'credentials' ? 'none' : 'block';
+  if (credentialsGroup) credentialsGroup.style.display = mode === 'credentials' ? 'block' : 'none';
+}
+
 async function loadSettings() {
   try {
     console.log('Loading settings from background service worker...');
@@ -200,6 +221,7 @@ async function loadSettings() {
         serverUrl: savedConnectionSettings.serverUrl || 'https://my.cnvs.ai',
         apiBasePath: savedConnectionSettings.apiBasePath || '/rest/v2',
         apiToken: savedConnectionSettings.apiToken || '',
+        authMode: savedConnectionSettings.authMode || 'token',
         deviceId: savedConnectionSettings.deviceId || '',
         deviceToken: savedConnectionSettings.deviceToken || '',
         deviceName: savedConnectionSettings.deviceName || '',
@@ -273,6 +295,12 @@ function populateForm() {
   serverUrl.value = settings.connectionSettings.serverUrl;
   apiBasePath.value = settings.connectionSettings.apiBasePath;
   apiToken.value = settings.connectionSettings.apiToken;
+
+  // Auth mode
+  currentAuthMode = settings.connectionSettings.authMode || 'token';
+  if (authModeToken) authModeToken.checked = currentAuthMode === 'token';
+  if (authModeCredentials) authModeCredentials.checked = currentAuthMode === 'credentials';
+  updateAuthModeVisibility(currentAuthMode);
   browserIdentity.value = settings.browserIdentity || getDefaultBrowserIdentity();
   if (newDeviceName) newDeviceName.value = settings.connectionSettings.deviceName || '';
   if (newDevicePlatform) newDevicePlatform.value = settings.connectionSettings.devicePlatform || '';
@@ -320,13 +348,19 @@ async function handleTestConnection() {
   try {
     setButtonLoading(testConnectionBtn, true);
 
+    // In credentials mode, only do a fresh login if email+password are entered.
+    // Otherwise fall back to the stored JWT (e.g. on initial connection check at startup).
+    const freshCredentials = currentAuthMode === 'credentials' && authEmail.value.trim() && authPassword.value;
     const connectionData = {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
-      apiToken: apiToken.value.trim()
+      apiToken: freshCredentials ? '' : (apiToken.value.trim() || settings.connectionSettings.apiToken || ''),
+      authMode: freshCredentials ? 'credentials' : 'token',
+      email: freshCredentials ? authEmail.value.trim() : undefined,
+      password: freshCredentials ? authPassword.value : undefined
     };
 
-    console.log('Testing connection with:', connectionData);
+    console.log('Testing connection with:', { ...connectionData, password: '[redacted]' });
 
     // Send test connection request to background
     const response = await sendMessageToBackground('TEST_CONNECTION', connectionData);
@@ -389,13 +423,14 @@ async function handleConnect() {
     const connectionData = {
       serverUrl: serverUrl.value.trim(),
       apiBasePath: apiBasePath.value.trim(),
-      apiToken: apiToken.value.trim(),
+      apiToken: currentAuthMode === 'token' ? apiToken.value.trim() : '',
+      authMode: currentAuthMode,
+      email: currentAuthMode === 'credentials' ? authEmail.value.trim() : undefined,
+      password: currentAuthMode === 'credentials' ? authPassword.value : undefined,
       browserIdentity: browserIdentity.value.trim()
     };
 
-    console.log('Connecting with:', connectionData);
-
-
+    console.log('Connecting with:', { ...connectionData, password: '[redacted]' });
 
     // Send connect request to background
     const response = await sendMessageToBackground('CONNECT', connectionData);
@@ -404,6 +439,11 @@ async function handleConnect() {
     if (response.success && response.authenticated) {
       isConnected = true;
       settings.user = response.user || null;
+      // Store the resolved token (may be a JWT obtained from credentials login)
+      if (response.apiToken) {
+        settings.connectionSettings.apiToken = response.apiToken;
+        settings.connectionSettings.authMode = currentAuthMode;
+      }
       updateConnectionStatus(true);
 
       if (response.user) {
@@ -876,11 +916,17 @@ async function handleSaveSettings() {
 
     const assignedDevice = await resolveDeviceAssignment();
 
+    // When using credentials auth, the JWT was obtained during connect and stored in settings
+    const resolvedApiToken = currentAuthMode === 'credentials'
+      ? settings.connectionSettings.apiToken
+      : apiToken.value.trim();
+
     const allSettings = {
       connectionSettings: {
         serverUrl: serverUrl.value.trim(),
         apiBasePath: apiBasePath.value.trim(),
-        apiToken: apiToken.value.trim(),
+        apiToken: resolvedApiToken,
+        authMode: currentAuthMode,
         deviceId: assignedDevice.deviceId,
         deviceToken: assignedDevice.token,
         deviceName: assignedDevice.name || '',
@@ -1084,10 +1130,23 @@ function validateConnectionForm() {
     return false;
   }
 
-  if (!apiToken.value.trim()) {
-    showToast('API token is required', 'warning');
-    apiToken.focus();
-    return false;
+  if (currentAuthMode === 'credentials') {
+    if (!authEmail.value.trim()) {
+      showToast('Email is required', 'warning');
+      authEmail.focus();
+      return false;
+    }
+    if (!authPassword.value) {
+      showToast('Password is required', 'warning');
+      authPassword.focus();
+      return false;
+    }
+  } else {
+    if (!apiToken.value.trim()) {
+      showToast('API token is required', 'warning');
+      apiToken.focus();
+      return false;
+    }
   }
 
   return true;
