@@ -35,6 +35,8 @@ jobs:
       - name: Delete old runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No checkout — gh must not rely on .git for repo detection
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           WORKFLOW="${{ github.event.inputs.workflow }}"
