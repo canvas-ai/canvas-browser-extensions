@@ -1,0 +1,89 @@
+name: Cleanup Old Workflow Runs
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: 'Workflow file in .github/workflows/'
+        required: true
+        default: 'build.yml'
+        type: string
+      keep_runs:
+        description: 'How many newest runs to keep'
+        required: true
+        default: '5'
+        type: string
+      fetch_limit:
+        description: 'Max runs to fetch (cap for one run)'
+        required: true
+        default: '500'
+        type: string
+      dry_run:
+        description: 'Dry run — list IDs only, do not delete'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Prune workflow run history
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          WORKFLOW="${{ github.event.inputs.workflow }}"
+          KEEP="${{ github.event.inputs.keep_runs }}"
+          LIMIT="${{ github.event.inputs.fetch_limit }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+
+          case "$KEEP" in (*[!0-9]*) echo "keep_runs must be a non-negative integer"; exit 1;; esac
+          case "$LIMIT" in (*[!0-9]*) echo "fetch_limit must be a non-negative integer"; exit 1;; esac
+
+          echo "Workflow: $WORKFLOW | keep: $KEEP | fetch limit: $LIMIT | dry_run: $DRY"
+
+          gh run list -w "$WORKFLOW" -L "$LIMIT" --json databaseId,createdAt,status,displayTitle \
+            > runs.json
+
+          TOTAL=$(jq 'length' runs.json)
+          echo "Fetched $TOTAL run(s)"
+
+          # Newest first by createdAt; keep newest KEEP runs, delete the rest
+          jq -r --argjson k "$KEEP" \
+            'sort_by(.createdAt) | reverse | .[$k:] | .[].databaseId' runs.json > to_delete.txt
+          N=$(wc -l < to_delete.txt | tr -d ' ')
+          echo "Runs to remove: $N"
+
+          if [ "$N" -eq 0 ]; then
+            echo "Nothing to delete."
+            exit 0
+          fi
+
+          if [ "$DRY" = "true" ]; then
+            echo "Dry run — would delete run id(s):"
+            cat to_delete.txt
+            exit 0
+          fi
+
+          OK=0
+          FAIL=0
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            if gh run delete "$id" --yes; then
+              OK=$((OK + 1))
+            else
+              FAIL=$((FAIL + 1))
+              echo "Skip or failed: $id"
+            fi
+          done < to_delete.txt
+
+          echo "Deleted: $OK | failed/skipped: $FAIL"
+          if [ "$FAIL" -gt 0 ]; then
+            exit 1
+          fi
+
