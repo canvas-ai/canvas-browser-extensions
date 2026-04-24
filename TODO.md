@@ -1,8 +1,5 @@
 # TODO
 
-- Context menu: popup notification on success
-- Right click on the popup icon
-  - Sync window to Canvas -> Context tree as with our global context menu
-  - Sync all windows to Canvas -> Context tree
-
-- Sidebar mode for tree view/traversal
+- Add support for multiple trees
+- Cleanup the UI, usability refactor
+- Add a in-popup settings tab with material design v2 based switches for the most common functionality
