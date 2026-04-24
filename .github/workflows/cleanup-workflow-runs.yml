@@ -37,6 +37,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No checkout — gh must not rely on .git for repo detection
           GH_REPO: ${{ github.repository }}
+          # Older gh on runners has no `gh run delete --yes`; non-interactive + id is enough
+          GH_PROMPT_DISABLED: "1"
         run: |
           set -euo pipefail
           WORKFLOW="${{ github.event.inputs.workflow }}"
@@ -76,7 +78,7 @@ jobs:
           FAIL=0
           while IFS= read -r id; do
             [ -z "$id" ] && continue
-            if gh run delete "$id" --yes; then
+            if gh run delete "$id"; then
               OK=$((OK + 1))
             else
               FAIL=$((FAIL + 1))
