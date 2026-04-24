@@ -136,7 +136,7 @@ export class TabManager {
       featureArray: this.generateFeatureArray(browserIdentity, syncSettings),
       metadata: {
         contentType: 'application/json',
-        contentEncoding: 'utf8',
+        contentEncoding: 'utf8'
       },
       indexOptions: {
         checksumAlgorithms: ['sha1', 'sha256'],
