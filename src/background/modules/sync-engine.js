@@ -21,7 +21,6 @@ export class SyncEngine {
     this.syncQueue = [];
     this.autoSyncEnabled = false;
     this.syncInterval = null;
-    this.syncIntervalMs = 30000; // 30 seconds
     this.pendingTabOpens = new Set(); // Track URLs being opened to prevent duplicates
     this.pendingFetches = new Map(); // Track pending document fetches to prevent duplicates
     this.webSocketHandlersSetup = false;
@@ -317,9 +316,13 @@ export class SyncEngine {
       if (mode === 'explorer' && currentWorkspace) {
         console.log('SyncEngine: Fetching documents for tree event in explorer mode');
 
-        // Fetch documents from the workspace
         const wsId = currentWorkspace.name || currentWorkspace.id;
-        const response = await apiClient.getWorkspaceDocuments(wsId, eventData.contextSpec || '/', ['data/abstraction/tab']);
+        const eventDocuments = Array.isArray(eventData.documents)
+          ? eventData.documents
+          : (eventData.document ? [eventData.document] : null);
+        const response = eventDocuments
+          ? { status: 'success', payload: eventDocuments }
+          : await apiClient.getWorkspaceDocuments(wsId, eventData.contextSpec || '/', ['data/abstraction/tab']);
 
         if (response.status === 'success') {
           const documents = response.payload || [];
@@ -613,29 +616,15 @@ export class SyncEngine {
 
   // Start automatic synchronization
   startAutoSync() {
-    console.log('SyncEngine: Starting auto-sync...');
+    console.log('SyncEngine: Starting event-driven auto-sync...');
 
     this.autoSyncEnabled = true;
 
     // Clear existing interval
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
+      this.syncInterval = null;
     }
-
-    // Start periodic sync
-    this.syncInterval = setInterval(async () => {
-      if (!this.syncInProgress && this.isInitialized) {
-        try {
-          const currentContext = await browserStorage.getCurrentContext();
-          if (currentContext?.id) {
-            console.log('SyncEngine: Performing periodic sync...');
-            await this.performIncrementalSync(currentContext.id);
-          }
-        } catch (error) {
-          console.error('SyncEngine: Auto-sync failed:', error);
-        }
-      }
-    }, this.syncIntervalMs);
   }
 
   // Stop automatic synchronization
@@ -872,11 +861,8 @@ export class SyncEngine {
   // Incremental synchronization (lighter than full sync)
   async performIncrementalSync(contextId) {
     try {
-      console.log('SyncEngine: Performing incremental synchronization...');
-
-      // For now, incremental sync is the same as full sync
-      // In the future, we could optimize this by tracking changes since last sync
-      return await this.performFullSync(contextId);
+      console.log('SyncEngine: Incremental sync requested; using event-driven updates instead of periodic full sync.');
+      return { success: true, skipped: true, contextId };
 
     } catch (error) {
       console.error('SyncEngine: Incremental sync failed:', error);
@@ -1494,88 +1480,26 @@ export class SyncEngine {
         documents = documents.slice(0, 100);
       }
 
-      // Filter out documents that would create duplicate tabs
-      const documentsToOpen = [];
-      const skippedDuplicates = [];
-
-      for (const document of documents) {
-        if (document.schema === 'data/abstraction/tab' && document.data?.url) {
-          // Check if tab is already open or pending
-          const existingTabs = await tabManager.findDuplicateTabs(document.data.url);
-          const isPending = this.isPendingTabOpen(document.data.url);
-
-          if (existingTabs.length === 0 && !isPending) {
-            // Mark as pending to prevent race conditions
-            this.markPendingTabOpen(document.data.url);
-            documentsToOpen.push(document);
-          } else {
-            console.log('SyncEngine: Skipping duplicate tab:', document.data?.title || document.data.url);
-            skippedDuplicates.push(document);
-          }
-        } else {
-          // Non-tab documents or documents without URLs - include them
-          documentsToOpen.push(document);
-        }
-      }
-
-      if (skippedDuplicates.length > 0) {
-        console.log(`SyncEngine: Skipped ${skippedDuplicates.length} duplicate tabs, opening ${documentsToOpen.length} new tabs`);
-      }
-
-      if (documentsToOpen.length === 0) {
-        console.log('SyncEngine: No new tabs to open after filtering duplicates');
+      const tabDocuments = documents.filter(document => document.schema === 'data/abstraction/tab' && document.data?.url);
+      if (tabDocuments.length === 0) {
+        console.log('SyncEngine: No tab documents to open');
         return;
       }
 
       // Get user-configured settings or use reasonable defaults
       const syncSettings = await browserStorage.getSyncSettings();
       const effectiveMaxConcurrent = maxConcurrent ?? syncSettings.tabOpeningMaxConcurrent ?? 20; // Increased from 3 to 20
-      const effectiveDelayMs = delayMs ?? syncSettings.tabOpeningDelayMs ?? 50; // Reduced from 200ms to 50ms
+      const effectiveDelayMs = delayMs ?? syncSettings.tabOpeningDelayMs ?? 0;
 
-      console.log('SyncEngine: Opening', documentsToOpen.length, 'tabs (max', effectiveMaxConcurrent, 'concurrent)');
+      console.log('SyncEngine: Opening', tabDocuments.length, 'tabs (max', effectiveMaxConcurrent, 'concurrent)');
+      const result = await tabManager.openCanvasDocuments(tabDocuments, {
+        active: false,
+        allowDuplicates: false,
+        maxConcurrent: effectiveMaxConcurrent,
+        delayMs: effectiveDelayMs
+      }, syncSettings);
 
-      // Process documents in batches to avoid overwhelming the browser
-      for (let i = 0; i < documentsToOpen.length; i += effectiveMaxConcurrent) {
-        const batch = documentsToOpen.slice(i, i + effectiveMaxConcurrent);
-
-        // Open batch of tabs concurrently with individual error handling
-        const promises = batch.map(async (document, index) => {
-          try {
-            console.log(`SyncEngine: Opening tab ${i + index + 1}/${documentsToOpen.length}:`, document.data?.title || document.id);
-            const result = await tabManager.openCanvasDocument(document, {
-              active: false,
-              allowDuplicates: false  // Prevent duplicates at tab manager level too
-            });
-            console.log('SyncEngine: ✅ Opened tab:', document.data?.title || document.id);
-            return { success: true, document, result };
-          } catch (error) {
-            console.error('SyncEngine: ❌ Failed to open tab:', document.data?.title || document.id, error);
-            return { success: false, document, error: error.message };
-          }
-        });
-
-        // Wait for all tabs in this batch to complete (don't let one failure stop others)
-        const results = await Promise.allSettled(promises);
-
-        // Log batch completion
-        const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-        const failed = batch.length - successful;
-        console.log(`SyncEngine: Batch ${Math.floor(i/effectiveMaxConcurrent) + 1} completed: ${successful} opened, ${failed} failed`);
-
-        // Small delay between batches if there are more to process
-        if (i + effectiveMaxConcurrent < documentsToOpen.length && effectiveDelayMs > 0) {
-          await new Promise(resolve => setTimeout(resolve, effectiveDelayMs));
-        }
-      }
-
-      // Clear pending flags after opening all tabs
-      for (const document of documentsToOpen) {
-        if (document.data?.url) {
-          this.clearPendingTabOpen(document.data.url);
-        }
-      }
-
-      console.log('SyncEngine: Completed opening all tabs');
+      console.log('SyncEngine: Completed opening tabs:', result);
 
     } catch (error) {
       console.error('SyncEngine: Failed to open tabs with rate limiting:', error);

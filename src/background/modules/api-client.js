@@ -16,6 +16,7 @@ export class CanvasApiClient {
     this.connected = false;
     this.appKey = 'canvas-extension';
     this.startedWorkspaces = new Set();
+    this.requestStats = { count: 0, totalMs: 0, last: null };
   }
 
   // ---- Utilities ---------------------------------------------------------
@@ -52,11 +53,16 @@ export class CanvasApiClient {
   }
 
   async fetchDeleteWithJson(url, body) {
+    const startedAt = performance.now();
+    const endpoint = url.replace(`${this.baseUrl}${this.apiBasePath}`, '');
     const resp = await fetch(url, {
       method: 'DELETE',
-      headers: await this.buildHeaders('DELETE', url.replace(`${this.baseUrl}${this.apiBasePath}`, '')),
+      headers: await this.buildHeaders('DELETE', endpoint),
       body: JSON.stringify(body)
     });
+    const durationMs = Math.round(performance.now() - startedAt);
+    this.recordRequestMetric('DELETE', endpoint, durationMs);
+    console.info(`API Timing: DELETE ${endpoint} ${durationMs}ms`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     return await resp.json();
   }
@@ -96,6 +102,20 @@ export class CanvasApiClient {
 
   parseResponsePayload(response) {
     return response?.payload || response?.data || response;
+  }
+
+  recordRequestMetric(method, endpoint, durationMs) {
+    this.requestStats.count += 1;
+    this.requestStats.totalMs += durationMs;
+    this.requestStats.last = { method, endpoint, durationMs, at: new Date().toISOString() };
+  }
+
+  getRequestStats() {
+    return { ...this.requestStats };
+  }
+
+  resetRequestStats() {
+    this.requestStats = { count: 0, totalMs: 0, last: null };
   }
 
   getBrowserPlatform() {
@@ -220,6 +240,7 @@ export class CanvasApiClient {
   async request(method, endpoint, data = null) {
     const url = this.buildUrl(endpoint);
     const headers = await this.buildHeaders(method, endpoint);
+    const startedAt = performance.now();
 
     // Firefox compatibility: avoid CORS issues for local network connections
     const isFirefox = typeof browser !== 'undefined' && browser.runtime;
@@ -260,6 +281,9 @@ export class CanvasApiClient {
       }
 
       const responseData = await response.json();
+      const durationMs = Math.round(performance.now() - startedAt);
+      this.recordRequestMetric(method, endpoint, durationMs);
+      console.info(`API Timing: ${method} ${endpoint} ${durationMs}ms`);
       console.log(`API Response: ${method} ${url}`, responseData);
 
       // Validate Canvas API response format

@@ -117,17 +117,7 @@ export class TabManager {
       schema: 'data/abstraction/tab',
       schemaVersion: '2.0',
       data: {
-        // Browser tab properties as specified in design doc
-        id: tab.id,
-        windowId: tab.windowId,
-        index: tab.index,
-        highlighted: tab.highlighted,
-        active: tab.active,
         pinned: tab.pinned,
-        discarded: tab.discarded || false,
-        incognito: tab.incognito,
-        audible: tab.audible,
-        mutedInfo: tab.mutedInfo,
         url: normalizedUrl,
         title: tab.title,
         favIconUrl: tab.favIconUrl,
@@ -137,24 +127,6 @@ export class TabManager {
       metadata: {
         contentType: 'application/json',
         contentEncoding: 'utf8'
-      },
-      indexOptions: {
-        checksumAlgorithms: ['sha1', 'sha256'],
-        primaryChecksumAlgorithm: 'sha1',
-        checksumFields: ['data.url'],
-        ftsSearchFields: ['data.title', 'data.url'],
-        vectorEmbeddingFields: ['data.title', 'data.url'],
-        embeddingOptions: {
-          embeddingModel: 'text-embedding-3-small',
-          embeddingDimensions: 1536,
-          embeddingProvider: 'openai',
-          embeddingProviderOptions: {},
-          chunking: {
-            type: 'sentence',
-            chunkSize: 1000,
-            chunkOverlap: 200
-          }
-        }
       }
     };
 
@@ -504,8 +476,23 @@ export class TabManager {
   // Find duplicate tabs by URL
   async findDuplicateTabs(url, syncSettings = {}) {
     const allTabs = await this.getAllTabs();
+    return this.findDuplicateTabsInList(url, allTabs, syncSettings);
+  }
+
+  normalizeUrl(rawUrl, syncSettings = {}) {
+    return normalizeTabUrl(rawUrl, syncSettings);
+  }
+
+  findDuplicateTabsInList(url, tabs, syncSettings = {}) {
     const needle = normalizeTabUrl(url, syncSettings);
-    return allTabs.filter(tab => normalizeTabUrl(tab.url, syncSettings) === needle);
+    return tabs.filter(tab => normalizeTabUrl(tab.url, syncSettings) === needle);
+  }
+
+  async findTabsMatchingUrls(urls, syncSettings = {}) {
+    const needles = new Set((urls || []).map(url => normalizeTabUrl(url, syncSettings)).filter(Boolean));
+    if (needles.size === 0) return [];
+    const allTabs = await this.getAllTabs();
+    return allTabs.filter(tab => needles.has(normalizeTabUrl(tab.url, syncSettings)));
   }
 
   // Canvas Integration Methods
@@ -667,12 +654,15 @@ export class TabManager {
           };
         }
 
-        // Open new tab (prefer the same window if available)
+        // Open new tabs in the current browser context by default. Stored Canvas
+        // window IDs are stale runtime state after restarts or across browsers.
         const baseOptions = {
           active: options.active !== false,
           pinned: canvasDoc.data.pinned || false
         };
-        const preferredWindowId = Number.isInteger(canvasDoc.data?.windowId) ? canvasDoc.data.windowId : undefined;
+        const preferredWindowId = options.restoreWindow === true && Number.isInteger(canvasDoc.data?.windowId)
+          ? canvasDoc.data.windowId
+          : undefined;
 
         let tab;
         if (preferredWindowId !== undefined) {
@@ -706,6 +696,79 @@ export class TabManager {
         error: error.message
       };
     }
+  }
+
+  async openCanvasDocuments(canvasDocs, options = {}, syncSettings = {}) {
+    const documents = Array.isArray(canvasDocs) ? canvasDocs.filter(doc => doc?.data?.url) : [];
+    if (documents.length === 0) {
+      return { success: false, total: 0, successful: 0, failed: 0, results: [] };
+    }
+
+    const allTabs = await this.getAllTabs();
+    const openUrls = new Set(allTabs.map(tab => normalizeTabUrl(tab.url, syncSettings)));
+    const queuedUrls = new Set();
+    const maxConcurrent = Math.max(1, options.maxConcurrent || 20);
+    const delayMs = options.delayMs || 0;
+
+    const work = documents.map((document) => {
+      const urlKey = normalizeTabUrl(document.data.url, syncSettings);
+      const duplicate = openUrls.has(urlKey) || queuedUrls.has(urlKey);
+      if (!options.allowDuplicates && duplicate) {
+        const existingTab = this.findDuplicateTabsInList(document.data.url, allTabs, syncSettings)[0] || null;
+        if (existingTab) this.markTabAsSynced(existingTab.id, document.id, document.data?.url);
+        return {
+          document,
+          skipped: true,
+          result: {
+            success: true,
+            tab: existingTab,
+            skipped: true,
+            message: existingTab ? 'Focused existing tab' : 'Duplicate tab already queued'
+          }
+        };
+      }
+
+      queuedUrls.add(urlKey);
+      return { document, skipped: false };
+    });
+
+    const results = [];
+    for (let i = 0; i < work.length; i += maxConcurrent) {
+      const batch = work.slice(i, i + maxConcurrent);
+      const opened = await Promise.all(batch.map(async (item) => {
+        if (item.skipped) return item;
+
+        try {
+          this.markUrlAsPendingFromCanvas(item.document.data.url);
+          const tab = await this.openTab(item.document.data.url, {
+            active: options.active !== false,
+            pinned: item.document.data.pinned || false
+          });
+          this.markTabAsSynced(tab.id, item.document.id, item.document.data?.url);
+          return { document: item.document, result: { success: true, tab, message: 'Canvas document opened' } };
+        } catch (error) {
+          return { document: item.document, result: { success: false, error: error.message } };
+        } finally {
+          this.unmarkUrlAsPendingFromCanvas(item.document.data.url);
+        }
+      }));
+
+      results.push(...opened);
+      if (i + maxConcurrent < work.length && delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    const successful = results.filter(item => item.result?.success && !item.result?.skipped).length;
+    const skipped = results.filter(item => item.result?.skipped).length;
+    return {
+      success: successful > 0 || skipped > 0,
+      total: documents.length,
+      successful,
+      skipped,
+      failed: documents.length - successful - skipped,
+      results
+    };
   }
 
   // Bulk sync multiple tabs

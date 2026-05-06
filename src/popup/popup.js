@@ -75,6 +75,10 @@ const syncToSelectedPaths = new Set();
 // Fuzzy search instances
 let browserTabsFuse = null;
 let canvasTabsFuse = null;
+let currentSyncSettings = {};
+let lastBrowserFuseKey = '';
+let lastCanvasFuseKey = '';
+const popupRequestStats = { count: 0, totalMs: 0 };
 
 // Fuzzy search configuration
 const fuseConfig = {
@@ -651,13 +655,15 @@ function isInternalTab(tab) {
 }
 
 async function loadTabs() {
+  const startedAt = performance.now();
+  const requestCountBefore = popupRequestStats.count;
   try {
     console.log('Loading tabs...');
 
-    // Get all browser tabs (both synced and unsynced)
-    console.log('Requesting all browser tabs...');
-    const allTabsResponse = await sendMessageToBackground('GET_ALL_TABS');
-    console.log('All browser tabs response:', allTabsResponse);
+    const [allTabsResponse, docsResponse] = await Promise.all([
+      sendMessageToBackground('GET_ALL_TABS'),
+      fetchCurrentDocumentList()
+    ]);
 
     if (allTabsResponse.success) {
       const rawTabs = allTabsResponse.tabs || [];
@@ -669,31 +675,7 @@ async function loadTabs() {
 
       console.log(`All browser tabs loaded: ${allBrowserTabs.length} usable, ${discardedCount} discarded, ${internalCount} internal (filtered out)`);
 
-      // Get synced tab URLs from server documents to identify which tabs are synced
-      if (currentConnection.connected) {
-        let docsResponse = null;
-        if (currentConnection.mode === 'context' && currentConnection.context) {
-          docsResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
-        } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-          docsResponse = await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', { contextSpec: currentWorkspacePath || '/' });
-        }
-
-        if (docsResponse?.success) {
-          const syncedUrls = new Set(
-            (docsResponse.documents || []).map(doc => doc.data?.url).filter(Boolean)
-          );
-
-          // Mark which tabs are synced
-          syncedTabIds.clear();
-          allBrowserTabs.forEach(tab => {
-            if (syncedUrls.has(tab.url)) {
-              syncedTabIds.add(tab.id);
-            }
-          });
-
-          console.log('Synced tab IDs:', Array.from(syncedTabIds));
-        }
-      }
+      markSyncedBrowserTabs(docsResponse?.documents || []);
 
       // Load pin state for all tabs
       await loadPinStates();
@@ -705,41 +687,14 @@ async function loadTabs() {
       console.error('Failed to get browser tabs:', allTabsResponse.error);
     }
 
-    // Get documents for current mode - only if connected
-    if (currentConnection.connected) {
-      if (currentConnection.mode === 'context' && currentConnection.context) {
-        console.log('Requesting Context documents...');
-        const canvasResponse = await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
-        console.log('Context documents response:', canvasResponse);
-
-        if (canvasResponse.success) {
-          canvasTabs = canvasResponse.documents || [];
-          console.log('Context documents loaded:', canvasTabs.length);
-          renderCanvasTabs();
-        } else {
-          console.error('Failed to get context documents:', canvasResponse.error);
-          canvasTabs = [];
-          renderCanvasTabs();
-        }
-      } else if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
-        console.log('Requesting Workspace documents...');
-        const wsResponse = await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', { contextSpec: currentWorkspacePath || '/' });
-        console.log('Workspace documents response:', wsResponse);
-
-        if (wsResponse.success) {
-          canvasTabs = wsResponse.documents || [];
-          console.log('Workspace documents loaded:', canvasTabs.length);
-          renderCanvasTabs();
-        } else {
-          console.error('Failed to get workspace documents:', wsResponse.error);
-          canvasTabs = [];
-          renderCanvasTabs();
-        }
-      } else {
-        console.log('No selection for current mode - skipping documents');
-        canvasTabs = [];
-        renderCanvasTabs();
-      }
+    if (docsResponse?.success) {
+      canvasTabs = docsResponse.documents || [];
+      console.log('Canvas documents loaded:', canvasTabs.length);
+      renderCanvasTabs();
+    } else if (currentConnection.connected) {
+      console.error('Failed to get Canvas documents:', docsResponse?.error);
+      canvasTabs = [];
+      renderCanvasTabs();
     } else {
       console.log('Not connected - skipping documents');
       canvasTabs = [];
@@ -755,7 +710,92 @@ async function loadTabs() {
     }
   } catch (error) {
     console.error('Failed to load tabs:', error);
+  } finally {
+    const durationMs = Math.round(performance.now() - startedAt);
+    const requestCount = popupRequestStats.count - requestCountBefore;
+    console.info(`Popup Timing: loadTabs ${durationMs}ms (${requestCount} background request${requestCount === 1 ? '' : 's'})`);
   }
+}
+
+async function fetchCurrentDocumentList() {
+  if (!currentConnection.connected) {
+    return { success: true, documents: [] };
+  }
+
+  if (currentConnection.mode === 'context' && currentConnection.context) {
+    return await sendMessageToBackground('GET_CANVAS_DOCUMENTS');
+  }
+
+  if (currentConnection.mode === 'explorer' && currentConnection.workspace) {
+    return await sendMessageToBackground('GET_WORKSPACE_DOCUMENTS', { contextSpec: currentWorkspacePath || '/' });
+  }
+
+  return { success: true, documents: [] };
+}
+
+function markSyncedBrowserTabs(documents) {
+  const syncedUrls = new Set(
+    (documents || [])
+      .map(doc => normalizeTabUrl(doc.data?.url))
+      .filter(Boolean)
+  );
+
+  syncedTabIds.clear();
+  allBrowserTabs.forEach(tab => {
+    if (syncedUrls.has(normalizeTabUrl(tab.url))) {
+      syncedTabIds.add(tab.id);
+    }
+  });
+
+  console.log('Synced tab IDs:', Array.from(syncedTabIds));
+}
+
+function applyOpenedCanvasDocuments(response, documents = []) {
+  const results = Array.isArray(response?.results)
+    ? response.results.map(item => item.result)
+    : [response];
+
+  results.forEach((result, index) => {
+    const tab = result?.tab;
+    const document = documents[index] || result?.document;
+    if (!tab?.id) return;
+
+    const existingIndex = allBrowserTabs.findIndex(item => item.id === tab.id);
+    if (existingIndex >= 0) {
+      allBrowserTabs[existingIndex] = { ...allBrowserTabs[existingIndex], ...tab };
+    } else {
+      allBrowserTabs.push(tab);
+    }
+    if (document?.id) syncedTabIds.add(tab.id);
+  });
+
+  updateBrowserTabsFilter();
+  renderBrowserTabs();
+  renderCanvasTabs();
+  initializeFuseInstances();
+}
+
+function applyRemovedCanvasDocuments(documentIds) {
+  const ids = new Set(documentIds.map(String));
+  canvasTabs = canvasTabs.filter(doc => !ids.has(String(doc.id)));
+  selectedCanvasTabs.forEach(id => {
+    if (ids.has(String(id))) selectedCanvasTabs.delete(id);
+  });
+  renderCanvasTabs();
+  initializeFuseInstances();
+}
+
+function applyClosedBrowserTabs(tabIds) {
+  const ids = new Set(tabIds.map(Number));
+  allBrowserTabs = allBrowserTabs.filter(tab => !ids.has(tab.id));
+  tabIds.forEach(tabId => {
+    syncedTabIds.delete(tabId);
+    selectedBrowserTabs.delete(tabId);
+  });
+  updateBrowserTabsFilter();
+  renderBrowserTabs();
+  renderCanvasTabs();
+  initializeFuseInstances();
 }
 
 async function loadPinStates() {
@@ -806,10 +846,10 @@ function getFilteredCanvasTabs() {
     return canvasTabs;
   } else {
     // Show only Canvas tabs that are NOT already open in browser
-    const openUrls = new Set(allBrowserTabs.map(tab => tab.url));
+    const openUrls = new Set(allBrowserTabs.map(tab => normalizeTabUrl(tab.url)));
     const filteredTabs = canvasTabs.filter(doc => {
       const url = doc.data?.url;
-      return url && !openUrls.has(url);
+      return url && !openUrls.has(normalizeTabUrl(url));
     });
     console.log(`Filtered Canvas tabs: ${filteredTabs.length} of ${canvasTabs.length} total (hiding tabs already open in browser)`);
     return filteredTabs;
@@ -826,6 +866,7 @@ async function loadSyncSettings() {
 
     if (response.success) {
       const settings = response.settings;
+      currentSyncSettings = settings || {};
 
       // Update checkbox states to match saved settings
       sendNewTabsToCanvas.checked = settings.sendNewTabsToCanvas || false;
@@ -1617,20 +1658,24 @@ function initializeFuseInstances() {
   console.log('Initializing FuzzySearch search instances...');
 
   // Initialize browser tabs fuzzy search
-  if (browserTabs && browserTabs.length > 0) {
-    browserTabsFuse = new FuzzySearch(browserTabs, fuseConfig);
+  const browserFuseKey = createListSignature(browserTabs, tab => `${tab.id}:${tab.url}:${tab.title || ''}`);
+  if (browserFuseKey !== lastBrowserFuseKey) {
+    lastBrowserFuseKey = browserFuseKey;
+    browserTabsFuse = browserTabs && browserTabs.length > 0 ? new FuzzySearch(browserTabs, fuseConfig) : null;
+  }
+  if (browserTabsFuse) {
     console.log('Browser tabs FuzzySearch instance created with', browserTabs.length, 'items');
-  } else {
-    browserTabsFuse = null;
   }
 
   // Initialize Canvas documents fuzzy search
   const filteredCanvasTabs = getFilteredCanvasTabs();
-  if (filteredCanvasTabs && filteredCanvasTabs.length > 0) {
-    canvasTabsFuse = new FuzzySearch(filteredCanvasTabs, fuseConfig);
+  const canvasFuseKey = createListSignature(filteredCanvasTabs, doc => `${doc.id}:${doc.data?.url || ''}:${doc.data?.title || ''}`);
+  if (canvasFuseKey !== lastCanvasFuseKey) {
+    lastCanvasFuseKey = canvasFuseKey;
+    canvasTabsFuse = filteredCanvasTabs && filteredCanvasTabs.length > 0 ? new FuzzySearch(filteredCanvasTabs, fuseConfig) : null;
+  }
+  if (canvasTabsFuse) {
     console.log('Canvas tabs FuzzySearch instance created with', filteredCanvasTabs.length, 'items');
-  } else {
-    canvasTabsFuse = null;
   }
 }
 
@@ -2289,6 +2334,7 @@ async function handleSyncSettingChange(event) {
 
     if (response.success) {
       console.log('Sync setting saved successfully:', actualSettingName, '=', settingValue);
+      currentSyncSettings = { ...currentSyncSettings, ...settingsUpdate };
     } else {
       console.error('Failed to save sync setting:', response.error);
       // Revert checkbox state on failure
@@ -2445,9 +2491,7 @@ async function handleOpenCanvasTab(documentId) {
     if (response.success) {
       console.log('Canvas document opened successfully');
       showToast(`Opened: ${document.data?.title || 'Tab'}`, 'success');
-
-      // Give browser time to register the new tab before refreshing (especially important for Firefox)
-      await new Promise(resolve => setTimeout(resolve, 300));
+      applyOpenedCanvasDocuments(response, [document]);
     } else {
       console.error('Failed to open Canvas document:', response.error);
       showToast(`Failed to open: ${response.error || 'Unknown error'}`, 'error');
@@ -2455,13 +2499,6 @@ async function handleOpenCanvasTab(documentId) {
   } catch (error) {
     console.error('Failed to open Canvas tab:', error);
     showToast(`Error opening tab: ${error.message}`, 'error');
-  } finally {
-    // Always refresh the list to ensure UI is up to date
-    try {
-      await loadTabs();
-    } catch (refreshError) {
-      console.error('Failed to refresh tabs after opening:', refreshError);
-    }
   }
 }
 
@@ -2483,7 +2520,7 @@ async function handleRemoveCanvasTab(documentId) {
     console.log('Remove Canvas document response:', response);
 
     if (response.success) {
-      await loadTabs(); // Refresh lists
+      applyRemovedCanvasDocuments([document.id]);
     } else {
       console.error('Failed to remove Canvas document:', response.error);
     }
@@ -2511,7 +2548,7 @@ async function handleDeleteCanvasTab(documentId) {
     console.log('Delete Canvas document response:', response);
 
     if (response.success) {
-      await loadTabs(); // Refresh lists
+      applyRemovedCanvasDocuments([document.id]);
     } else {
       console.error('Failed to delete Canvas document:', response.error);
     }
@@ -2819,12 +2856,38 @@ function isUUID(str) {
 }
 
 // Utility functions
+function createListSignature(items, mapItem) {
+  return (items || []).map(mapItem).join('|');
+}
+
+function normalizeTabUrl(rawUrl) {
+  const removeUtmParameters = currentSyncSettings?.removeUtmParameters !== false;
+  if (!removeUtmParameters || !rawUrl || typeof rawUrl !== 'string') return rawUrl;
+
+  try {
+    const url = new URL(rawUrl);
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (key.toLowerCase().startsWith('utm_')) {
+        url.searchParams.delete(key);
+      }
+    }
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 async function sendMessageToBackground(type, data = null) {
+  const startedAt = performance.now();
   return new Promise((resolve, reject) => {
     // Cross-browser compatibility: Firefox uses 'browser', Chrome uses 'chrome'
     const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
 
     runtime.sendMessage({ type, data }, (response) => {
+      const durationMs = Math.round(performance.now() - startedAt);
+      popupRequestStats.count += 1;
+      popupRequestStats.totalMs += durationMs;
+      console.info(`Popup Timing: ${type} ${durationMs}ms`);
       const lastError = (typeof browser !== 'undefined') ? browser.runtime.lastError : chrome.runtime.lastError;
       if (lastError) {
         reject(new Error(lastError.message));
@@ -2837,11 +2900,16 @@ async function sendMessageToBackground(type, data = null) {
 
 // Special function for direct message sending (for messages that need specific format)
 async function sendDirectMessageToBackground(message) {
+  const startedAt = performance.now();
   return new Promise((resolve, reject) => {
     // Cross-browser compatibility: Firefox uses 'browser', Chrome uses 'chrome'
     const runtime = (typeof browser !== 'undefined') ? browser.runtime : chrome.runtime;
 
     runtime.sendMessage(message, (response) => {
+      const durationMs = Math.round(performance.now() - startedAt);
+      popupRequestStats.count += 1;
+      popupRequestStats.totalMs += durationMs;
+      console.info(`Popup Timing: ${message?.type || 'direct'} ${durationMs}ms`);
       const lastError = (typeof browser !== 'undefined') ? browser.runtime.lastError : chrome.runtime.lastError;
       if (lastError) {
         reject(new Error(lastError.message));
@@ -2996,12 +3064,10 @@ async function handleCloseAll() {
       return;
     }
 
-    for (const tab of browserTabs) {
-      await sendMessageToBackground('CLOSE_TAB', { tabId: tab.id });
-    }
+    const tabIds = browserTabs.map(tab => tab.id);
+    await closeTabs(tabIds);
 
     console.log('All browser tabs closed');
-    await loadTabs(); // Refresh lists
   } catch (error) {
     console.error('Failed to close all tabs:', error);
   }
@@ -3042,8 +3108,7 @@ async function handleOpenAll() {
 
         if (opened > 0) {
           showToast(`Opened ${opened} of ${filteredCanvasTabs.length} tabs`, 'success');
-          // Give browser time to register new tabs before refreshing (especially important for Firefox)
-          await new Promise(resolve => setTimeout(resolve, 300));
+          applyOpenedCanvasDocuments(response, filteredCanvasTabs);
         }
         if (failed > 0) {
           showToast(`${failed} tabs failed to open`, 'warning');
@@ -3063,21 +3128,14 @@ async function handleOpenAll() {
   } catch (error) {
     console.error('Failed to open all Canvas tabs:', error);
     showToast(`Error opening all tabs: ${error.message}`, 'error');
-  } finally {
-    // Always refresh the list to ensure UI is up to date
-    // This will dynamically remove successfully opened tabs from canvas-to-browser list
-    try {
-      await loadTabs();
-    } catch (refreshError) {
-      console.error('Failed to refresh tabs after opening all:', refreshError);
-    }
   }
 }
 
 async function closeTabs(tabIds) {
-  for (const tabId of tabIds) {
-    await sendMessageToBackground('CLOSE_TAB', { tabId });
-  }
+  if (!tabIds.length) return;
+  const response = await sendMessageToBackground('CLOSE_TABS', { tabIds });
+  if (!response?.success) throw new Error(response?.error || 'Failed to close tabs');
+  applyClosedBrowserTabs(tabIds);
 }
 
 async function handleSyncWindow(windowId, closeAfterSync = false) {
@@ -3100,9 +3158,9 @@ async function handleSyncWindow(windowId, closeAfterSync = false) {
       selectedBrowserTabs.forEach(id => {
         if (tabIds.includes(id)) selectedBrowserTabs.delete(id);
       });
+    } else {
+      await loadTabs();
     }
-
-    await loadTabs();
   } catch (error) {
     console.error('Failed to sync window tabs:', error);
   }
@@ -3169,7 +3227,6 @@ async function handleSyncAndCloseSelected() {
 
     await closeTabs(selectedIds);
     selectedBrowserTabs.clear();
-    await loadTabs();
   } catch (error) {
     console.error('Failed to sync+close selected tabs:', error);
   }
@@ -3185,13 +3242,9 @@ async function handleCloseSelected() {
       return;
     }
 
-    for (const tabId of selectedIds) {
-      await sendMessageToBackground('CLOSE_TAB', { tabId });
-    }
+    await closeTabs(selectedIds);
 
     console.log('Selected browser tabs closed');
-    selectedBrowserTabs.clear();
-    await loadTabs(); // Refresh lists
   } catch (error) {
     console.error('Failed to close selected tabs:', error);
   }
@@ -3241,10 +3294,8 @@ async function handleOpenSelected() {
       if (response.success) {
         console.log(`Successfully opened ${response.successful}/${response.total} documents`);
         showToast(`Opened ${response.successful} of ${response.total} tabs`, 'success');
-
-        // Give browser time to register new tabs before refreshing (especially important for Firefox)
         if (response.successful > 0) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          applyOpenedCanvasDocuments(response, documentsToOpen);
         }
       } else {
         console.error('Failed to open documents:', response.error);
@@ -3257,13 +3308,6 @@ async function handleOpenSelected() {
   } catch (error) {
     console.error('Failed to open selected Canvas tabs:', error);
     showToast(`Error opening tabs: ${error.message}`, 'error');
-  } finally {
-    // Always refresh the list to ensure UI is up to date
-    try {
-      await loadTabs();
-    } catch (refreshError) {
-      console.error('Failed to refresh tabs after opening selected:', refreshError);
-    }
   }
 }
 
@@ -3277,19 +3321,17 @@ async function handleRemoveSelected() {
       return;
     }
 
-    for (const documentId of selectedIds) {
-      const document = canvasTabs.find(doc => doc.id === documentId);
-      if (document) {
-        await sendMessageToBackground('REMOVE_CANVAS_DOCUMENT', {
-          document,
-          closeTab: false
-        });
-      }
-    }
+    const documents = selectedIds
+      .map(documentId => canvasTabs.find(doc => doc.id === documentId))
+      .filter(Boolean);
+    const response = await sendMessageToBackground('REMOVE_CANVAS_DOCUMENTS', {
+      documents,
+      closeTab: false
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to remove selected Canvas tabs');
 
     console.log('Selected Canvas tabs removed');
-    selectedCanvasTabs.clear();
-    await loadTabs(); // Refresh lists
+    applyRemovedCanvasDocuments(selectedIds);
   } catch (error) {
     console.error('Failed to remove selected Canvas tabs:', error);
   }
@@ -3305,19 +3347,17 @@ async function handleDeleteSelected() {
       return;
     }
 
-    for (const documentId of selectedIds) {
-      const document = canvasTabs.find(doc => doc.id === documentId);
-      if (document) {
-        await sendMessageToBackground('REMOVE_CANVAS_DOCUMENT', {
-          document,
-          closeTab: true
-        });
-      }
-    }
+    const documents = selectedIds
+      .map(documentId => canvasTabs.find(doc => doc.id === documentId))
+      .filter(Boolean);
+    const response = await sendMessageToBackground('REMOVE_CANVAS_DOCUMENTS', {
+      documents,
+      closeTab: true
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to delete selected Canvas tabs');
 
     console.log('Selected Canvas tabs deleted');
-    selectedCanvasTabs.clear();
-    await loadTabs(); // Refresh lists
+    applyRemovedCanvasDocuments(selectedIds);
   } catch (error) {
     console.error('Failed to delete selected Canvas tabs:', error);
   }

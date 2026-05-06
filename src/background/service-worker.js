@@ -238,7 +238,6 @@ function setupWebSocketEventHandlers() {
   const refreshPopupOnDocumentEvent = (eventType) => {
     webSocketClient.on(eventType, (data) => {
       console.log(`WebSocket document event: ${eventType}`, data);
-      refreshTabLists();
       broadcastToPopup(eventType, data);
     });
   };
@@ -265,50 +264,46 @@ function setupWebSocketEventHandlers() {
   ].forEach(refreshPopupOnDocumentEvent);
 
   // Workspace tree changes
-  webSocketClient.on('workspace.tree.updated', async (data) => {
+  webSocketClient.on('workspace.tree.updated', (data) => {
     console.log('Workspace tree updated:', data);
-    // Refresh context menus when tree structure changes
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('workspace.tree.updated', data);
   });
 
-  webSocketClient.on('workspace.tree.created', async (data) => {
+  webSocketClient.on('workspace.tree.created', (data) => {
     console.log('Workspace tree node created:', data);
-    // Refresh context menus when new directories are created
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('workspace.tree.created', data);
   });
 
-  webSocketClient.on('workspace.tree.deleted', async (data) => {
+  webSocketClient.on('workspace.tree.deleted', (data) => {
     console.log('Workspace tree node deleted:', data);
-    // Refresh context menus when directories are deleted
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('workspace.tree.deleted', data);
   });
 
-  webSocketClient.on('workspace.tree.renamed', async (data) => {
+  webSocketClient.on('workspace.tree.renamed', (data) => {
     console.log('Workspace tree node renamed:', data);
-    // Refresh context menus when directories are renamed
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('workspace.tree.renamed', data);
   });
 
   // Directory-specific events
-  webSocketClient.on('directory.created', async (data) => {
+  webSocketClient.on('directory.created', (data) => {
     console.log('Directory created:', data);
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('directory.created', data);
   });
 
-  webSocketClient.on('directory.deleted', async (data) => {
+  webSocketClient.on('directory.deleted', (data) => {
     console.log('Directory deleted:', data);
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('directory.deleted', data);
   });
 
-  webSocketClient.on('directory.renamed', async (data) => {
+  webSocketClient.on('directory.renamed', (data) => {
     console.log('Directory renamed:', data);
-    await setupContextMenus();
+    scheduleContextMenusSetup();
     broadcastToPopup('directory.renamed', data);
   });
 }
@@ -343,6 +338,14 @@ let refreshTabsDebounce = null;
 function scheduleRefreshTabLists() {
   clearTimeout(refreshTabsDebounce);
   refreshTabsDebounce = setTimeout(refreshTabLists, 250);
+}
+
+let contextMenusDebounce = null;
+function scheduleContextMenusSetup() {
+  clearTimeout(contextMenusDebounce);
+  contextMenusDebounce = setTimeout(() => {
+    void setupContextMenus();
+  }, 250);
 }
 
 async function ensureApiClientReady(override = null) {
@@ -571,6 +574,7 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
   // Always respond exactly once for async handlers. This prevents:
   // "A listener indicated an asynchronous response ... but the message channel closed..."
   let responded = false;
+  const messageStartedAt = performance.now();
   const respond = (payload) => {
     if (responded) return;
     responded = true;
@@ -581,10 +585,17 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
       console.warn('Failed to sendResponse (channel closed?):', e);
     }
   };
-  const run = (p) => Promise.resolve(p).catch((error) => {
-    console.error('Unhandled message handler error:', error);
-    respond({ success: false, error: error?.message || String(error) });
-  });
+  const run = (p) => {
+    return Promise.resolve(p)
+      .then(() => {
+        console.info(`Background Timing: ${message.type} ${Math.round(performance.now() - messageStartedAt)}ms`);
+        return null;
+      })
+      .catch((error) => {
+        console.error('Unhandled message handler error:', error);
+        respond({ success: false, error: error?.message || String(error) });
+      });
+  };
 
   // Add ping test
   if (message.type === 'PING') {
@@ -708,9 +719,19 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
     run(handleRemoveCanvasDocument(message.data, respond));
     return true;
 
+  case 'REMOVE_CANVAS_DOCUMENTS':
+    // Remove multiple Canvas documents
+    run(handleRemoveCanvasDocuments(message.data, respond));
+    return true;
+
   case 'CLOSE_TAB':
     // Close browser tab
     run(handleCloseTab(message.data, respond));
+    return true;
+
+  case 'CLOSE_TABS':
+    // Close multiple browser tabs
+    run(handleCloseTabs(message.data, respond));
     return true;
 
   case 'CLOSE_WINDOW':
@@ -1522,6 +1543,28 @@ async function handleCloseTab(data, sendResponse) {
   }
 }
 
+async function handleCloseTabs(data, sendResponse) {
+  try {
+    const { tabIds } = data || {};
+    if (!Array.isArray(tabIds) || tabIds.length === 0) {
+      throw new Error('Tab IDs array is required');
+    }
+
+    console.log('Closing tabs:', tabIds);
+    const result = await tabManager.closeTabs(tabIds);
+    if (!result) throw new Error('Failed to close tabs');
+
+    sendResponse({
+      success: true,
+      closed: tabIds.length,
+      message: 'Tabs closed successfully'
+    });
+  } catch (error) {
+    console.error('Failed to close tabs:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
 async function handleCloseWindow(data, sendResponse) {
   try {
     const { windowId } = data || {};
@@ -2283,38 +2326,14 @@ async function handleOpenCanvasDocument(data, sendResponse) {
     if (documents && Array.isArray(documents)) {
       console.log('Opening multiple Canvas documents:', documents.length);
 
-      const results = [];
       const bulkOptions = {
         ...options,
-        allowDuplicates: true,  // Allow duplicates for bulk operations from popup
-        active: false  // Don't steal focus when opening multiple
+        allowDuplicates: options.allowDuplicates === true,
+        active: false
       };
-
-      for (let i = 0; i < documents.length; i++) {
-        const doc = documents[i];
-        try {
-          console.log(`🔧 Opening document ${i + 1}/${documents.length}:`, {
-            title: doc.data?.title,
-            url: doc.data?.url,
-            id: doc.id
-          });
-          const result = await tabManager.openCanvasDocument(doc, bulkOptions);
-          console.log(`🔧 Result for document ${i + 1}:`, result);
-          results.push({ document: doc, result });
-        } catch (error) {
-          console.error(`❌ Failed to open document ${i + 1}:`, error);
-          results.push({ document: doc, result: { success: false, error: error.message } });
-        }
-      }
-
-      const successful = results.filter(r => r.result.success).length;
-      sendResponse({
-        success: successful > 0,
-        total: documents.length,
-        successful,
-        failed: documents.length - successful,
-        results
-      });
+      const syncSettings = await browserStorage.getSyncSettings();
+      const result = await tabManager.openCanvasDocuments(documents, bulkOptions, syncSettings);
+      sendResponse(result);
       return;
     }
 
@@ -2418,6 +2437,65 @@ async function handleRemoveCanvasDocument(data, sendResponse) {
       success: false,
       error: error.message
     });
+  }
+}
+
+async function handleRemoveCanvasDocuments(data, sendResponse) {
+  try {
+    const { documents, contextId, closeTab = false } = data || {};
+    const items = Array.isArray(documents) ? documents.filter(Boolean) : [];
+    if (items.length === 0) {
+      throw new Error('Canvas documents array is required');
+    }
+
+    const documentIds = items.map(doc => doc.id).filter(id => id !== undefined && id !== null);
+    if (documentIds.length === 0) {
+      throw new Error('No valid document IDs found');
+    }
+
+    const mode = await browserStorage.getSyncMode();
+    const currentContext = await browserStorage.getCurrentContext();
+    const currentWorkspace = await browserStorage.getCurrentWorkspace();
+    const workspacePath = await browserStorage.getWorkspacePath();
+    const syncSettings = await browserStorage.getSyncSettings();
+
+    await ensureApiClientReady();
+
+    let response;
+    if (mode === 'context') {
+      const targetContextId = contextId || currentContext?.id;
+      if (!targetContextId) throw new Error('No context selected');
+      response = closeTab
+        ? await apiClient.deleteDocuments(targetContextId, documentIds)
+        : await apiClient.removeDocuments(targetContextId, documentIds);
+    } else {
+      const wsId = currentWorkspace?.name || currentWorkspace?.id;
+      if (!wsId) throw new Error('No workspace selected');
+      const contextSpec = workspacePath || '/';
+      response = closeTab
+        ? await apiClient.deleteWorkspaceDocuments(wsId, documentIds, contextSpec, ['data/abstraction/tab'])
+        : await apiClient.removeWorkspaceDocuments(wsId, documentIds, contextSpec, ['data/abstraction/tab']);
+    }
+
+    const success = response.status === 'success';
+    if (success && syncSettings.closeTabsRemovedFromCanvas) {
+      const urls = items.map(doc => doc.data?.url).filter(Boolean);
+      const matchingTabs = await tabManager.findTabsMatchingUrls(urls, syncSettings);
+      if (matchingTabs.length > 0) {
+        await tabManager.closeTabs(matchingTabs.map(tab => tab.id));
+      }
+    }
+
+    sendResponse({
+      success,
+      total: items.length,
+      successful: success ? items.length : 0,
+      failed: success ? 0 : items.length,
+      response
+    });
+  } catch (error) {
+    console.error('Failed to remove Canvas documents:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
