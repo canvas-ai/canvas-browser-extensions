@@ -3,6 +3,14 @@
 
 import { browserStorage } from './browser-storage.js';
 
+export class AuthExpiredError extends Error {
+  constructor(status) {
+    super(`HTTP ${status}: session expired`);
+    this.name = 'AuthExpiredError';
+    this.status = status;
+  }
+}
+
 const DEFAULT_WORKSPACE_TREE_NAME = 'context';
 
 export class CanvasApiClient {
@@ -63,7 +71,10 @@ export class CanvasApiClient {
     const durationMs = Math.round(performance.now() - startedAt);
     this.recordRequestMetric('DELETE', endpoint, durationMs);
     console.info(`API Timing: DELETE ${endpoint} ${durationMs}ms`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    if (!resp.ok) {
+      if (resp.status === 401 || resp.status === 403) throw new AuthExpiredError(resp.status);
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
     return await resp.json();
   }
 
@@ -277,6 +288,7 @@ export class CanvasApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) throw new AuthExpiredError(response.status);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 

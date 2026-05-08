@@ -2,7 +2,7 @@
 // Handles background operations, API communication, and tab synchronization
 
 import { browserStorage } from './modules/browser-storage.js';
-import { apiClient } from './modules/api-client.js';
+import { apiClient, AuthExpiredError } from './modules/api-client.js';
 import { webSocketClient } from './modules/websocket-client.js';
 import { tabManager } from './modules/tab-manager.js';
 import { syncEngine } from './modules/sync-engine.js';
@@ -329,6 +329,13 @@ function broadcastToPopup(type, data) {
   }
 }
 
+async function handleAuthExpired() {
+  console.warn('Auth expired — clearing session and notifying UI');
+  apiClient.userToken = null;
+  await browserStorage.setConnectionSettings({ connected: false, apiToken: '' });
+  broadcastToPopup('auth.session.expired', {});
+}
+
 // Refresh tab lists (notify popup)
 function refreshTabLists() {
   broadcastToPopup('tabs.refresh', {});
@@ -591,7 +598,13 @@ runtimeAPI.onMessage.addListener((message, sender, sendResponse) => {
         console.info(`Background Timing: ${message.type} ${Math.round(performance.now() - messageStartedAt)}ms`);
         return null;
       })
-      .catch((error) => {
+      .catch(async (error) => {
+        if (error instanceof AuthExpiredError) {
+          console.warn('AuthExpiredError caught in message handler:', message.type);
+          await handleAuthExpired();
+          respond({ success: false, error: 'session_expired', message: 'Session expired. Please reconnect.' });
+          return;
+        }
         console.error('Unhandled message handler error:', error);
         respond({ success: false, error: error?.message || String(error) });
       });

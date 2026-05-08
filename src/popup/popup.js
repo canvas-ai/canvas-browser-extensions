@@ -175,6 +175,13 @@ runtime.onMessage.addListener((message) => {
       console.log('Joined context:', message.data);
       break;
 
+    case 'auth.session.expired':
+      console.warn('Session expired — prompting user to reconnect');
+      currentConnection.connected = false;
+      updateConnectionStatus(currentConnection);
+      showSessionExpiredBanner();
+      break;
+
     default:
       console.log('Unknown background event:', message.eventType, message.data);
     }
@@ -505,6 +512,8 @@ function updateConnectionStatus(connection) {
   if (connection.connected) {
     console.log('Popup: Setting status to CONNECTED');
     connectionStatus.className = 'status-dot connected';
+    const expiredBanner = document.getElementById('session-expired-banner');
+    if (expiredBanner) expiredBanner.remove();
 
     // Show user info if available
     if (connection.user && connection.user.name) {
@@ -3374,6 +3383,28 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.style.display = 'none';
   }, 5000);
+}
+
+function showSessionExpiredBanner() {
+  const existing = document.getElementById('session-expired-banner');
+  if (existing) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'session-expired-banner';
+  banner.style.cssText = 'background:#7f1d1d;color:#fecaca;padding:8px 12px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+
+  const msg = document.createElement('span');
+  msg.textContent = 'Session expired.';
+  banner.appendChild(msg);
+
+  const btn = document.createElement('button');
+  btn.textContent = 'Reconnect';
+  btn.style.cssText = 'background:#dc2626;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;white-space:nowrap;';
+  btn.addEventListener('click', openSettingsPage);
+  banner.appendChild(btn);
+
+  const container = document.getElementById('viewContainer');
+  if (container) container.prepend(banner);
 }
 
 // ===================================
