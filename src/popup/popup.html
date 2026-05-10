@@ -184,6 +184,13 @@
           <h3 id="treeTitle">Select Path</h3>
           <p id="treeSubtitle">Choose a folder or enter path manually</p>
         </div>
+        <div class="tree-search-container">
+          <svg class="tree-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" class="tree-search-input" id="treeSearchInput" placeholder="Search folders...">
+          <button class="tree-search-clear" id="treeSearchClear" title="Clear search">✕</button>
+        </div>
         <div class="tree-container" id="treeContainer">
           <div class="loading-state">Loading tree...</div>
         </div>

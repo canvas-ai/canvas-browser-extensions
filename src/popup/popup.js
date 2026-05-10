@@ -43,6 +43,7 @@ let viewContainer;
 // Tree view elements
 let treeBackBtn, treePathInput, pathSubmitBtn, pathCancelBtn;
 let treeTitle, treeSubtitle, treeContainer;
+let treeSearchInput, treeSearchClear;
 
 // Selection view elements
 let selectionBackBtn, contextsSelectionTab, workspacesSelectionTab;
@@ -301,6 +302,8 @@ function initializeElements() {
   treeTitle = document.getElementById('treeTitle');
   treeSubtitle = document.getElementById('treeSubtitle');
   treeContainer = document.getElementById('treeContainer');
+  treeSearchInput = document.getElementById('treeSearchInput');
+  treeSearchClear = document.getElementById('treeSearchClear');
 
   // Selection view elements
   selectionBackBtn = document.getElementById('selectionBackBtn');
@@ -338,6 +341,12 @@ function setupEventListeners() {
   pathSubmitBtn.addEventListener('click', handlePathSubmit);
   pathCancelBtn.addEventListener('click', () => navigateToView('main'));
   treePathInput.addEventListener('keydown', handleTreePathKeydown);
+  treeSearchInput.addEventListener('input', () => {
+    const query = treeSearchInput.value.trim();
+    treeSearchClear.style.display = query ? 'inline-flex' : 'none';
+    filterTreeView(query);
+  });
+  treeSearchClear.addEventListener('click', clearTreeSearch);
 
   // Selection view navigation
   selectionBackBtn.addEventListener('click', handleSelectionBackClick);
@@ -1797,6 +1806,11 @@ function renderTreeView() {
   console.log('Rendering tree view with data:', treeData);
   console.log('Tree data structure:', JSON.stringify(treeData, null, 2));
 
+  if (treeSearchInput) {
+    treeSearchInput.value = '';
+    treeSearchClear.style.display = 'none';
+  }
+
   const treeHtml = renderTreeNode(treeData, '', 0);
   treeContainer.textContent = '';
   setSecureHtml(treeContainer, treeHtml);
@@ -1895,6 +1909,132 @@ function setupTreeEventListeners() {
       }
     }
   });
+}
+
+function filterTreeView(query) {
+  // Clear previous search state
+  treeContainer.querySelectorAll('.tree-node').forEach(node => {
+    node.classList.remove('hidden-by-search', 'search-match');
+    const label = node.querySelector('.node-label');
+    if (label && label.dataset.originalText !== undefined) {
+      label.textContent = label.dataset.originalText;
+      delete label.dataset.originalText;
+    }
+  });
+  treeContainer.querySelectorAll('.tree-children[data-search-opened]').forEach(tc => {
+    tc.style.display = 'none';
+    tc.removeAttribute('data-search-opened');
+    const prevNode = tc.previousElementSibling;
+    if (prevNode && prevNode.classList.contains('tree-node')) {
+      const svg = prevNode.querySelector('.expand-btn svg');
+      if (svg) svg.style.transform = '';
+    }
+  });
+  const prevNoResults = treeContainer.querySelector('.tree-no-results');
+  if (prevNoResults) prevNoResults.remove();
+
+  if (!query) return;
+
+  const lowerQuery = query.toLowerCase();
+  const allNodes = Array.from(treeContainer.querySelectorAll('.tree-node'));
+
+  // Collect paths whose label matches the query
+  const matchingPaths = new Set();
+  allNodes.forEach(node => {
+    const label = node.querySelector('.node-label');
+    if (label && label.textContent.toLowerCase().includes(lowerQuery)) {
+      matchingPaths.add(node.dataset.path);
+    }
+  });
+
+  // Build visible set: matching nodes + all ancestor paths
+  const visiblePaths = new Set(matchingPaths);
+  visiblePaths.add('/');
+  matchingPaths.forEach(path => {
+    const parts = path.split('/').filter(Boolean);
+    let ancestor = '';
+    for (const part of parts) {
+      ancestor = ancestor ? `${ancestor}/${part}` : `/${part}`;
+      visiblePaths.add(ancestor);
+    }
+  });
+
+  // Apply visibility and highlight matching labels
+  allNodes.forEach(node => {
+    const path = node.dataset.path;
+    const label = node.querySelector('.node-label');
+
+    if (!visiblePaths.has(path)) {
+      node.classList.add('hidden-by-search');
+      return;
+    }
+
+    node.classList.add('search-match');
+
+    if (matchingPaths.has(path) && label && label.textContent !== '/') {
+      const original = label.textContent;
+      const lowerText = original.toLowerCase();
+      const idx = lowerText.indexOf(lowerQuery);
+      if (idx !== -1) {
+        label.dataset.originalText = original;
+        label.textContent = '';
+        if (idx > 0) label.appendChild(document.createTextNode(original.slice(0, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'search-highlight';
+        mark.textContent = original.slice(idx, idx + lowerQuery.length);
+        label.appendChild(mark);
+        if (idx + lowerQuery.length < original.length) {
+          label.appendChild(document.createTextNode(original.slice(idx + lowerQuery.length)));
+        }
+      }
+    }
+  });
+
+  // Expand collapsed tree-children containers that contain visible nodes
+  treeContainer.querySelectorAll('.tree-children').forEach(tc => {
+    if (tc.style.display === 'none' && tc.querySelector('.tree-node:not(.hidden-by-search)')) {
+      tc.style.display = 'block';
+      tc.setAttribute('data-search-opened', 'true');
+      const prevNode = tc.previousElementSibling;
+      if (prevNode && prevNode.classList.contains('tree-node')) {
+        const svg = prevNode.querySelector('.expand-btn svg');
+        if (svg) svg.style.transform = 'rotate(90deg)';
+      }
+    }
+  });
+
+  if (matchingPaths.size === 0) {
+    const noResults = document.createElement('div');
+    noResults.className = 'tree-no-results';
+    noResults.textContent = `No folders matching "${query}"`;
+    treeContainer.appendChild(noResults);
+  }
+}
+
+function clearTreeSearch() {
+  treeContainer.querySelectorAll('.tree-node').forEach(node => {
+    node.classList.remove('hidden-by-search', 'search-match');
+    const label = node.querySelector('.node-label');
+    if (label && label.dataset.originalText !== undefined) {
+      label.textContent = label.dataset.originalText;
+      delete label.dataset.originalText;
+    }
+  });
+  treeContainer.querySelectorAll('.tree-children[data-search-opened]').forEach(tc => {
+    tc.style.display = 'none';
+    tc.removeAttribute('data-search-opened');
+    const prevNode = tc.previousElementSibling;
+    if (prevNode && prevNode.classList.contains('tree-node')) {
+      const svg = prevNode.querySelector('.expand-btn svg');
+      if (svg) svg.style.transform = '';
+    }
+  });
+  const noResults = treeContainer.querySelector('.tree-no-results');
+  if (noResults) noResults.remove();
+  if (treeSearchInput) {
+    treeSearchInput.value = '';
+    treeSearchClear.style.display = 'none';
+  }
 }
 
 function selectTreePath(path) {

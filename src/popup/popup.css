@@ -847,6 +847,73 @@ body[data-host="panel"] {
   margin: 0;
 }
 
+.tree-search-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.tree-search-icon {
+  position: absolute;
+  left: 8px;
+  width: 14px;
+  height: 14px;
+  color: #6c757d;
+  pointer-events: none;
+}
+
+.tree-search-input {
+  flex: 1;
+  padding: 6px 28px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+
+.tree-search-input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.tree-search-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6c757d;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  line-height: 1;
+  display: none;
+}
+
+.tree-search-clear:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.tree-node.hidden-by-search {
+  display: none !important;
+}
+
+.node-label .search-highlight {
+  background-color: #fff3cd;
+  color: #856404;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.tree-no-results {
+  color: #6c757d;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 16px;
+}
+
 .tree-container {
   flex: 1;
   overflow-y: auto;
